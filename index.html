@@ -203,7 +203,6 @@ p{margin:0;line-height:1.5;color:var(--muted)}
     <button class="tool" data-speed="0" aria-label="Pause"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg><span>pause</span></button>
     <button class="tool on" data-speed="1" aria-label="Normal speed"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l11 7-11 7z"/></svg><span>1×</span></button>
     <button class="tool" data-speed="2" aria-label="Double speed"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5l9 7-9 7zM12 5l9 7-9 7z"/></svg><span>2×</span></button>
-    <button class="tool" data-speed="3" aria-label="Triple speed"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 6l7 6-7 6zM8.5 6l7 6-7 6zM16 6l7 6-7 6z"/></svg><span>3×</span></button>
   </div>
 </div>
 
@@ -239,9 +238,9 @@ const cv = document.getElementById('cv');
 const W = 44, H = 28, N = W * H;
 const CAR_COLORS = ['#e5484d', '#3e7bfa', '#eea300', '#2fa36b', '#8e5cd9', '#12a5b8'];
 const COLOR_NAMES = ['red', 'blue', 'yellow', 'green', 'purple', 'teal'];
-const SPEED = 1.6, HOME_REST = 3.5, PARK_TIME = 1.6, WEEK_LEN = 45, CAP = 7, MAXPINS = 10, TIMER_FILL = 38, TIMER_DRAIN = 12;
+const SPEED = 1.15, HOME_REST = 3.5, PARK_TIME = 1.6, WEEK_LEN = 45, CAP = 7, MAXPINS = 10, TIMER_FILL = 30, TIMER_DRAIN = 12;
 const MILESTONES = [{k:'b', n:300, name:'Bronze'}, {k:'s', n:600, name:'Silver'}, {k:'g', n:1000, name:'Gold'}];
-const STAGES = [{week:1,size:[14,9]},{week:4,size:[20,13]},{week:7,size:[27,17]},{week:11,size:[34,22]},{week:16,size:[44,28]}];
+const STAGES = [{week:1,size:[17,11]},{week:4,size:[22,14]},{week:7,size:[28,18]},{week:11,size:[35,22]},{week:16,size:[44,28]}];
 
 // ---------- terrain (0 land, 1 water, 2 hill) — simplified real geography ----------
 function makeT(fn){ const t = new Uint8Array(N); for (let y=0;y<H;y++) for (let x=0;x<W;x++) t[y*W+x] = fn(x,y); t.fn = fn; return t; }
@@ -654,7 +653,7 @@ function spawnHouse(color, near){
   let spot = -1;
   for (let t=0; t<60 && spot<0; t++){
     let cand;
-    if (anchors.length && t < 40) { const a = anchors[Math.floor(rng()*anchors.length)]; const r = near ? 4 : 3 + (t>>3);
+    if (anchors.length && t < 40) { const a = anchors[Math.floor(rng()*anchors.length)]; const r = near ? 5 : 4 + (t>>3);
       const x = ix(a) + Math.round((rng()*2-1)*r), y = iy(a) + Math.round((rng()*2-1)*r);
       if (x<0||y<0||x>=W||y>=H) continue; cand = y*W+x;
     } else cand = G.rect.x + Math.floor(rng()*G.rect.w) + (G.rect.y + Math.floor(rng()*G.rect.h))*W;
@@ -662,6 +661,8 @@ function spawnHouse(color, near){
     if (t < 50) { const R = G.rect, cx = ix(cand), cy = iy(cand); if (cx===R.x || cy===R.y || cx===R.x+R.w-1 || cy===R.y+R.h-1) continue; }
     if (neighbors4(cand).some(n => G.occ[n]===3 || G.occ[n]===4)) continue;
     if (anchors.length && Math.min(...anchors.map(a=>Math.hypot(ix(a)-ix(cand), iy(a)-iy(cand)))) < 2) continue;
+    // like the original, homes sit a little way out from their workplace, so one house can't do all the work
+    if (t < 50 && G.dests.some(d => d.color === color && Math.hypot(d.x + 0.5 - ix(cand), d.y + 0.5 - iy(cand)) < 5.5)) continue;
     spot = cand;
   }
   if (spot < 0) return null;
@@ -1027,14 +1028,14 @@ function stepCar(c, dt){
   }
   const a = c.path[c.seg], b = c.path[c.seg+1], len = edgeLen(a,b); let mv = SPEED*dt*(isMw(a,b) ? 2.3 : isFerry(a,b) ? 0.6 : isMetro(a,b) ? 3.2 : 1)*(c.kind==='amb' ? 1.35 : c.kind==='truck' ? 0.75 : 1)*({snow:0.75, rain:0.9, fog:0.85, sand:0.7, storm:0.65}[G.weather] || 1);
   let lim = len;
-  if (c.kind !== 'amb') for (const o of G.cars) if (o!==c && o.state!=='unload' && o.path[o.seg]===a && o.path[o.seg+1]===b && o.s > c.s) lim = Math.min(lim, o.s - 0.5);
+  if (c.kind !== 'amb') for (const o of G.cars) if (o!==c && o.state!=='unload' && o.path[o.seg]===a && o.path[o.seg+1]===b && o.s > c.s) lim = Math.min(lim, o.s - 0.62);
   const last = c.seg+1 === c.path.length-1;
   const amb = c.kind === 'amb';
   if (!amb && G.cars.some(o => o.kind==='amb' && o.state!=='unload' && o.path[o.seg+1]===b && o!==c && o.path[o.seg]!==a)) lim = Math.min(lim, len - 0.4);
   if (!last && !amb && c.s + mv > len - 0.32) {
     const c2 = c.path[c.seg+2];
     let ok = reserve(b, c, a);
-    if (ok) for (const o of G.cars) if (o!==c && o.state!=='unload' && o.path[o.seg]===b && o.path[o.seg+1]===c2 && o.s < 0.45) { ok=false; break; }
+    if (ok) for (const o of G.cars) if (o!==c && o.state!=='unload' && o.path[o.seg]===b && o.path[o.seg+1]===c2 && o.s < 0.62) { ok=false; break; }
     if (!ok) lim = Math.min(lim, len - 0.32);
   }
   if (last && c.state === 'go' && G.occ[b] === 4 && parkedAt(b, c).length >= stallsAt(b)) lim = Math.min(lim, len - 0.5);
@@ -1042,9 +1043,9 @@ function stepCar(c, dt){
   // crossings slow everyone down a little, even going straight
   if (!last && c.s > len - 0.6 && degree(b) >= 3 && !G.round.has(b)) mv *= 0.72;
   let ns = Math.min(c.s + mv, Math.max(c.s, lim));
-  if (ns - c.s < mv*0.2) { c.stuck += dt; if (c.stuck > 1.8 && !c.honked && now - (G.lastHonk||0) > 0.9) { c.honked = true; G.lastHonk = now; honk(); } if (c.stuck > 5) ns = c.s + mv; } else { c.stuck = 0; c.honked = false; }
+  if (ns - c.s < mv*0.2) { c.stuck += dt; if (c.stuck > 1.8 && !c.honked && now - (G.lastHonk||0) > 0.9) { c.honked = true; G.lastHonk = now; honk(); } if (c.stuck > 25) ns = c.s + mv; } else { c.stuck = 0; c.honked = false; }
   c.s = ns;
-  if (c.held >= 0 && c.held === a && c.s > 0.32) { release(c.held, c); c.held = -1; }
+  if (c.held >= 0 && c.held === a && c.s > 0.62) { release(c.held, c); c.held = -1; }
   if (c.s >= len) {
     c.s -= len; c.seg++;
     if (degree(b) >= 3) G.stats.pass.set(b, (G.stats.pass.get(b)||0) + 1);
@@ -1060,8 +1061,8 @@ function loseCarSilent(c){ if (c.held>=0) release(c.held,c); G.cars.splice(G.car
 
 // ---------- simulation ----------
 const isRush = () => PLUS() && G.week >= 3 && ((G.weekT > 10 && G.weekT < 17) || (G.weekT > 29 && G.weekT < 36));
-const pinInterval = d => (1 - 0.12*(((d && d.level)||1)-1)) * (G.city.practice ? 1.4 : 1) * Math.max(3.4, 9.5 - G.week*0.33) * (G.mods.has('rush') ? 0.67 : 1) * (isRush() ? 0.65 : 1) * (G.gameDay === d ? 0.45 : 1);
-const houseInterval = () => (G.city.practice ? 1.5 : 1) * Math.max(2.6, 10 - G.week*0.5) * (G.mods.has('busy') ? 0.5 : 1);
+const pinInterval = d => (1 - 0.12*(((d && d.level)||1)-1)) * (G.city.practice ? 1.4 : 1) * Math.max(2.6, 5 - G.week*0.18) * (G.mods.has('rush') ? 0.67 : 1) * (isRush() ? 0.65 : 1) * (G.gameDay === d ? 0.45 : 1);
+const houseInterval = () => (G.city.practice ? 1.5 : 1) * Math.max(2.2, 7 - G.week*0.4) * (G.mods.has('busy') ? 0.5 : 1);
 function update(dt){
   G.time += dt; G.weekT += dt;
   if (G.lights.size) stepLights(dt);
@@ -1303,7 +1304,7 @@ function showUpgrade(){
     const gd = G.dests.filter(x => x.color !== -2); if (PLUS() && G.week >= 5 && gd.length > 1 && rng() < (G.city.carnival ? 0.55 : 0.3)) { G.gameDay = gd[Math.floor(rng()*gd.length)]; toast(G.city.carnival ? 'Carnival week! One destination is packed with visitors.' : G.gameDay.color < 0 ? 'Holiday rush! The airport is extra busy this week.' : `Game day! The ${COLOR_NAMES[G.gameDay.color]} stadium needs extra cars this week.`, 3500); }
     const every = G.mods.has('rainbow') ? 2 : 3;
     if (G.week % every === 0 && G.colors < CAR_COLORS.length) { G.colors++; announceDest(G.colors-1, true); }
-    else if (G.week % 2 === 0) { let best=0, bs=-1; for (let c=0;c<G.colors;c++){ const {h,d}=countColor(c); if (h/Math.max(1,d) > bs){bs=h/Math.max(1,d); best=c;} } announceDest(best, false); }
+    else if (G.week >= 2) { let best=0, bs=-1; for (let c=0;c<G.colors;c++){ const {h,d}=countColor(c); if (h/Math.max(1,d) > bs){bs=h/Math.max(1,d); best=c;} } announceDest(best, false); }
     saveGame();
   });
 }
@@ -1739,7 +1740,7 @@ addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && (e.key==='z'||e.key==='Z')) { doUndo(); e.preventDefault(); return; }
   if (e.key==='Escape' && G.plan) { endPlan(false); return; }
   if (e.key===' ') { if (!G.plan) setSpeed(G.speed===0?1:0); e.preventDefault(); }
-  if (e.key==='1') setSpeed(1); if (e.key==='2') setSpeed(2); if (e.key==='3') setSpeed(3);
+  if (e.key==='1') setSpeed(1); if (e.key==='2') setSpeed(2);
   if (e.key==='e'||e.key==='E') setTool(tool==='erase'?'draw':'erase');
   if (e.key==='r'||e.key==='R') setTool('round');
   if (e.key==='d'||e.key==='D') setTool('draw');
@@ -2548,7 +2549,7 @@ function showHome(){
       ${card('classic', 'Classic', '<span class="tag">Simple</span>', 'The pure road puzzle. Roads, bridges, tunnels, roundabouts, lights, and motorways.', ['18 real cities', 'Daily and weekly challenges', 'Replays and photo mode'])}
       ${card('plus', 'Plus', '<span class="tag">Free for now</span>', 'Everything in Classic, plus weather, events, ferries, metros, and smarter traffic.', ['Map maker and sandbox', 'World tour and achievements', 'Cars route around traffic'])}
     </div>
-    <p class="hint">Classic and Plus keep separate progress. Version 30.</p>
+    <p class="hint">Classic and Plus keep separate progress. Version 32.</p>
     ${settingsRow()}
   </div>`);
   sheetCard.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { setEdition(b.dataset.mode); SET.lastMode = b.dataset.mode; saveSet(); showMenu(); });

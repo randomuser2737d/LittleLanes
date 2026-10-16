@@ -41,7 +41,8 @@ Cities unlock by reaching trip goals in the city before them.
 | `index.html` | The whole game: HTML, CSS and JavaScript in one file, with no libraries |
 | `sw.js` | Offline support and automatic updates |
 | `manifest.json` and icons | Let it install as an app |
-| `INSTALL.md` | How to put it online, install it and update it |
+| `INSTALL.md` | How players install the game on each device |
+| `PUBLISHING.md` | For the owner: putting the game online and uploading updates |
 | `STATUS.md` | Change log for each version |
 
 ## Updating

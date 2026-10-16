@@ -1,4 +1,4 @@
-# Little Lanes — build status (Oct 12, version 30)
+# Little Lanes — build status (Oct 12, version 32)
 
 Single-file game: `index.html` (HTML + vanilla JS + Canvas 2D, no libraries). Plan and design decisions live in the "Little Lanes — Game Design & Build Plan" doc.
 
@@ -15,6 +15,22 @@ Single-file game: `index.html` (HTML + vanilla JS + Canvas 2D, no libraries). Pl
 - Erasing a road that cars are using turns it gray; it disappears once those cars have passed (pathfinding avoids gray roads)
 - Houses have a driveway direction (stub shown when unconnected); roads connect only through it; drawing from or into a house turns its driveway; a busy old driveway goes gray until its cars are home
 - Cars slow for corners, park in lot stalls a little longer; deliveries show a white pop ring and a floating +1; new pins bounce in
+
+## Version 32 (real traffic jams)
+- Cars no longer "ghost" through each other after waiting 5 s: a jam stays a jam until it clears (a 25 s safety valve remains only for genuine dead-ends)
+- A car keeps a crossing blocked until it is fully through it (0.62 tiles past, was 0.32), and cars keep a bigger gap (0.62 tiles, was 0.5); a car can't enter a road until the car ahead has moved on
+- Result: busy crossings, driveways and full parking lots now back traffic up, and badly planned roads can gridlock, as in the original. Roundabouts, traffic lights and motorways matter much more
+- Removed the 3× speed button (and key); speeds are pause, 1× and 2×
+
+## Version 31 (much harder, both modes)
+- Cars drive at 1.15 tiles/s (was 1.6)
+- The first city area is bigger (17×11 instead of 14×9) and grows in larger steps, so everything looks smaller and cars look slower, like the original
+- Workplaces want visitors about twice as often (every 5 s at the start, down to 2.6 s later; was 9.5 s → 3.4 s). A workplace now needs 2–3 houses, not 1
+- New houses always appear at least ~5 tiles from their own workplace
+- A new workplace appears every week from week 2 (was every other week); new colors still every 3 weeks
+- Houses appear faster (every 7 s at the start, down to 2.2 s)
+- The red overflow timer fills in 30 s (was 38 s)
+- Test bot now loses in week 3–4 instead of surviving easily
 
 ## Version 30 (installing and updating)
 - Updates reach installed copies by themselves: the app checks for a new version every time it opens or comes back to the front, and shows "A new version of Little Lanes is ready · Update". Tapping Update saves your game and reloads into the new version. The game page is fetched network-first, so it still plays offline from the saved copy

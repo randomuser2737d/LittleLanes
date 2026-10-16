@@ -1,5 +1,5 @@
 // Bump VERSION whenever you change any file, so players get the update.
-const VERSION = 'little-lanes-v30';
+const VERSION = 'little-lanes-v32';
 const FILES = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES))); });
 self.addEventListener('activate', e => {

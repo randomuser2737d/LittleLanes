@@ -2,7 +2,7 @@
 
 Little Lanes is free and works on phones, tablets and computers. You install it straight from its web page, so there is no app store. It takes about 30 seconds.
 
-**Game address:** https://randomuser2737d.github.io/
+**Game address:** https://randomuser2737d.github.io/LittleLanes/
 
 ## iPhone or iPad
 1. Open the game address in **Safari**. (Chrome on iPhone works too on iOS 16.4 and newer.)

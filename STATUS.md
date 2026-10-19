@@ -1,4 +1,4 @@
-# Little Lanes — build status (Oct 12, version 32)
+# Little Lanes — build status (Oct 12, version 34)
 
 Single-file game: `index.html` (HTML + vanilla JS + Canvas 2D, no libraries). Plan and design decisions live in the "Little Lanes — Game Design & Build Plan" doc.
 
@@ -15,6 +15,18 @@ Single-file game: `index.html` (HTML + vanilla JS + Canvas 2D, no libraries). Pl
 - Erasing a road that cars are using turns it gray; it disappears once those cars have passed (pathfinding avoids gray roads)
 - Houses have a driveway direction (stub shown when unconnected); roads connect only through it; drawing from or into a house turns its driveway; a busy old driveway goes gray until its cars are home
 - Cars slow for corners, park in lot stalls a little longer; deliveries show a white pop ring and a floating +1; new pins bounce in
+
+## Version 34
+- Real maps: all 18 cities were redrawn from real map data (OpenStreetMap coastlines and lakes), with the main rivers traced along their real paths. Seattle now has Elliott Bay, Lake Union, Lake Washington with Mercer Island, and Lake Sammamish. Landmarks, airports and starting areas sit where they really are.
+- Unfinished games from older versions are reset once because the maps changed. Best scores and unlocks are kept.
+- Smoother driving: cars speed up and brake gradually, follow curves through corners, and pull into and out of parking spots slowly.
+- Jams no longer freeze: cars brake early before busy crossings, and gridlocked cars inch forward after a few seconds instead of stopping completely.
+
+## Version 33
+- Brake lights: cars stuck in traffic show red lights, so jams are easy to spot.
+- Warning beat: when a workplace's red timer passes halfway, a beep plays that speeds up as it fills.
+- Off-screen alerts: when zoomed in, a red arrow at the screen edge points to any workplace with a running timer.
+- New "Worst jam" stat on the game-over screen.
 
 ## Version 32 (real traffic jams)
 - Cars no longer "ghost" through each other after waiting 5 s: a jam stays a jam until it clears (a 25 s safety valve remains only for genuine dead-ends)

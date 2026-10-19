@@ -53,3 +53,7 @@ Service workers need a web server. From this folder, run `python3 -m http.server
 
 ## License
 All rights reserved. See [LICENSE](LICENSE).
+
+## Map data
+
+City coastlines and lakes are based on data © OpenStreetMap contributors (openstreetmap.org/copyright), available under the Open Database License, via the geo-maps project.

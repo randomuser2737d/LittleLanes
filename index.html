@@ -246,156 +246,63 @@ const STAGES = [{week:1,size:[17,11]},{week:4,size:[22,14]},{week:7,size:[28,18]
 function makeT(fn){ const t = new Uint8Array(N); for (let y=0;y<H;y++) for (let x=0;x<W;x++) t[y*W+x] = fn(x,y); t.fn = fn; return t; }
 const ell = (x,y,cx,cy,rx,ry) => ((x-cx)/rx)**2 + ((y-cy)/ry)**2 < 1;
 const CITIES = [
-  { id:'seattle', name:'Seattle', country:'USA', drive:'right', center:[21,15], bridges:2, tunnels:1, after:null, marks:[{x:14,y:8,k:'tower'}], airport:[21,25], rain:0.45, snow:0.15, ferries:1,
-    note:'Puget Sound, Lake Union, Lake Washington',
-    gen: () => makeT((x,y) => {
-      const coast = 6 + 1.5*Math.sin(y*0.45) + 3*Math.exp(-(((y-13.5)/2.6)**2));
-      if (x < coast) return 1;
-      if (ell(x,y,18,7,3,2)) return 1;
-      const lw = 33 + 1.2*Math.sin(y*0.35); if (x >= lw && x < lw+3) return 1;
-      if (ell(x,y,14,5,1.7,1.4) || ell(x,y,23,22,1.6,1.4)) return 2;
-      return 0; }) },
-  { id:'amsterdam', name:'Amsterdam', country:'Netherlands', drive:'right', center:[22,10], bridges:4, tunnels:0, after:'seattle', need:300, drawbridge:true, marks:[{x:21,y:4,k:'station'},{x:22,y:4,k:'station'},{x:23,y:4,k:'station'}], airport:[5,23], rain:0.4, snow:0.15,
+  { id:'seattle', name:'Seattle', country:'USA', drive:'right', center:[13,10], bridges:3, tunnels:1, after:null, marks:[{x:9,y:8,k:'tower'}], airport:[14,24], rain:0.45, snow:0.15, ferries:1,
+    note:'Elliott Bay, Lake Union, Lake Washington with Mercer Island, and Lake Sammamish.',
+    gen: () => decodeT('0213051206190j2214021206180i11051605180b120612061801170c14041205231205160e13041304231205150g1303160221011205150g1303170a150h12031809160g12031908160f14021a071a0b13031b06190b13041b05190c130414021307150g130413051108130h1304120g130h15011202230b1403120c1801230721041303120c19230623031303120e172306230314021209230514230623031402120726041423072104140212072703140g130211072803140g130211082703140g130c250222140g1302120f22150f1203110g22150f120k22') },
+  { id:'amsterdam', name:'Amsterdam', country:'Netherlands', drive:'right', center:[21,12], bridges:4, tunnels:0, after:'seattle', need:300, drawbridge:true, marks:[{x:23,y:8,k:'station'},{x:24,y:8,k:'station'},{x:25,y:8,k:'station'}], airport:[2,24], rain:0.4, snow:0.15,
     note:'Canal rings and the IJ. Drawbridges lift for boats.',
-    gen: () => makeT((x,y) => {
-      if (y < 3.6 + 0.6*Math.sin(x*0.3)) return 1;
-      const d = Math.hypot(x+0.5-22, (y+0.5-3)*1.15);
-      if (y > 3 && ((d>=7.3&&d<8.7) || (d>=11.8&&d<13.2) || (d>=16.3&&d<17.7))) return 1;
-      const ax = 26 + Math.sin(y*0.5); if (y >= 15 && x >= ax && x < ax+1.6) return 1;
-      return 0; }) },
-  { id:'london', name:'London', country:'UK', drive:'left', center:[20,8], bridges:2, tunnels:1, after:'amsterdam', need:400, marks:[{x:24,y:9,k:'clock'}], airport:[2,11], rain:0.35, snow:0.1, fog:0.25,
+    gen: () => decodeT('031506180q1407170r1308160s1209150t110a140z05140z05140e130n140a190l14061f0f1102150411011g0315061803120111021d0414071b02110211011b051307150e1a06120813011405110519071109110412041206180n120d160l150z06120z07120z08110z08110z08110z08110z08120z07120p120f120o140f110n160e110i') },
+  { id:'london', name:'London', country:'UK', drive:'left', center:[18,13], bridges:2, tunnels:1, after:'amsterdam', need:400, marks:[{x:18,y:15,k:'clock'}], airport:[2,22], rain:0.35, snow:0.1, fog:0.25,
     note:'The winding Thames. Foggy weeks slow traffic.',
-    gen: () => makeT((x,y) => {
-      const yc = 14 + 3.5*Math.sin(x*0.2 + 0.5);
-      if (Math.abs(y+0.5-yc) < 1.2) return 1;
-      if (ell(x,y,11,3,2,1.5) || ell(x,y,31,23,1.6,1.3)) return 2;
-      return 0; }) },
-  { id:'cairo', name:'Cairo', country:'Egypt', drive:'right', center:[26,14], bridges:3, tunnels:1, after:'london', need:500, marks:[{x:8,y:18,k:'pyramid'},{x:10,y:19,k:'pyramid'},{x:12,y:18,k:'pyramid'}], airport:[38,3], rain:0.03, snow:0, sand:0.2,
+    gen: () => decodeT('0a260z03260z04230z0z0z0z0z0z0z0z0z0z0z0z0q140z0419021402150m110616011202150l110d12031102130i120e110311041102110f120e12011207110b150f15071207150k12091107120y1205120z011203120z03150z06120z0z0z0z0i2405') },
+  { id:'cairo', name:'Cairo', country:'Egypt', drive:'right', center:[28,10], bridges:3, tunnels:1, after:'london', need:500, marks:[{x:9,y:25,k:'pyramid'},{x:8,y:25,k:'pyramid'},{x:8,y:26,k:'pyramid'}], airport:[40,2], rain:0.03, snow:0, sand:0.2,
     note:'The Nile and its islands. Watch for sandstorms.',
-    gen: () => makeT((x,y) => {
-      const xc = 19 + 1.5*Math.sin(y*0.25), dx = Math.abs(x+0.5-xc);
-      if (y >= 10 && y <= 14 && dx < 0.7) return 0;
-      if (dx < 1.7) return 1;
-      if (ell(x,y,38.5,14,2.8+0.6*Math.sin(y*1.3),5.5)) return 2;
-      return 0; }) },
+    gen: () => decodeT('0r120z07110z07120z06130z06130z05140z051101120z051101120z051102110z051102110a230r12011109250r1309250s1208260s1208270r1208270r1208260s1209250s1209250s120a230t120z08110z08110z08120z07120z08110z08110z08120z07120e') },
   // ----- City Pack 1 -----
-  { id:'bangkok', name:'Bangkok', country:'Thailand', drive:'left', center:[29,12], bridges:3, tunnels:0, after:'london', need:600, pack:1, flood:true, marks:[{x:15,y:13,k:'temple'}], airport:[40,22], rain:0.5, snow:0,
+  { id:'bangkok', name:'Bangkok', country:'Thailand', drive:'left', center:[25,11], bridges:3, tunnels:0, after:'london', need:600, pack:1, flood:true, marks:[{x:17,y:10,k:'temple'}], airport:[38,24], rain:0.5, snow:0,
     note:'Chao Phraya bends and canals. Rainy weeks flood riverside roads.',
-    gen: () => makeT((x,y) => {
-      const xc = 21 + 5*Math.sin(y*0.21 + 0.4);
-      if (Math.abs(x+0.5-xc) < 1.25) return 1;
-      if (Math.abs(y-20) < 0.5 && x > 2.5 && x < xc) return 1;
-      if (Math.abs(x-33) < 0.5 && y > 4.5 && y < 23.5) return 1;
-      return 0; }) },
-  { id:'tokyo', name:'Tokyo', country:'Japan', drive:'left', center:[17,10], bridges:3, tunnels:2, after:'bangkok', need:700, pack:1, rail:17, marks:[{x:15,y:15,k:'tower'}], airport:[29,24], rain:0.35, snow:0.05,
+    gen: () => decodeT('0j120z07120z07110z07120z07110z07120z07110z08110z07120z07110z07120z08110z08110z08120z08120z08120z08120z08130z08130z08120c120t120a140t12091102120t12071202120u11071103120u12051203120v12041203120w1604120y11071103') },
+  { id:'tokyo', name:'Tokyo', country:'Japan', drive:'left', center:[22,10], bridges:3, tunnels:2, after:'bangkok', need:700, pack:1, rail:17, marks:[{x:18,y:15,k:'tower'}], airport:[23,22], rain:0.35, snow:0.05,
     note:'Sumida River and Tokyo Bay. Trains cross the city.',
-    gen: () => makeT((x,y) => {
-      if (ell(x,y,38,30,13,9.5)) return 1;
-      const sx = 27 + 1.4*Math.sin(y*0.35); if (y < 22 && Math.abs(x+0.5-sx) < 0.9) return 1;
-      if (ell(x,y,8,7,2.2,1.8) || ell(x,y,6,20,2.5,2)) return 2;
-      if (x > 18.5 && x < 21.5 && y > 9.5 && y < 11.5) return 2;
-      if (x > 17.5 && x < 22.5 && y > 8.5 && y < 12.5) return 1;
-      return 0; }) },
-  { id:'mumbai', name:'Mumbai', country:'India', drive:'left', center:[22,9], bridges:2, tunnels:1, after:'tokyo', need:750, pack:1, flood:true, marks:[{x:18,y:24,k:'arch'}], airport:[25,4], rain:0.5, snow:0,
+    gen: () => decodeT('0r1105120z011106110z011106110z011106120y1206120b230k1206120a250j1108110a250j1108110b230j1208110x1208120w1109120p13041109120v1209120v1209120v110a120u120a120u110b110t130b110t130a120s14051302160p14031501160p120212011402160p12021702180n120218011a0l13021i0m130112031d0m15021f0n14041d') },
+  { id:'mumbai', name:'Mumbai', country:'India', drive:'left', center:[18,19], bridges:2, tunnels:1, after:'tokyo', need:750, pack:1, flood:true, marks:[{x:18,y:22,k:'arch'}], airport:[23,2], rain:0.5, snow:0,
     note:'A narrow peninsula. Monsoon weeks flood roads by the water.',
-    gen: () => makeT((x,y) => {
-      const left = 9 + Math.max(0, y-8)*0.42 + 1.2*Math.sin(y*0.6), right = 35 - Math.max(0, y-6)*0.62;
-      if (x < left || x > right) return 1;
-      if (ell(x,y,15,14,3,1.6)) return 1;
-      if (ell(x,y,27,15,1.6,1.5)) return 2;
-      return 0; }) },
-  { id:'hongkong', name:'Hong Kong', country:'China (SAR)', drive:'left', center:[22,8], bridges:2, tunnels:3, after:'mumbai', need:800, pack:1, marks:[{x:22,y:22,k:'tower'}], airport:[3,5], rain:0.4, snow:0, storm:0.12,
+    gen: () => decodeT('1g0m15011g0m15011g01110j16011j0i1q0i1p0i1p0i1o0j1p0i1q0813061r07140111011t081z12071z11081z081z11081c02120212031d21061c0212081c2211051g081c0113041f0612011g041f0315011g041g081g031i071g031i071f021k071e031k071e011f0411091e011e0f1t0f') },
+  { id:'hongkong', name:'Hong Kong', country:'China (SAR)', drive:'left', center:[22,14], bridges:2, tunnels:3, after:'mumbai', need:800, pack:1, marks:[{x:17,y:17,k:'tower'}], airport:[8,7], rain:0.4, snow:0, storm:0.12,
     note:'Victoria Harbour and steep hills. Typhoon weeks hit hard.',
-    gen: () => makeT((x,y) => {
-      const hy = 14 + 1.2*Math.sin(x*0.25);
-      if (y >= hy && y < hy + 3.2) return 1;
-      if (x < 5.2 + 0.7*Math.sin(y*0.6) && y > 9.5 - 0.6*Math.cos(x*0.5)) return 1;
-      if (y > hy + 3.2 && (ell(x,y,22,22,7,3.2) || ell(x,y,34,21,4,2.6) || ell(x,y,12,24,3.5,2))) return 2;
-      if (ell(x,y,36,4,3,2.2)) return 2;
-      return 0; }) },
+    gen: () => decodeT('0z051405170q11011d02110p12021a04110b230b1301150114072404250c15011102130511012405240c1502160412240l15021604120g240515021604140e250415021d02120c230614021d03110o11021i06140d1l06150c1k07160611051m011a0313051q03150213051f061406130114051d0l15051d03250d15051d03250f140111021e03230h13011i0925081m09240916011h0k14031j05110b16021c011604120711031j031d0511031k021d04120318') },
   // ----- City Pack 2 -----
-  { id:'istanbul', name:'Istanbul', country:'Turkey', drive:'right', center:[14,8], bridges:3, tunnels:1, after:'london', need:800, pack:2, marks:[{x:11,y:15,k:'dome'}], airport:[40,4], rain:0.25, snow:0.08, ferries:2,
+  { id:'istanbul', name:'Istanbul', country:'Turkey', drive:'right', center:[18,18], bridges:3, tunnels:1, after:'london', need:800, pack:2, marks:[{x:19,y:18,k:'dome'}], airport:[2,2], rain:0.25, snow:0.08, ferries:2,
     note:'The Bosphorus splits two continents. Starts with 2 ferries.',
-    gen: () => makeT((x,y) => {
-      const bx = 24 + 2.5*Math.sin(y*0.18 + 1);
-      if (Math.abs(x+0.5-bx) < 1.4) return 1;
-      if (y >= 17 && x < bx && Math.abs(y+0.5 - (17 + (bx-x)*0.25)) < 1) return 1;
-      if (y > 24) return 1;
-      return 0; }) },
-  { id:'sydney', name:'Sydney', country:'Australia', drive:'left', center:[20,7], bridges:2, tunnels:2, after:'istanbul', need:800, pack:2, marks:[{x:22,y:12,k:'shells'}], airport:[18,25], rain:0.25, snow:0, storm:0.12, ferries:1,
+    gen: () => decodeT('0u130z06120z07120z07120z07120z0612220z0413220z0412230z04120z06130z06130z05130z04140z03150w1204140z1103140z02160z06130z06130z06130z02180w1d0u1d0t1g0p1l0i12021m0h1r0h1v0d') },
+  { id:'sydney', name:'Sydney', country:'Australia', drive:'left', center:[20,16], bridges:2, tunnels:2, after:'istanbul', need:800, pack:2, marks:[{x:21,y:14,k:'shells'}], airport:[14,24], rain:0.25, snow:0, storm:0.12, ferries:1,
     note:'A harbour full of inlets. Summer storms roll in.',
-    gen: () => makeT((x,y) => {
-      const hy = 14 + 0.8*Math.sin(x*0.3);
-      if (x > 6 && Math.abs(y+0.5-hy) < 1.3) return 1;
-      if (x > 40) return 1;
-      for (const [ix0, dir] of [[12,1],[19,-1],[28,1],[34,-1]]) if (Math.abs(x+0.5-ix0) < 0.8 && (dir>0 ? y > hy && y < hy+5 : y < hy && y > hy-5)) return 1;
-      return 0; }) },
-  { id:'sanfrancisco', name:'San Francisco', country:'USA', drive:'right', center:[13,15], bridges:2, tunnels:3, after:'sydney', need:800, pack:2, marks:[{x:16,y:6,k:'tower'}], airport:[20,26], rain:0.15, snow:0, fog:0.35,
+    gen: () => decodeT('0r1504180q1703180r1704160r1705150s1704150s1802160t1603160t1602170u1e0e120e1e0e120e1e0e120e1e0e12061m0e12061m0e13051m0e13051c01190e13051b02190e13061903190z190z190z190z190x1b0x1b0w1c0w1c0w1c0v1d') },
+  { id:'sanfrancisco', name:'San Francisco', country:'USA', drive:'right', center:[16,11], bridges:2, tunnels:3, after:'sydney', need:800, pack:2, marks:[{x:16,y:10,k:'tower'}], airport:[18,23], rain:0.15, snow:0, fog:0.35,
     note:'The Bay and steep hills. Famous for fog.',
-    gen: () => makeT((x,y) => {
-      if (x < 3 + (y < 4 ? 4 : 0)) return 1;
-      if (y < 4) return 1;
-      if (x > 24 + 0.3*y) return 1;
-      if (ell(x,y,12,12,2.5,2) || ell(x,y,17,18,2.2,1.6) || ell(x,y,8,22,2.5,2)) return 2;
-      return 0; }) },
-  { id:'rio', name:'Rio de Janeiro', country:'Brazil', drive:'right', center:[13,11], bridges:2, tunnels:3, after:'sanfrancisco', need:800, pack:2, marks:[{x:7,y:7,k:'statue'}], airport:[34,10], rain:0.3, snow:0, carnival:true,
+    gen: () => decodeT('051p0b23061o0a24061o0a24061o0a24061e011a092411021h01160d241k01180b241s0g150212011204190j150a21011a0h150d180i140e180i110h180i110h1a01110e110i1c0d110h1g0a110822081g09110724071i031202110724081n01110j1g051102120b22051g08120b22061g071203110g1f071202120g1g061203110e1j05120h1l03130f1o01150f1q') },
+  { id:'rio', name:'Rio de Janeiro', country:'Brazil', drive:'right', center:[22,10], bridges:2, tunnels:3, after:'sanfrancisco', need:800, pack:2, marks:[{x:24,y:15,k:'statue'}], airport:[17,2], rain:0.3, snow:0, carnival:true,
     note:'Guanabara Bay and granite peaks. Carnival brings big crowds.',
-    gen: () => makeT((x,y) => {
-      if (x > 27 && y < 20 && ell(x,y,36,9,9,11)) return 1;
-      if (y > 23 + 1.5*Math.sin(x*0.4)) return 1;
-      if (ell(x,y,7,7,2.5,2.5) || ell(x,y,22,20,2,2.5) || ell(x,y,6,17,3,2) || ell(x,y,15,4,2,1.5)) return 2;
-      if (ell(x,y,13,18,2.2,1.4)) return 1;
-      return 0; }) },
-  { id:'newyork', name:'New York', country:'USA', drive:'right', center:[19,11], bridges:3, tunnels:1, after:'hongkong', need:800, pack:3, marks:[{x:8,y:24,k:'statue'}], airport:[36,18], rain:0.35, snow:0.25, ferries:1,
+    gen: () => decodeT('0o1i0p1h0q12021e0t1d0u1e0u1f0t1204190z01160z051502110z01180z1c0w1c0w1701140v1803110e240f160i270421071a0e280324041c0d280324071a0d26042212071b0o13051c0p12031e0q11021f0h24071g03110d25071f02130d23011m01150e1o0115081u0213071w') },
+  { id:'newyork', name:'New York', country:'USA', drive:'right', center:[20,9], bridges:3, tunnels:1, after:'hongkong', need:800, pack:3, marks:[{x:8,y:22,k:'statue'}], airport:[40,24], rain:0.35, snow:0.25, ferries:1,
     note:'Manhattan between the Hudson and the East River, with the harbor to the south.',
-    gen: () => makeT((x,y) => {
-      if (ell(x,y,8,24,1.4,1.1)) return 0;
-      if (y > 22 + 0.8*Math.sin(x*0.5) && x < 32) return 1;
-      if (x > 8.5 + 0.08*y && x < 11.5 + 0.08*y) return 1;
-      if (x > 27 - 0.2*y && x < 29.5 - 0.2*y && y > 2) return 1;
-      if (ell(x,y,20,2,1.6,1.2)) return 2;
-      return 0; }) },
-  { id:'paris', name:'Paris', country:'France', drive:'right', center:[22,12], bridges:4, tunnels:1, after:'newyork', need:800, pack:3, marks:[{x:12,y:20,k:'tower'},{x:16,y:8,k:'arch'}], airport:[37,4], rain:0.4, snow:0.1,
+    gen: () => decodeT('0j130a14011704110d130b14031404120d130711061705110d130714041801130d1308130611031301130d1308120d1102120c130o1202110c1209110e1302110b1308120v1208120k13091208110x1207120x1206120x1306120l110b1306120k120b1306120k110b1406120k110c1207120x1207110x1305130w1402160v1804110u190x1a0w1c0w1b0x1a0y1a0t') },
+  { id:'paris', name:'Paris', country:'France', drive:'right', center:[23,14], bridges:4, tunnels:1, after:'newyork', need:800, pack:3, marks:[{x:12,y:14,k:'tower'},{x:11,y:9,k:'arch'}], airport:[40,2], rain:0.4, snow:0.1,
     note:'The Seine winds through the middle; Montmartre rises in the north.',
-    gen: () => makeT((x,y) => {
-      const sc = 13 + 4*Math.sin((x-4)/7);
-      if (Math.abs(y - sc) < 1.1) return 1;
-      if (ell(x,y,24,4,2.5,1.8) || ell(x,y,34,8,2,1.5)) return 2;
-      return 0; }) },
-  { id:'singapore', name:'Singapore', country:'Singapore', drive:'left', center:[20,11], bridges:3, tunnels:2, after:'paris', need:800, pack:3, marks:[{x:22,y:13,k:'temple'}], airport:[38,9], rain:0.55, snow:0,
+    gen: () => decodeT('0z0z0z0z0z0m210z06250z04250z05230z0e240z05240z05240z0x160z021303130y1207130v120a130t110d120r120e130o120h110o110i120m120j120k120l120j110n120h120o120g110q110f120q120z08130z081307') },
+  { id:'singapore', name:'Singapore', country:'Singapore', drive:'left', center:[24,17], bridges:3, tunnels:2, after:'paris', need:800, pack:3, marks:[{x:26,y:20,k:'temple'}], airport:[40,12], rain:0.55, snow:0,
     note:'An island city: the Johor Strait to the north, Marina Bay and the sea to the south.',
-    gen: () => makeT((x,y) => {
-      if (ell(x,y,22,25.2,3.2,1.2)) return 0;
-      if (y < 2.5 + 0.6*Math.sin(x/3)) return 1;
-      if (y > 21 + 1.5*Math.sin(x/5)) return 1;
-      if (ell(x,y,27,19,3,2.2) || ell(x,y,31,15,1.8,1.4)) return 1;
-      if (x > 15 && x < 25 && Math.abs(y - 17 - 0.4*Math.sin(x)) < 0.55) return 1;
-      if (ell(x,y,12,10,2.5,2)) return 2;
-      return 0; }) },
+    gen: () => decodeT('0b1106170h120a12051205130f12091907130e12081203130a130c1306130h1502110614061103110i150119051203120c1107130316041402120c120713021603140q1b03130f120c13031303110f140j1202120f130k12011201120a23120n1302110a230p120z07120z07120c110t110c120l1402130211051104110i1c0212011a0e1f0312021103130d1g031208130111091h0312051101160113021k01140311011b031p031e021q021z1z1z1j') },
   // ----- City Pack 4 -----
-  { id:'seoul', name:'Seoul', country:'South Korea', drive:'right', center:[26,8], bridges:4, tunnels:2, after:'rio', need:800, pack:4, marks:[{x:22,y:11,k:'tower'},{x:18,y:7,k:'temple'}], airport:[5,24], rain:0.35, snow:0.3,
+  { id:'seoul', name:'Seoul', country:'South Korea', drive:'right', center:[21,10], bridges:4, tunnels:2, after:'rio', need:800, pack:4, marks:[{x:22,y:11,k:'tower'},{x:20,y:8,k:'temple'}], airport:[2,11], rain:0.35, snow:0.3,
     note:'The wide Han River splits the city; Bukhansan, Namsan and Gwanak peaks all around.',
-    gen: () => makeT((x,y) => {
-      if (Math.abs(y - (16 + 2*Math.sin(x/6))) < 1.4) return 1;
-      if (ell(x,y,20,2.5,4,2.2) || ell(x,y,22,11,1.6,1.3) || ell(x,y,16,25,3,1.8) || ell(x,y,36,5,2,1.5)) return 2;
-      return 0; }) },
-  { id:'capetown', name:'Cape Town', country:'South Africa', drive:'left', center:[25,11], bridges:2, tunnels:3, after:'seoul', need:800, pack:4, marks:[{x:28,y:8,k:'dome'}], airport:[38,18], rain:0.25, snow:0,
+    gen: () => decodeT('0z0z0z0z0z0i220z07220z0y110z08120z031104130z011106120y1207130w1209130c230e120c120b230e110e130p120g130m120j140a1206120m14061b0p1905130u150z0z0z0z0z0z0z0z0z0z0l') },
+  { id:'capetown', name:'Cape Town', country:'South Africa', drive:'left', center:[16,9], bridges:2, tunnels:3, after:'seoul', need:800, pack:4, marks:[{x:14,y:5,k:'dome'}], airport:[40,16], rain:0.25, snow:0,
     note:'Table Bay to the north, Table Mountain and Lion\'s Head over the city, False Bay to the south-east.',
-    gen: () => makeT((x,y) => {
-      if (x < 3 + 1.2*Math.sin(y/3)) return 1;
-      if (y < 4.5 + 1.2*Math.sin(x/5) && x < 33) return 1;
-      if (y > 23 + Math.sin(x/4) && x > 20) return 1;
-      if (ell(x,y,15,18,5.5,2.6) || ell(x,y,7,11,1.6,1.6) || ell(x,y,9,24,2,1.5)) return 2;
-      return 0; }) },
-  { id:'toronto', name:'Toronto', country:'Canada', drive:'right', center:[20,10], bridges:3, tunnels:1, after:'capetown', need:800, pack:4, marks:[{x:18,y:17,k:'tower'}], airport:[5,6], rain:0.3, snow:0.45,
+    gen: () => decodeT('1p0j1p0j1p0j1p0j1o0k1d04160l1d04160l1b07120o1a0y1a0y1a230v1a01210w1a06220q1a06220q1a270r1901270r1902250s190z1802250t1603270s1603270s1504270s1506230u140z05140z05130z06120z07110z08') },
+  { id:'toronto', name:'Toronto', country:'Canada', drive:'right', center:[21,13], bridges:3, tunnels:1, after:'capetown', need:800, pack:4, marks:[{x:21,y:17,k:'tower'}], airport:[2,11], rain:0.3, snow:0.45,
     note:'Lake Ontario and the Toronto Islands to the south, the Don and Humber rivers cutting north.',
-    gen: () => makeT((x,y) => {
-      if (ell(x,y,21,23.3,6,1.3)) return 0;
-      if (y > 19.5 + 0.6*Math.sin(x/4)) return 1;
-      if (y < 20 && Math.abs(x - (30 + Math.sin(y/3))) < 0.6) return 1;
-      if (y < 20 && Math.abs(x - (9 + 0.8*Math.sin(y/4))) < 0.55) return 1;
-      if (ell(x,y,26,5,1.6,1.1) || ell(x,y,36,11,1.8,1.2)) return 2;
-      return 0; }) },
+    gen: () => decodeT('0z0y110z08110h110p110g1206110h120g1205120h120g1206110h120g1206120g120d1507110g120c1607120f120b1708110f120b1708120e120a1808120e12091909120e11081a09120e11051d0a120d11041e0a120c12031f0b1101110814031f0b130716021f0b180217011f0c17021n0c17021n0b1x0b1x0b1x081z11041z15031z16') },
 ];
 const PRACTICE = { id:'practice', name:'Practice town', country:'Made-up', drive:'right', center:[22,14], bridges:1, tunnels:0, after:null, marks:[],
   note:'Learn the tools, no game over', practice:true,
@@ -987,6 +894,15 @@ function reserve(node, c, from){
   if (set.size < cap) { set.add(c.id); c.held = node; return true; }
   return false;
 }
+function peekFree(node, c, from, nxt){
+  if (G.blocked.has(node)) return false;
+  if (degree(node) <= 2) return true;
+  if (G.lights.has(node) && from >= 0) { const L = lightState(node); if (L.state !== 'g' || L.axis !== approachAxis(from, node)) return false; }
+  const set = G.res.get(node), cap = G.round.has(node) ? 3 : G.lights.has(node) ? 3 : 1;
+  if (set && !set.has(c.id) && set.size >= cap) return false;
+  for (const o of G.cars) if (o!==c && o.state!=='unload' && o.path[o.seg]===node && o.path[o.seg+1]===nxt && o.s < 0.62) return false;
+  return true;
+}
 function release(node, c){ const s = G.res.get(node); if (s) s.delete(c.id); }
 function loseCar(c){
   if (c.held >= 0) release(c.held, c);
@@ -1032,6 +948,8 @@ function stepCar(c, dt){
   const last = c.seg+1 === c.path.length-1;
   const amb = c.kind === 'amb';
   if (!amb && G.cars.some(o => o.kind==='amb' && o.state!=='unload' && o.path[o.seg+1]===b && o!==c && o.path[o.seg]!==a)) lim = Math.min(lim, len - 0.4);
+  // look ahead: start braking early if the crossing ahead is busy, instead of slamming to a stop at the line
+  if (!last && !amb && c.s + mv <= len - 0.32 && c.s > len - 1.1 && !peekFree(b, c, a, c.path[c.seg+2])) lim = Math.min(lim, len - 0.32);
   if (!last && !amb && c.s + mv > len - 0.32) {
     const c2 = c.path[c.seg+2];
     let ok = reserve(b, c, a);
@@ -1042,8 +960,14 @@ function stepCar(c, dt){
   if (!last && c.s > len - 0.7) { const c2 = c.path[c.seg+2]; const d1x = ix(b)-ix(a), d1y = iy(b)-iy(a), d2x = ix(c2)-ix(b), d2y = iy(c2)-iy(b); if (d1x*d2y - d1y*d2x !== 0 || d1x*d2x + d1y*d2y < 0) mv *= 0.5; }
   // crossings slow everyone down a little, even going straight
   if (!last && c.s > len - 0.6 && degree(b) >= 3 && !G.round.has(b)) mv *= 0.72;
-  let ns = Math.min(c.s + mv, Math.max(c.s, lim));
-  if (ns - c.s < mv*0.2) { c.stuck += dt; if (c.stuck > 1.8 && !c.honked && now - (G.lastHonk||0) > 0.9) { c.honked = true; G.lastHonk = now; honk(); } if (c.stuck > 25) ns = c.s + mv; } else { c.stuck = 0; c.honked = false; }
+  // gridlock valve: after a long wait, cars inch forward instead of the jam freezing solid
+  if (c.stuck > 6) lim = Math.max(lim, Math.min(len, c.s + mv*0.3 + 0.02));
+  const room = Math.max(0, lim - c.s), vmax = mv / Math.max(dt, 1e-4);
+  const want = lim >= len - 1e-6 ? vmax : Math.min(vmax, room * 3.2 + 0.12);
+  if (c.v === undefined) c.v = want;
+  c.v = want < c.v ? Math.max(want, c.v - 5*SPEED*dt) : Math.min(want, c.v + 2.4*SPEED*dt);
+  let ns = c.s + Math.min(c.v*dt, room);
+  if (ns - c.s < mv*0.2) { c.stuck += dt; if (c.stuck > 1.8 && !c.honked && now - (G.lastHonk||0) > 0.9) { c.honked = true; G.lastHonk = now; honk(); } } else if (ns - c.s > mv*0.5) { c.stuck = Math.max(0, c.stuck - dt*3); if (c.stuck < 0.2) c.honked = false; }
   c.s = ns;
   if (c.held >= 0 && c.held === a && c.s > 0.62) { release(c.held, c); c.held = -1; }
   if (c.s >= len) {
@@ -1072,6 +996,7 @@ function update(dt){
   // a car that just got home rests in the driveway before it can leave again
   if (G.resting) { for (const r of G.resting) { r.t -= dt; if (r.t <= 0) { r.h.rest = Math.max(0, (r.h.rest||0) - 1); r.h.idle++; } } G.resting = G.resting.filter(r => r.t > 0); }
   G.returning = G.returning.filter(r => r.t > 0);
+  { let j = 0; for (const c of G.cars) if (c.stuck > 1) j++; G.stats.jam = Math.max(G.stats.jam||0, j); }
   for (const d of G.dests) {
     if (now < d.born + 0.6 || d.color === -2) continue;
     d.pinT += dt; const iv = pinInterval(d);
@@ -1079,6 +1004,7 @@ function update(dt){
     if (G.endless && (G.city.practice || G.cfg.kind === 'sandbox')) { d.timer = 0; continue; }
     if (d.pins >= CAP + ((d.level||1)-1)*2) { if (d.timer === 0) tone(220, .3, .04, 'triangle'); d.timer += dt/TIMER_FILL; }
     else d.timer = Math.max(0, d.timer - dt/TIMER_DRAIN);
+    if (d.timer > 0.5) { d.beatT = (d.beatT || 0) - dt; if (d.beatT <= 0) { d.beatT = 1.1 - d.timer*0.6; tone(180 + d.timer*120, .09, .035, 'square'); } } else d.beatT = 0;
     if (d.timer >= 1) {
       if (!G.endless) { gameOver(d); return; }
       // endless, like the original: the oldest visitors give up and you lose points, but the game goes on
@@ -1350,6 +1276,7 @@ function statsLine(){
     <div><div class="small">Roads built</div><h3>${G.stats.built}</h3></div>
     <div><div class="small">Longest trip</div><h3>${G.stats.longest.toFixed(1)} tiles</h3></div>
     <div><div class="small">Busiest crossing</div><h3>${busy} cars</h3></div>
+    <div><div class="small">Worst jam</div><h3>${G.stats.jam||0} cars stuck</h3></div>
     ${G.bonus ? `<div><div class="small">Ambulance bonus</div><h3>+${G.bonus}</h3></div>` : ''}${G.stats.deliveries ? `<div><div class="small">Deliveries</div><h3>${G.stats.deliveries}</h3></div>` : ''}</div>`;
 }
 function gameOver(d){
@@ -1790,7 +1717,7 @@ function serialize(){
   for (const c of G.cars) if (!c.kind) back.set(c.home, (back.get(c.home)||0) + 1);
   for (const r of G.returning) back.set(r.h, (back.get(r.h)||0) + 1);
   for (const r of (G.resting||[])) back.set(r.h, (back.get(r.h)||0) + 1);
-  return { v:1, ed: EDITION, cfg:{kind:G.cfg.kind, key:G.cfg.key||null, goal:G.cfg.goal||0, chName:G.cfg.chName||'', tourIds:G.cfg.tourIds||null, tourIdx:G.cfg.tourIdx||0, tourTotal:G.cfg.tourTotal||0, cityId:G.city.id, modIds:[...G.mods], seed:G.cfg.seed}, rng: rng.get(),
+  return { v:1, mv:2, ed: EDITION, cfg:{kind:G.cfg.kind, key:G.cfg.key||null, goal:G.cfg.goal||0, chName:G.cfg.chName||'', tourIds:G.cfg.tourIds||null, tourIdx:G.cfg.tourIdx||0, tourTotal:G.cfg.tourTotal||0, cityId:G.city.id, modIds:[...G.mods], seed:G.cfg.seed}, rng: rng.get(),
     road: roadState(), houses: G.houses.map(h => [h.i, h.color, h.idle + (back.get(h)||0), h.trips||0, !!h.apt, h.face||0]),
     dests: G.dests.map(d => [d.x, d.y, d.ent, d.color, d.pins, d.pinT, d.timer, d.pq, entsOf(d), d.level||1, d.served||0, lotsOf(d).map(l => [l.t, l.gate, l.face])]),
     week:G.week, weekT:G.weekT, time:G.time, houseT:G.houseT, score:G.score, endless:G.endless, colors:G.colors, stage:G.stage, portrait:!!G.portrait, wk:(G.weekly||[]).slice(-200), sec:!!G.usedSecond, incoming:G.incoming||[],
@@ -1800,6 +1727,7 @@ function restore(S){
   try {
     if (S.ed && S.ed !== EDITION) setEdition(S.ed);
     const city = ALL_CITIES().find(c => c.id === S.cfg.cityId); if (!city || S.v !== 1) return false;
+    if (!city.custom && S.mv !== 2) { setTimeout(() => toast('The city maps were redrawn to match the real places, so your unfinished game was reset. Your best scores are safe.', 4500), 400); return false; }
     newGame({kind:S.cfg.kind, key:S.cfg.key, goal:S.cfg.goal, chName:S.cfg.chName, tourIds:S.cfg.tourIds, tourIdx:S.cfg.tourIdx, tourTotal:S.cfg.tourTotal, city, mods: MODS.filter(m => S.cfg.modIds.includes(m.id)), seed:S.cfg.seed}, true);
     rng = mulberry32(S.rng);
     Object.assign(G, {week:S.week, weekT:S.weekT, time:S.time, houseT:S.houseT, score:S.score, endless:S.endless, colors:S.colors, stage:S.stage});
@@ -1988,6 +1916,7 @@ function drawVehicle(car){
   if (st === 'retro') { ctx.fillStyle = 'rgba(255,255,255,.85)'; rr(-0.09, -0.08, 0.16, 0.16, 0.06); ctx.fill(); }
   ctx.fillStyle = 'rgba(0,0,0,.2)'; if (st === 'van') rr(-0.16, -0.085, 0.26, 0.17, 0.03); else rr(-0.07, -0.085, 0.15, 0.17, 0.04); ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,.75)'; rr(0.08, -0.08, 0.05, 0.16, 0.02); ctx.fill();
+  if (car.stuck > 0.25) { ctx.fillStyle = '#ff3b30'; ctx.globalAlpha = Math.min(1, car.stuck*2); ctx.fillRect(-L-0.015, -Wd+0.02, 0.045, 0.05); ctx.fillRect(-L-0.015, Wd-0.07, 0.045, 0.05); ctx.globalAlpha = 1; }
   if (car.kind === 'amb') {
     const on = Math.floor(now*6) % 2;
     ctx.fillStyle = on ? '#e5484d' : '#3e7bfa'; ctx.fillRect(-0.05, -0.1, 0.05, 0.09); ctx.fillStyle = on ? '#3e7bfa' : '#e5484d'; ctx.fillRect(-0.05, 0.01, 0.05, 0.09);
@@ -2310,20 +2239,37 @@ function render(){
     let px, py, ang = 0;
     if (car.seg >= car.path.length-1 || car.state==='unload') { const n = car.path[car.path.length-1]; [px,py] = nodePos(n); if (car.state === 'unload' && G.occ[n] === 4) { const d = G.destAt.get(n), lot = d && lotsOf(d).find(l => l.t.includes(n))?.t;
       if (lot) { const g = lotGeom(d, lot), st = car.stall || 0;
-        const cx0 = px, cy0 = py, along = g.bdy ? g.w : g.h, step = (along - 0.24) / (lot.length === 2 ? 3 : 4);
+        const cx0 = car.parkFrom ? car.parkFrom[0] : px, cy0 = car.parkFrom ? car.parkFrom[1] : py, along = g.bdy ? g.w : g.h, step = (along - 0.24) / (lot.length === 2 ? 3 : 4);
         const nS = lot.length === 2 ? 3 : 4, idx = st % nS, pos = 0.12 + (idx + 0.5)*step;
         if (g.bdy) { px = g.x0 + pos; py = g.y0 + g.h/2 + g.bdy*0.15; } else { py = g.y0 + pos; px = g.x0 + g.w/2 + g.bdx*0.15; }
         ang = Math.atan2(g.bdy, g.bdx); car.stallXY = [px, py, ang];
-        const f = ease(clamp((now - (car.parkT || 0)) / 0.28, 0, 1)); px = cx0 + (px - cx0)*f; py = cy0 + (py - cy0)*f; if (f >= 1) car.ra = ang; } } }
+        const f = ease(clamp((now - (car.parkT || 0)) / 0.6, 0, 1)); px = cx0 + (px - cx0)*f; py = cy0 + (py - cy0)*f; if (f < 0.5) ang = Math.atan2(py - cy0, px - cx0) || ang; } } }
     else {
       const a = car.path[car.seg], b = car.path[car.seg+1], len = edgeLen(a,b), t = Math.min(1, car.s/len);
       const [x1,y1]=nodePos(a), [x2,y2]=nodePos(b), dx=(x2-x1)/len, dy=(y2-y1)/len;
-      px = x1 + (x2-x1)*t + (-dy)*0.12*G.drive; py = y1 + (y2-y1)*t + dx*0.12*G.drive; ang = Math.atan2(dy, dx);
+      px = x1 + (x2-x1)*t; py = y1 + (y2-y1)*t; ang = Math.atan2(dy, dx);
+      // round the corners: near a node, follow a curve from the old direction into the new one
+      const R = 0.34; let cn = -1, pn = -1, nn = -1, u = 0;
+      if (car.seg + 2 < car.path.length && len - car.s < Math.min(R, len/2)) { pn = a; cn = b; nn = car.path[car.seg+2]; }
+      else if (car.seg > 0 && car.s < Math.min(R, len/2)) { pn = car.path[car.seg-1]; cn = a; nn = b; }
+      if (cn >= 0 && !G.round.has(cn)) {
+        const [qx, qy] = nodePos(cn), [ax, ay] = nodePos(pn), [bx, by] = nodePos(nn);
+        const l1 = Math.hypot(qx-ax, qy-ay), l2 = Math.hypot(bx-qx, by-qy), r = Math.min(R, l1/2, l2/2);
+        const e1x = (qx-ax)/l1, e1y = (qy-ay)/l1, e2x = (bx-qx)/l2, e2y = (by-qy)/l2;
+        if (e1x*e2x + e1y*e2y > -0.5 && r > 0.05) {
+          u = cn === b ? (r - (len - car.s)) / (2*r) : 0.5 + car.s / (2*r); u = clamp(u, 0, 1);
+          const sx = qx - e1x*r, sy = qy - e1y*r, ex = qx + e2x*r, ey = qy + e2y*r, m = 1-u;
+          px = m*m*sx + 2*u*m*qx + u*u*ex; py = m*m*sy + 2*u*m*qy + u*u*ey;
+          ang = Math.atan2(2*m*(qy-sy) + 2*u*(ey-qy), 2*m*(qx-sx) + 2*u*(ex-qx));
+        }
+      }
+      px += -Math.sin(ang)*0.12*G.drive; py += Math.cos(ang)*0.12*G.drive;
       // inside a roundabout, cars follow the ring instead of crossing the island
       for (const c0 of [a, b]) if (G.round.has(c0)) { const cx = ix(c0)+.5, cy = iy(c0)+.5, rx = px - cx, ry = py - cy, dd = Math.hypot(rx, ry); if (dd < 0.72 && dd > 1e-3) { px = cx + rx/dd*0.72; py = cy + ry/dd*0.72; ang = Math.atan2(ry, rx) + (G.drive > 0 ? -Math.PI/2 : Math.PI/2); } }
     }
-    if (car.state === 'back' && car.stallXY && now - (car.unparkT || 0) < 0.3) { const f = ease(clamp((now - car.unparkT)/0.3, 0, 1)); px = car.stallXY[0] + (px - car.stallXY[0])*f; py = car.stallXY[1] + (py - car.stallXY[1])*f; }
-    if (car.ra === undefined) car.ra = ang; else { let da = ang - car.ra; while (da > Math.PI) da -= 2*Math.PI; while (da < -Math.PI) da += 2*Math.PI; car.ra += da * Math.min(1, 0.25 * (G.speed || 1)); }
+    if (car.state === 'back' && car.stallXY && now - (car.unparkT || 0) < 0.55) { const f = ease(clamp((now - car.unparkT)/0.55, 0, 1)); px = car.stallXY[0] + (px - car.stallXY[0])*f; py = car.stallXY[1] + (py - car.stallXY[1])*f; }
+    if (car.ra === undefined) car.ra = ang; else { let da = ang - car.ra; while (da > Math.PI) da -= 2*Math.PI; while (da < -Math.PI) da += 2*Math.PI; car.ra += da * (1 - Math.exp(-(G.fdt || 0.016) * 16 * Math.max(1, G.speed || 1))); }
+    if (car.state !== 'unload') car.parkFrom = [px, py];
     ctx.save(); ctx.translate(px,py); ctx.rotate(car.ra);
     if (car.seg < car.path.length-1 && car.state !== 'unload' && isMetro(car.path[car.seg], car.path[car.seg+1])) { const a = car.path[car.seg], b = car.path[car.seg+1], f = car.s / edgeLen(a,b); if (f > 0.12 && f < 0.88) continue; }
     const onFerry = car.seg < car.path.length-1 && car.state !== 'unload' && isFerry(car.path[car.seg], car.path[car.seg+1]);
@@ -2334,6 +2280,23 @@ function render(){
   }
   ctx.setTransform(dpr,0,0,dpr,0,0);
   drawWeather();
+  drawDangerArrows();
+}
+function drawDangerArrows(){
+  if (!G || G.over || G.replay) return;
+  const c = cam(), m = 34;
+  for (const d of G.dests) {
+    if (!(d.timer > 0)) continue;
+    const x = c.ox + (d.x+1)*c.s, y = c.oy + (d.y+1)*c.s;
+    if (x > 0 && x < cw && y > 60 && y < ch - 60) continue;
+    const ax = Math.min(cw-m, Math.max(m, x)), ay = Math.min(ch-m-40, Math.max(m+50, y)), ang = Math.atan2(y-ay, x-ax);
+    ctx.save(); ctx.translate(ax, ay);
+    ctx.globalAlpha = 0.75 + 0.25*Math.sin(now*6);
+    ctx.fillStyle = TH.danger; ctx.beginPath(); ctx.arc(0, 0, 16, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, 11, -Math.PI/2, -Math.PI/2 + Math.PI*2*d.timer); ctx.stroke();
+    ctx.rotate(ang); ctx.fillStyle = TH.danger; ctx.beginPath(); ctx.moveTo(26, 0); ctx.lineTo(16, -8); ctx.lineTo(16, 8); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
 }
 
 // ---------- HUD ----------
@@ -2549,7 +2512,7 @@ function showHome(){
       ${card('classic', 'Classic', '<span class="tag">Simple</span>', 'The pure road puzzle. Roads, bridges, tunnels, roundabouts, lights, and motorways.', ['18 real cities', 'Daily and weekly challenges', 'Replays and photo mode'])}
       ${card('plus', 'Plus', '<span class="tag">Free for now</span>', 'Everything in Classic, plus weather, events, ferries, metros, and smarter traffic.', ['Map maker and sandbox', 'World tour and achievements', 'Cars route around traffic'])}
     </div>
-    <p class="hint">Classic and Plus keep separate progress. Version 32.</p>
+    <p class="hint">Classic and Plus keep separate progress. Version 34.</p>
     ${settingsRow()}
   </div>`);
   sheetCard.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { setEdition(b.dataset.mode); SET.lastMode = b.dataset.mode; saveSet(); showMenu(); });
@@ -2620,7 +2583,7 @@ function showMenu(paused){
 // ---------- loop ----------
 let last = performance.now()/1000;
 function frame(ts){
-  now = ts/1000; const rdt = Math.min(0.05, now - last); last = now;
+  now = ts/1000; const rdt = Math.min(0.05, now - last); last = now; if (G) G.fdt = rdt;
   requestAnimationFrame(frame);
   try {
     if (G && !G.over && !G.modal && G.speed > 0) { let t = rdt*G.speed; while (t > 0 && !G.over) { const d = Math.min(0.025, t); update(d); t -= d; } }

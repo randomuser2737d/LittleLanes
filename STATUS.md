@@ -1,4 +1,4 @@
-# Little Lanes — build status (Nov 12, version 36)
+# Little Lanes — build status (Nov 12, version 37)
 
 Single-file game: `index.html` (HTML + vanilla JS + Canvas 2D, no libraries). Plan and design decisions live in the "Little Lanes — Game Design & Build Plan" doc.
 
@@ -234,3 +234,7 @@ Plus only:
 - Codes box in the menu. The admin code LANES-ADMIN-2026 unlocks every city, challenge, Expert mode and theme in both Classic and Plus on that device
 - House limit: at most about one house per 11 tiles of the open city area (about 110 on the full map)
 - Note: "cars gliding around the screen" was the metro drawing bug fixed in version 35
+
+## Version 37
+- Cleaner menu: compact city cards; tapping a city opens its own panel with Play, Endless, Expert, Sandbox and that city's challenges (locked cities explain how to unlock)
+- Everything else is in collapsible dropdowns: Daily and weekly challenges, My maps and world tour, Map themes, Achievements and car styles, Codes, Settings, How to play

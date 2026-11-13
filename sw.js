@@ -1,5 +1,5 @@
 // Little Lanes service worker: lets the installed app open offline and pick up new versions.
-const VERSION = 'little-lanes-v36';
+const VERSION = 'little-lanes-v37';
 const CORE = ['./', 'index.html', 'manifest.json'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(CORE)).catch(() => {}));

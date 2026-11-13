@@ -114,6 +114,11 @@ p{margin:0;line-height:1.5;color:var(--muted)}
 .opt{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;padding:14px;border-radius:14px;border:1px solid var(--panel-line);background:var(--land);min-width:0}
 .opt:hover:not(:disabled){border-color:var(--accent)}
 .opt:disabled{cursor:default}
+.drop{border:1px solid var(--panel-line);border-radius:14px;padding:12px 14px;background:var(--land)}
+.drop>summary{cursor:pointer;font-family:var(--display);font-weight:600;font-size:16px;list-style:none;display:flex;justify-content:space-between;align-items:center}
+.drop>summary::-webkit-details-marker{display:none}
+.drop>summary::after{content:'▾';color:var(--muted);transition:transform .15s}
+.drop[open]>summary::after{transform:rotate(180deg)}
 .opt:disabled > *, .opt.dim > *{opacity:.55}
 .thumb{width:100%;aspect-ratio:44/28;border-radius:10px;object-fit:cover;display:block;max-width:100%}
 .opt .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -2645,11 +2650,48 @@ function showHome(){
       ${card('classic', 'Classic', '<span class="tag">Simple</span>', 'The pure road puzzle. Roads, bridges, tunnels, roundabouts, lights, and motorways.', ['18 real cities', 'Daily and weekly challenges', 'Replays and photo mode'])}
       ${card('plus', 'Plus', '<span class="tag">Free for now</span>', 'Everything in Classic, plus weather, events, ferries, metros, and smarter traffic.', ['Map maker and sandbox', 'World tour and achievements', 'Cars route around traffic'])}
     </div>
-    <p class="hint">Classic and Plus keep separate progress. Version 36.</p>
+    <p class="hint">Classic and Plus keep separate progress. Version 37.</p>
     ${settingsRow()}
   </div>`);
   sheetCard.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { setEdition(b.dataset.mode); SET.lastMode = b.dataset.mode; saveSet(); showMenu(); });
   wireSettings(showHome);
+}
+const INP = 'font:inherit;padding:9px 12px;border-radius:12px;border:1px solid var(--panel-line);background:var(--land);color:var(--ink);min-width:0;flex:1 1 160px';
+const HELP = `Drag to draw roads. Drag at an angle for diagonal roads. Houses and parking lots each have one driveway (lots show a little arrow); drag from a house or lot, or draw a road into it from another side, to turn its driveway. Erase with right-click or the eraser; a road with cars on it turns gray and disappears once they've passed. Ctrl+Z undoes, Space pauses. Every Sunday you pick an upgrade, and every few weeks the city grows.`;
+// a collapsible section; remembers which ones were open
+const OPEN = new Set();
+const drop = (title, body) => `<details class="drop" data-drop="${title}"${OPEN.has(title) ? ' open' : ''}><summary>${title}</summary><div class="stack" style="margin-top:12px">${body}</div></details>`;
+// tapping a city opens its own small panel with every way to play it
+function showCity(c, paused){
+  const best = store.best[c.id] || 0, open = unlocked(c), prev = CITIES.find(p => p.id === c.after);
+  const canEndless = !c.practice && (store.admin || best > 0), canExpert = !c.practice && reached(c.id, MILESTONES[2].n);
+  const chals = !c.practice && CHALLENGES[c.id] && reached(c.id, PLUS() ? MILESTONES[1].n : 1000) ? CHALLENGES[c.id] : [];
+  const ch = store.chal || {};
+  showSheet(`<div class="stack">
+    <div class="menu-head"><button class="btn" id="cityBack">← Cities</button><div><div class="small">${c.country} · drives ${c.drive}</div><h2>${c.name}</h2></div></div>
+    ${c.practice ? '' : `<img class="thumb" alt="" src="${thumb(c)}">`}
+    <p>${PLUS() ? c.note : c.note.split('. ')[0]}</p>
+    <div class="row" style="display:flex;gap:10px;align-items:center">${PLUS() && !c.practice ? medalRow(best) : ''}<span class="hint">${best ? 'Best ' + best : 'Not played yet'}</span></div>
+    ${open ? `<div class="btnrow"><button class="btn primary" data-go="play">Play</button>
+      ${canEndless ? `<button class="btn" data-go="endless">Endless${(store.endless||{})[c.id] ? ' · best ' + store.endless[c.id] : ''}</button>` : ''}
+      ${canExpert ? `<button class="btn" data-go="expert">Expert${(store.expert||{})[c.id] ? ' · best ' + store.expert[c.id] : ''}</button>` : ''}
+      ${PLUS() && !c.practice ? '<button class="btn" data-go="sandbox">Sandbox</button>' : ''}</div>
+      ${canEndless ? '<p class="hint">Endless: no game over; an overflowing workplace costs 3 points. Expert: roads lock after 30 seconds, no undo, one upgrade choice.</p>' : ''}
+      ${chals.length ? `<div class="small">City challenges</div><div class="grid2">${chals.map(x => `<button class="opt" data-chal="${c.id}:${x.id}"><div class="row"><h3>${x.name}</h3>${(ch[x.id]||0) >= x.goal ? '<span class="tag">done</span>' : ''}</div><p>${x.desc}</p><span class="hint">${ch[x.id] ? 'Best ' + ch[x.id] : 'Not played yet'}</span></button>`).join('')}</div>` : ''}`
+    : `<p class="hint">Locked. Reach ${c.need || 300} trips in ${prev ? prev.name : 'the previous city'} to open it, or enter a code in the Codes section.</p>`}
+  </div>`);
+  const seed = () => (Date.now() & 0x7fffffff);
+  sheetCard.querySelector('#cityBack').onclick = () => showMenu(paused);
+  sheetCard.querySelectorAll('[data-go]').forEach(b => b.onclick = () => {
+    const k = b.dataset.go;
+    if (k === 'play') newGame({kind:'classic', city: c, mods:[], seed: seed()});
+    else if (k === 'endless') { newGame({kind:'classic', city: c, mods:[], seed: seed()}); G.endless = true; G.endlessRun = true; el('cityName').textContent = c.name + ' · Endless'; }
+    else if (k === 'expert') newGame({kind:'expert', city: c, mods:[], seed: seed()});
+    else if (k === 'sandbox') newGame({kind:'sandbox', city: c, mods:[], seed: seed()});
+  });
+  sheetCard.querySelectorAll('[data-chal]').forEach(b => b.onclick = () => { const x = CHALLENGES[c.id].find(q => q.id === b.dataset.chal.split(':')[1]);
+    newGame({kind:'challenge', key:x.id, goal:x.goal, chName:x.name, city: c, mods: MODS.filter(m => x.mods.includes(m.id)), seed: seed()}); });
+  sheet.scrollTop = 0;
 }
 function showMenu(paused){
   const daily = challengeFor('daily'), weekly = challengeFor('weekly');
@@ -2661,9 +2703,8 @@ function showMenu(paused){
   const practiceCard = !PLUS() ? '' : `<button class="opt" data-city="practice"><div class="row"><h3>Practice town</h3><span class="tag">no game over</span></div><p>A small made-up town to learn roads, bridges, and upgrades.</p></button>`;
   const cityCards = practiceCard + CITIES.map(c => {
     const open = unlocked(c), best = store.best[c.id] || 0, prev = CITIES.find(p=>p.id===c.after);
-    return `<button class="opt" data-city="${c.id}" ${open?'':'disabled'}><img class="thumb" alt="" src="${thumb(c)}">
-      <div class="row"><h3>${c.name}</h3><span class="tag">drives ${c.drive}</span>${c.pack ? `<span class="tag">Pack ${c.pack}</span>` : ""}</div>
-      <p>${c.country} · ${PLUS() ? c.note : c.note.split('. ')[0]}</p>
+    return `<button class="opt${open?'':' dim'}" data-city="${c.id}"><img class="thumb" alt="" src="${thumb(c)}">
+      <div class="row"><h3>${c.name}</h3><span class="hint">${c.country}</span></div>
       <div class="row">${PLUS() ? medalRow(best) : ""}<span class="hint">${open ? (best ? 'Best '+best : 'Not played yet') : 'Reach '+(c.need||300)+' trips in '+prev.name}</span></div>
     </button>`; }).join('');
   const chCard = (ch, rec, label) => `<button class="opt" data-ch="${ch.kind}">
@@ -2675,20 +2716,16 @@ function showMenu(paused){
     <div class="menu-head">${paused ? '' : '<button class="btn" id="homeBtn" aria-label="Back to home">← Home</button>'}<div><div class="small">Little Lanes</div><h2>${PLUS() ? 'Plus' : 'Classic'}</h2></div></div>
     ${paused ? '<div class="btnrow"><button class="btn primary" id="resume">Resume</button><button class="btn" id="photo">Photo mode</button></div>' : ''}
     ${savedCity ? `<div class="btnrow"><button class="btn primary" id="cont">Continue ${savedCity.name} · week ${saved.week} · ${saved.score} trips</button></div>` : ''}
-    <div class="small">Cities</div><div class="grid2">${cityCards}</div>
-    ${PLUS() ? silverSection() + themeSection() : silverSection(1000)}
-    ${endlessCities.length ? `<div class="small">Endless</div><div class="btnrow">${endlessCities.map(c=>`<button class="btn" data-endless="${c.id}">${c.name}${(store.endless||{})[c.id] ? ' · best '+store.endless[c.id] : ''}</button>`).join('')}</div><p class="hint">No game over. When a workplace overflows, its oldest visitors give up and you lose 3 points.</p>` : ''}
-    ${expertCities.length ? `<div class="small">Expert mode</div><div class="btnrow">${expertCities.map(c=>`<button class="btn" data-expert="${c.id}">${c.name} expert${(store.expert||{})[c.id] ? ' · best '+store.expert[c.id] : ''}</button>`).join('')}</div><p class="hint">Roads lock 30 seconds after you build them, there is no undo, and you get one upgrade choice instead of two.</p>` : ''}
-    ${PLUS() ? mapsSection() + sandboxSection() + tourSection() : ''}
-    <div class="small">Challenges</div><div class="grid2">${chCard(daily, dRec, 'Daily puzzle')}${chCard(weekly, wRec, 'Weekly challenge')}</div>
-    ${PLUS() ? achSection() : ''}
-    <div class="small">Codes</div>
-    <form class="btnrow" id="unlockForm" style="align-items:center"><input id="unlockIn" placeholder="Enter a code" autocomplete="off" style="font:inherit;padding:9px 12px;border-radius:12px;border:1px solid var(--panel-line);background:var(--land);color:var(--ink);min-width:0;flex:1 1 160px"><button class="btn" type="submit">Redeem</button></form>
-    ${store.admin ? '<p class="hint">Admin code active: everything is unlocked in Classic and Plus.</p>' : ''}
-    <div class="small">Check a friend's daily code</div>
-    <form class="btnrow" id="codeForm" style="align-items:center"><input id="codeIn" placeholder="e.g. 3ABC12-4F" autocomplete="off" style="font:inherit;padding:9px 12px;border-radius:12px;border:1px solid var(--panel-line);background:var(--land);color:var(--ink);min-width:0;flex:1 1 160px"><button class="btn" type="submit">Check</button><span class="hint" id="codeOut"></span></form>
-    ${settingsRow()}
-    <p class="hint">Drag to draw roads. Drag at an angle for diagonal roads. Houses and parking lots each have one driveway (lots show a little arrow); drag from a house or lot, or draw a road into it from another side, to turn its driveway. Erase with right-click or the eraser; a road with cars on it turns gray and disappears once they've passed. Ctrl+Z undoes, Space pauses. Every Sunday you pick an upgrade, and every few weeks the city grows.</p>
+    <div class="small">Cities · tap one for its options</div><div class="grid2">${cityCards}</div>
+    ${drop('Daily and weekly challenges', `<div class="grid2">${chCard(daily, dRec, 'Daily puzzle')}${chCard(weekly, wRec, 'Weekly challenge')}</div>
+      <div class="small">Check a friend's daily code</div>
+      <form class="btnrow" id="codeForm" style="align-items:center"><input id="codeIn" placeholder="e.g. 3ABC12-4F" autocomplete="off" style="${INP}"><button class="btn" type="submit">Check</button><span class="hint" id="codeOut"></span></form>`)}
+    ${PLUS() ? drop('My maps and world tour', mapsSection() + tourSection()) : ''}
+    ${PLUS() && themeSection() ? drop('Map themes', themeSection()) : ''}
+    ${PLUS() ? drop('Achievements and car styles', achSection()) : ''}
+    ${drop('Codes', `<form class="btnrow" id="unlockForm" style="align-items:center"><input id="unlockIn" placeholder="Enter a code" autocomplete="off" style="${INP}"><button class="btn" type="submit">Redeem</button></form>${store.admin ? '<p class="hint">Admin code active: everything is unlocked in Classic and Plus.</p>' : ''}`)}
+    ${drop('Settings', settingsRow())}
+    ${drop('How to play', `<p class="hint">${HELP}</p>`)}
   </div>`);
   if (paused) sheetCard.querySelector('#resume').onclick = () => { closeSheet(); G.modal = false; };
   if (paused) sheetCard.querySelector('#photo').onclick = () => { closeSheet(); photoMode(true); };
@@ -2698,7 +2735,8 @@ function showMenu(paused){
     sheetCard.querySelector('#codeOut').textContent = !r ? "That code doesn't look right. Check for typos." : `${r.score} trips on the ${r.date} daily.` + (mine ? ` Your official score that day: ${mine.first}.` : ''); };
   wireSettings(() => showMenu(paused));
   const hb = sheetCard.querySelector('#homeBtn'); if (hb) hb.onclick = showHome;
-  sheetCard.querySelectorAll('[data-city]').forEach(b => b.onclick = () => newGame({kind:'classic', city: ALL_CITIES().find(c=>c.id===b.dataset.city), mods:[], seed: (Date.now() & 0x7fffffff)}));
+  sheetCard.querySelectorAll('[data-city]').forEach(b => b.onclick = () => showCity(ALL_CITIES().find(c=>c.id===b.dataset.city), paused));
+  sheetCard.querySelectorAll('details.drop').forEach(d => d.addEventListener('toggle', () => { if (d.open) OPEN.add(d.dataset.drop); else OPEN.delete(d.dataset.drop); }));
   sheetCard.querySelectorAll('[data-endless]').forEach(b => b.onclick = () => { newGame({kind:'classic', city: CITIES.find(c=>c.id===b.dataset.endless), mods:[], seed: (Date.now() & 0x7fffffff)}); G.endless = true; G.endlessRun = true; el('cityName').textContent = G.city.name + ' · Endless'; });
   sheetCard.querySelectorAll('[data-expert]').forEach(b => b.onclick = () => newGame({kind:'expert', city: CITIES.find(c=>c.id===b.dataset.expert), mods:[], seed: (Date.now() & 0x7fffffff)}));
   const tb = sheetCard.querySelector('#tourBtn'); if (tb) tb.onclick = () => { const ids = CITIES.filter(unlocked).map(c=>c.id); newGame({kind:'tour', tourIds:ids, tourIdx:0, tourTotal:0, city: CITIES.find(c=>c.id===ids[0]), mods:[], seed:(Date.now() & 0x7fffffff)}); };

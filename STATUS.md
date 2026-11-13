@@ -1,4 +1,4 @@
-# Little Lanes — build status (Oct 12, version 34)
+# Little Lanes — build status (Nov 12, version 36)
 
 Single-file game: `index.html` (HTML + vanilla JS + Canvas 2D, no libraries). Plan and design decisions live in the "Little Lanes — Game Design & Build Plan" doc.
 
@@ -219,3 +219,18 @@ Plus only:
 
 ## Debug hook
 `window.__LL` exposes `G` (game state), `cam()`, and `expand()` for testing in the browser console.
+
+## Version 35
+- Fixed: cars riding a metro line leaked a saved drawing state every frame, which could slowly break the picture and slow the game in long Plus games
+- Fixed: removing a car that was already gone could delete a different car
+- Fixed: a delayed "airport opened" timer could fire inside the next game
+- Fixed: a crossing booking left behind by a car could lock that crossing for good; stale bookings are now cleared every second
+- Smarter crossings: each car books its movement through a junction. Movements whose lanes don't cross (opposite cars going straight, near-side turns) share the crossing; turns across oncoming traffic wait for a gap. Works for left- and right-hand driving
+- Smarter navigation: cars pick the emptier parking lot of their workplace when they leave, and switch to the other lot on the way if theirs fills up. Rerouting waits at least 3 seconds between switches, so cars don't flip back and forth
+- Faster: cars only check the cars on their own road segment; trees, settled houses and their parked cars are drawn once into cached layers. In a test city with 230 houses, a frame went from about 19 ms to 12 ms
+- sw.js now caches only the page and manifest up front and saves icons the first time they load
+
+## Version 36
+- Codes box in the menu. The admin code LANES-ADMIN-2026 unlocks every city, challenge, Expert mode and theme in both Classic and Plus on that device
+- House limit: at most about one house per 11 tiles of the open city area (about 110 on the full map)
+- Note: "cars gliding around the screen" was the metro drawing bug fixed in version 35

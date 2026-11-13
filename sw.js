@@ -1,22 +1,22 @@
-// Bump VERSION whenever you change any file, so players get the update.
-const VERSION = 'little-lanes-v34';
-const FILES = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable.png'];
-self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES))); });
+// Little Lanes service worker: lets the installed app open offline and pick up new versions.
+const VERSION = 'little-lanes-v36';
+const CORE = ['./', 'index.html', 'manifest.json'];
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(VERSION).then(c => c.addAll(CORE)).catch(() => {}));
+});
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
-// the page asks the waiting new version to take over when the player taps "Update"
 self.addEventListener('message', e => { if (e.data === 'skipWaiting') self.skipWaiting(); });
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  const url = new URL(e.request.url);
-  // the game page itself: try the network first so updates are found, fall back to the saved copy offline
-  if (e.request.mode === 'navigate' && url.origin === location.origin) {
-    e.respondWith(fetch(e.request).then(res => { if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put('./index.html', copy)); } return res; }).catch(() => caches.match('./index.html').then(r => r || caches.match('./'))));
+  const req = e.request;
+  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
+  if (req.mode === 'navigate') {
+    // the page itself: try the network first so updates show up, fall back to the saved copy offline
+    e.respondWith(fetch(req).then(r => { const copy = r.clone(); caches.open(VERSION).then(c => c.put('index.html', copy)); return r; })
+      .catch(() => caches.match('index.html').then(r => r || caches.match('./'))));
     return;
   }
-  e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
-    if (res.ok && url.origin === location.origin) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(e.request, copy)); }
-    return res;
-  }).catch(() => hit)));
+  // icons, manifest: use the saved copy, fetch and save it the first time
+  e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(r => { if (r.ok) { const copy = r.clone(); caches.open(VERSION).then(c => c.put(req, copy)); } return r; })));
 });

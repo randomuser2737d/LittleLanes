@@ -1,4 +1,4 @@
-# Little Lanes — build status (Nov 16, version 39)
+# Little Lanes — build status (Nov 16, version 41)
 
 Single-file game: `index.html` (HTML + vanilla JS + Canvas 2D, no libraries). Plan and design decisions live in the "Little Lanes — Game Design & Build Plan" doc.
 
@@ -254,3 +254,14 @@ Plus only:
 - Repeatable games: rules that used the real clock now use game time (new workplaces, newly opened areas, the airport opening), and the game steps in fixed slices. The same seed and the same moves give the same game, which duels and future score checks need
 - Duel a friend (menu dropdown): pick a city and a rule, either Survival (last to overflow wins) or Sprint (most trips by the end of week 10), and get a code like DUEL-0FJSAW-SG. Both players enter it, play the same city with the same houses and workplaces, then swap result codes (RES-…) at the end to see who won. Codes carry a check so typos and mixed-up duels are caught
 - Duel emotes: an emote button in duel games opens 8 preset emotes (Hi, Good luck, Nice road, Oops, Close one, Bring it, GG, Rematch?). They show as a bubble for 2.5 seconds. Limits: one every 3 seconds, 20 per game, and a 10-second cooldown after the same one 3 times in a row. For now they only show on your own screen; online duels will send them to the other player
+
+## Version 40
+- Duels can't be paused: the pause button and planning mode are hidden, Space does nothing, and the city keeps running while the menu or photo mode is open. If you switch to another app or tab, the city catches up on the missed time when you come back (up to 3 minutes). Upgrade choices still wait, since both players get the same ones
+
+## Version 41 (fair play)
+- Duel upgrade screens pick the first card after 20 seconds (one limit for the new-tool card and the choice together), so they can't be used as a pause
+- Duels are not saved, so you can't quit and reload an earlier moment
+- Each duel attempt is counted per device, and the result code shows it ("attempt 2"), so replaying a duel to learn it shows up
+- Duels and daily/weekly puzzles always use the same play-area shape, even on a phone held upright (it used to get a taller area)
+- Daily puzzle: the first run you start is the official one. Quitting it and starting again makes the official score 0 and the new run practice
+- Still possible, since everything runs on the device: editing saved data in the browser tools. Online play with server score checks fixes that later

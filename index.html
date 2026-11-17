@@ -444,7 +444,8 @@ function loadStore(ed){
   // scores end up in menus: keep them plain numbers
   const num = v => Math.max(0, Math.min(1e7, Math.floor(+v) || 0));
   for (const k of ['best','endless','expert','chal']) { const o = store[k]; if (!o || typeof o !== 'object' || Array.isArray(o)) { if (k==='best'||k==='endless') store[k] = {}; else delete store[k]; continue; } for (const id in o) o[id] = num(o[id]); }
-  for (const k of ['daily','weekly']) { const o = store[k]; if (!o || typeof o !== 'object' || Array.isArray(o)) { store[k] = {}; continue; } for (const id in o) { const r = o[id]; o[id] = r && typeof r === 'object' ? {first: r.first === null ? null : num(r.first), best: num(r.best), top: (Array.isArray(r.top) ? r.top : []).slice(0,5).map(num)} : {first:null, best:0, top:[]}; } }
+  for (const k of ['daily','weekly']) { const o = store[k]; if (!o || typeof o !== 'object' || Array.isArray(o)) { store[k] = {}; continue; } for (const id in o) { const r = o[id]; o[id] = r && typeof r === 'object' ? {first: r.first === null ? null : num(r.first), best: num(r.best), top: (Array.isArray(r.top) ? r.top : []).slice(0,5).map(num), started: r.started === true} : {first:null, best:0, top:[]}; } }
+  if (store.duelTries && (typeof store.duelTries !== 'object' || Array.isArray(store.duelTries))) delete store.duelTries; else if (store.duelTries) for (const k in store.duelTries) { if (!/^DUEL-[0-9A-Z-]{6,12}$/.test(k)) delete store.duelTries[k]; else store.duelTries[k] = num(store.duelTries[k]); }
   for (const k of ['tour','tut']) if (store[k] !== undefined) store[k] = num(store[k]);
   if (store.lb && typeof store.lb === 'object' && !Array.isArray(store.lb)) { const lb = {}; for (const id of Object.keys(store.lb)) if (/^[a-z]+$/.test(id) && Array.isArray(store.lb[id])) lb[id] = store.lb[id].slice(0, 10).filter(Array.isArray).map(r => [num(r[0]), num(r[1]), num(r[2])]); store.lb = lb; } else delete store.lb;
   store.admin = store.admin === true;
@@ -522,9 +523,10 @@ function readDuel(code){ const m = /^DUEL-([0-9A-Z])([0-9A-Z]{4})([SW])-([0-9A-Z
   const body = m[1]+m[2]+m[3]; if (duelChk(body).slice(0,2) !== m[4]) return null; const city = CITIES[parseInt(m[1], 36)]; if (!city) return null;
   return {code: `DUEL-${body}-${m[4]}`, city, seed: parseInt(m[2], 36), rule: m[3]}; }
 // a result says how far you got in that duel: score, week reached, and whether the city overflowed
-function makeResult(duelCode, score, week, lost){ const body = `${Math.min(99999, score).toString(36).toUpperCase().padStart(4,'0')}${Math.min(99, week).toString(36).toUpperCase().padStart(2,'0')}${lost ? 'L' : 'F'}`; return `RES-${body}-${duelChk(duelCode + body)}`; }
-function readResult(duelCode, code){ const m = /^RES-([0-9A-Z]{4})([0-9A-Z]{2})([LF])-([0-9A-Z]{4})$/.exec(String(code||'').trim().toUpperCase()); if (!m) return null;
-  if (duelChk(duelCode + m[1]+m[2]+m[3]) !== m[4]) return {bad: true}; return {score: parseInt(m[1], 36), week: parseInt(m[2], 36), lost: m[3] === 'L'}; }
+function makeResult(duelCode, score, week, lost, tries){ const body = `${Math.min(99999, score).toString(36).toUpperCase().padStart(4,'0')}${Math.min(99, week).toString(36).toUpperCase().padStart(2,'0')}${lost ? 'L' : 'F'}${Math.min(35, tries || 1).toString(36).toUpperCase()}`; return `RES-${body}-${duelChk(duelCode + body)}`; }
+function readResult(duelCode, code){ const m = /^RES-([0-9A-Z]{4})([0-9A-Z]{2})([LF])([1-9A-Z])-([0-9A-Z]{4})$/.exec(String(code||'').trim().toUpperCase()); if (!m) return null;
+  if (duelChk(duelCode + m[1]+m[2]+m[3]+m[4]) !== m[5]) return {bad: true}; return {score: parseInt(m[1], 36), week: parseInt(m[2], 36), lost: m[3] === 'L', tries: parseInt(m[4], 36)}; }
+const triesTxt = r => r.tries > 1 ? `, attempt ${r.tries >= 35 ? '35+' : r.tries}` : '';
 function duelVerdict(rule, me, them){
   const a = rule === 'W' ? [me.score, me.week] : [me.lost ? me.week : 99, me.score], b = rule === 'W' ? [them.score, them.week] : [them.lost ? them.week : 99, them.score];
   if (a[0] !== b[0]) return a[0] > b[0] ? 1 : -1; if (a[1] !== b[1]) return a[1] > b[1] ? 1 : -1; return 0; }
@@ -553,7 +555,8 @@ function sendEmote(k){
 }
 function showEmoteUI(on){ el('emoteBtn').hidden = !on; if (!on) { el('emoteRing').hidden = true; el('emoteBubble').hidden = true; } }
 document.getElementById('emoteBtn').onclick = () => { const r = el('emoteRing'); r.innerHTML = EMOTES.map(([e, t], k) => `<button data-emo="${k}" ${emoteReady() ? '' : 'disabled'}>${e} ${t}</button>`).join(''); r.hidden = !r.hidden; r.querySelectorAll('[data-emo]').forEach(b => b.onclick = () => sendEmote(+b.dataset.emo)); };
-function startDuel(d){ newGame({kind:'duel', city: d.city, mods:[], seed: d.seed, duel: d}); toast(`Duel: ${DUEL_RULES[d.rule]}. Your friend gets the same city.`, 3500); }
+function startDuel(d){ store.duelTries = store.duelTries && typeof store.duelTries === 'object' ? store.duelTries : {}; const n = (store.duelTries[d.code] || 0) + 1; store.duelTries[d.code] = n; const ks = Object.keys(store.duelTries); if (ks.length > 60) delete store.duelTries[ks[0]]; save();
+  newGame({kind:'duel', city: d.city, mods:[], seed: d.seed, duel: d}); G.duelTry = n; if (n > 1) setTimeout(() => toast(`Attempt ${n} at this duel. Your result code shows it to your friend.`, 3500), 3600); toast(`Duel: ${DUEL_RULES[d.rule]}. Your friend gets the same city.`, 3500); }
 function wireDuel(){
   const q = id => sheetCard.querySelector(id); if (!q('#duelMake')) return;
   let made = null;
@@ -567,20 +570,20 @@ function wireDuel(){
     if (!me || !them) { out.textContent = 'Check both result codes.'; return; }
     if (me.bad || them.bad) { out.textContent = "A result code doesn't belong to this duel."; return; }
     const v = duelVerdict(d.rule, me, them);
-    out.textContent = `${v > 0 ? 'You win!' : v < 0 ? 'Your friend wins.' : "It's a tie!"} You: ${me.score} trips, week ${me.week}${me.lost ? ' (overflowed)' : ''}. Friend: ${them.score} trips, week ${them.week}${them.lost ? ' (overflowed)' : ''}.`; };
+    out.textContent = `${v > 0 ? 'You win!' : v < 0 ? 'Your friend wins.' : "It's a tie!"} You: ${me.score} trips, week ${me.week}${me.lost ? ' (overflowed)' : ''}${triesTxt(me)}. Friend: ${them.score} trips, week ${them.week}${them.lost ? ' (overflowed)' : ''}${triesTxt(them)}.`; };
 }
 function duelEndHtml(lost){
-  const d = G.cfg.duel, res = makeResult(d.code, G.score, G.week, lost);
+  const d = G.cfg.duel, res = makeResult(d.code, G.score, G.week, lost, G.duelTry);
   return `<p>Duel <b>${d.code}</b> · ${DUEL_RULES[d.rule]}</p><div class="btnrow" style="align-items:center"><span class="tag" style="font-size:15px;padding:6px 12px;user-select:text" id="resTxt">${res}</span><button class="btn" id="copyRes">Copy result code</button></div>
     <form class="btnrow" id="resCmp" style="align-items:center"><input id="resThem" placeholder="Friend's result code" autocomplete="off" style="${INP}"><button class="btn" type="submit">Who won?</button></form><p class="hint" id="resOut">Send your result code to your friend, and paste theirs here.</p>`;
 }
 function wireDuelEnd(lost){
   const q = id => sheetCard.querySelector(id); if (!q('#copyRes')) return;
-  const d = G.cfg.duel, me = {score: G.score, week: G.week, lost};
+  const d = G.cfg.duel, me = {score: G.score, week: G.week, lost, tries: G.duelTry || 1};
   q('#copyRes').onclick = () => navigator.clipboard?.writeText(q('#resTxt').textContent).then(() => toast('Result code copied'), () => toast('Select the code to copy it'));
   q('#resCmp').onsubmit = e => { e.preventDefault(); const them = readResult(d.code, q('#resThem').value);
     q('#resOut').textContent = !them ? "That result code doesn't look right." : them.bad ? "That result code is from a different duel." :
-      (v => `${v > 0 ? 'You win!' : v < 0 ? 'Your friend wins.' : "It's a tie!"} Friend: ${them.score} trips, week ${them.week}${them.lost ? ' (overflowed)' : ''}.`)(duelVerdict(d.rule, me, them)); };
+      (v => `${v > 0 ? 'You win!' : v < 0 ? 'Your friend wins.' : "It's a tie!"} Friend: ${them.score} trips, week ${them.week}${them.lost ? ' (overflowed)' : ''}${triesTxt(them)}.`)(duelVerdict(d.rule, me, them)); };
 }
 // Sprint duels end after week 10 with no overflow
 function finishSprint(){
@@ -633,7 +636,7 @@ function newGame(cfg, bare){
     G.stage = STAGES.length - 1;
     G.colors = 3;
   }
-  G.portrait = innerHeight > innerWidth * 1.15;
+  G.portrait = !['duel','daily','weekly'].includes(cfg.kind) && innerHeight > innerWidth * 1.15;
   G.rect = stageRect(G.stage);
   const [cx, cy] = city.center;
   for (let i=0;i<N;i++){ const d = Math.hypot(ix(i)-cx, iy(i)-cy); G.revealAt[i] = now + 0.15 + d*0.035; }
@@ -646,6 +649,11 @@ function newGame(cfg, bare){
   for (const sel of ['[data-tool=ferry]','[data-tool=metro]','#planBtn','#trafBtn','#statsBtn','#nightBtn']) document.querySelector(sel).hidden = !PLUS();
   setSpeed(1); setTool('draw'); closeSheet();
   Object.assign(EMO, {last: -99, sent: 0, streak: 0, prev: -1, coolUntil: -99}); showEmoteUI(cfg.kind === 'duel');
+  document.querySelector('[data-speed="0"]').hidden = cfg.kind === 'duel'; if (cfg.kind === 'duel') el('planBtn').hidden = true;
+  if (!bare && cfg.kind === 'daily') { const r = store.daily[cfg.key] || {first:null, best:0, top:[]};
+    G.dailyOfficial = !r.started && r.first === null;
+    if (!G.dailyOfficial && r.first === null) { r.first = 0; setTimeout(() => toast("Today's official run was left unfinished, so it counts as 0. This run is practice.", 4000), 600); }
+    r.started = true; store.daily[cfg.key] = r; save(); }
   if (!bare) { tone(523, .3, .04); saveGame(); }
 }
 
@@ -1360,7 +1368,15 @@ function showReveal(k){
     <p>${u.desc}</p>
     <div class="btnrow"><button class="btn primary" id="gotIt">Got it</button></div></div>`);
   tone(660,.12,.04,'triangle'); setTimeout(()=>tone(880,.18,.04,'triangle'),120); setTimeout(()=>tone(1175,.25,.04,'triangle'),240);
+  duelAutoPick();
   sheetCard.querySelector('#gotIt').onclick = () => { G.seen.add(k); showUpgrade(); };
+}
+function duelAutoPick(){
+  if (!isDuel()) return; const pend = G.pending, card = sheetCard;
+  const h = document.createElement('p'); h.className = 'hint'; h.textContent = `Duel: picks the first card for you in ${Math.max(1, Math.round(((pend.dl || performance.now()+20000) - performance.now())/1000))} seconds.`; card.querySelector('.stack')?.appendChild(h);
+  pend.dl = pend.dl || performance.now() + 20000; // one 20 s limit for the reveal card and the choice together
+  const tick = () => { if (!G || G.pending !== pend || G.over) return; if (performance.now() < pend.dl) { setTimeout(tick, 250); return; } const b = sheetCard.querySelector('#gotIt') || sheetCard.querySelector('[data-upg]'); if (b) b.click(); };
+  clearTimeout(duelAutoPick.t); duelAutoPick.t = setTimeout(tick, 250);
 }
 function showUpgrade(){
   const {picks, willExpand} = G.pending;
@@ -1378,6 +1394,7 @@ function showUpgrade(){
       <span class="upg-desc">${u.desc}</span>
       <span class="upg-have">You have ${u.have()}</span></button>`; }).join('')}</div>
     ${willExpand ? '<p class="hint">The city grows after you choose.</p>' : ''}</div>`);
+  duelAutoPick();
   const pk = sheetCard.querySelector('#peek');
   const peek = on => { sheet.style.opacity = on ? '0.06' : ''; };
   pk.addEventListener('pointerdown', e => { e.preventDefault(); peek(true); });
@@ -1466,7 +1483,7 @@ function gameOver(d){
   } else {
     if (cfg.kind === 'daily') unlockAch('daily');
     const bucket = store[cfg.kind]; const rec = bucket[cfg.key] || {first:null, best:0, top:[]};
-    const official = rec.first === null;
+    const official = rec.first === null && G.dailyOfficial !== false;
     if (official) rec.first = G.score;
     rec.best = Math.max(rec.best, G.score);
     rec.top = [...rec.top, G.score].sort((a,b)=>b-a).slice(0,5);
@@ -1543,11 +1560,12 @@ function showOver(d, extra){
 // ---------- input ----------
 let tool = 'draw', stroke = null;
 function setTool(t){ tool = t; document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool===t)); cv.style.cursor = t==='erase' ? 'cell' : 'crosshair'; }
-function setSpeed(s){ if (!G) return; if (G.plan && s > 0) { toast('Build or cancel your plan first'); return; } G.speed = s; document.querySelectorAll('[data-speed]').forEach(b => b.classList.toggle('on', +b.dataset.speed===s)); }
+const isDuel = () => !!(G && G.cfg && G.cfg.kind === 'duel');
+function setSpeed(s){ if (!G) return; if (isDuel() && s === 0 && !G.over) { toast('No pausing in duels'); return; } if (G.plan && s > 0) { toast('Build or cancel your plan first'); return; } G.speed = s; document.querySelectorAll('[data-speed]').forEach(b => b.classList.toggle('on', +b.dataset.speed===s)); }
 document.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool));
 document.querySelectorAll('[data-speed]').forEach(b => b.onclick = () => setSpeed(+b.dataset.speed));
 document.getElementById('undoBtn').onclick = () => doUndo();
-function startPlan(){ if (!G || G.over || G.modal || G.plan) return; G.plan = {snap: roadState(), speed: G.speed || 1, roads: new Set()}; for (let i=0;i<N;i++) if (G.occ[i]===1) G.plan.roads.add(i); G.speed = 0; document.querySelectorAll('[data-speed]').forEach(b => b.classList.toggle('on', +b.dataset.speed===0)); el('planBar').hidden = false; el('planBtn').classList.add('on'); }
+function startPlan(){ if (!G || G.over || G.modal || G.plan) return; if (isDuel()) { toast('Planning mode pauses the city, so it is off in duels'); return; } G.plan = {snap: roadState(), speed: G.speed || 1, roads: new Set()}; for (let i=0;i<N;i++) if (G.occ[i]===1) G.plan.roads.add(i); G.speed = 0; document.querySelectorAll('[data-speed]').forEach(b => b.classList.toggle('on', +b.dataset.speed===0)); el('planBar').hidden = false; el('planBtn').classList.add('on'); }
 function endPlan(build){ if (!G || !G.plan) return; const p = G.plan; if (!build) applyRoadState(p.snap); G.plan = null; el('planBar').hidden = true; el('planBtn').classList.remove('on'); setSpeed(p.speed); toast(build ? 'Plan built' : 'Plan canceled'); }
 for (const [id, k, msg] of [['trafBtn','traf','Traffic view'],['statsBtn','stats','Live stats'],['nightBtn','night','Day and night']]) {
   const b = document.getElementById(id); b.classList.toggle('on', !!SET[k]);
@@ -1840,7 +1858,18 @@ addEventListener('keydown', e => {
   if (e.key==='m'||e.key==='M') setTool('mway');
   if (PLUS() && (e.key==='p'||e.key==='P')) { G.plan ? endPlan(true) : startPlan(); }
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden && G && !G.over) setSpeed(0); });
+// duels never pause: if you switch away, the city catches up on the time you missed (up to 3 minutes)
+document.addEventListener('visibilitychange', () => {
+  if (!G || G.over) return;
+  if (isDuel()) {
+    if (document.hidden) G.hiddenAt = performance.now();
+    else if (G.hiddenAt) { let miss = Math.min(180, (performance.now() - G.hiddenAt) / 1000) * (G.speed || 1); G.hiddenAt = 0;
+      while (miss >= 0.025 && !G.over && !G.pending) { update(0.025); miss -= 0.025; }
+      if (!G.over) toast('Your city kept going while you were away'); }
+    return;
+  }
+  if (document.hidden) setSpeed(0);
+});
 
 // ---------- undo ----------
 function roadState(){
@@ -1877,7 +1906,7 @@ function doUndo(){ if (!G || G.over || G.modal || !G.undo.length) return; if (G.
 // ---------- save & resume ----------
 const gkey = () => EDITION === 'plus' ? 'littlelanes.save' : 'littlelanes.classic.save';
 function serialize(){
-  if (!G || G.over) return null;
+  if (!G || G.over || G.cfg.kind === 'duel') return null;
   const back = new Map();
   for (const c of G.cars) if (!c.kind) back.set(c.home, (back.get(c.home)||0) + 1);
   for (const r of G.returning) back.set(r.h, (back.get(r.h)||0) + 1);
@@ -1886,7 +1915,7 @@ function serialize(){
     road: roadState(), houses: G.houses.map(h => [h.i, h.color, h.idle + (back.get(h)||0), h.trips||0, !!h.apt, h.face||0]),
     dests: G.dests.map(d => [d.x, d.y, d.ent, d.color, d.pins, d.pinT, d.timer, d.pq, entsOf(d), d.level||1, d.served||0, lotsOf(d).map(l => [l.t, l.gate, l.face])]),
     week:G.week, weekT:G.weekT, time:G.time, houseT:G.houseT, score:G.score, endless:G.endless, colors:G.colors, stage:G.stage, portrait:!!G.portrait, wk:(G.weekly||[]).slice(-200), sec:!!G.usedSecond, incoming:G.incoming||[],
-    ms:[...G.milestonesHit], pending:G.pending||null, got:[...(G.got||[])], seen:[...(G.seen||[])], bonus:G.bonus, weather:G.weather, saved: Date.now() };
+    ms:[...G.milestonesHit], dof: G.dailyOfficial, pending:G.pending||null, got:[...(G.got||[])], seen:[...(G.seen||[])], bonus:G.bonus, weather:G.weather, saved: Date.now() };
 }
 function restore(S){
   try {
@@ -1897,7 +1926,7 @@ function restore(S){
     rng = mulberry32(S.rng);
     Object.assign(G, {week:S.week, weekT:S.weekT, time:S.time, houseT:S.houseT, score:S.score, endless:S.endless, colors:S.colors, stage:S.stage});
     G.incoming = (Array.isArray(S.incoming) ? S.incoming : []).filter(i => i && Number.isInteger(i.color) && i.color >= 0 && i.color < CAR_COLORS.length).map(i => ({color:i.color, houses:!!i.houses, at: Array.isArray(i.at) ? [i.at[0]|0, i.at[1]|0] : null, t: +i.t || 0}));
-    G.milestonesHit = new Set(S.ms); G.got = new Set(S.got || []); G.seen = new Set(S.seen || ['roads']);
+    G.milestonesHit = new Set(S.ms); G.dailyOfficial = S.dof; G.got = new Set(S.got || []); G.seen = new Set(S.seen || ['roads']);
     G.portrait = !!S.portrait; G.rect = stageRect(G.stage); G.weekly = (Array.isArray(S.wk) ? S.wk : []).map(v => Math.max(0, v|0)); G.usedSecond = !!S.sec;
     for (let i=0;i<N;i++) G.revealAt[i] = inRect(G.rect,i) ? now - 1 : 1e9;
     for (const [i, color, idle, trips, apt, face] of S.houses) { const h = {i, color, idle, born: now-1, trips: trips||0, apt: !!apt, face: face||0}; G.houses.push(h); G.houseAt.set(i, h); G.occ[i] = 2; }
@@ -2758,7 +2787,7 @@ function showHome(){
       ${card('classic', 'Classic', '<span class="tag">Simple</span>', 'The pure road puzzle. Roads, bridges, tunnels, roundabouts, lights, and motorways.', ['18 real cities', 'Daily and weekly challenges', 'Replays and photo mode'])}
       ${card('plus', 'Plus', '<span class="tag">Free for now</span>', 'Everything in Classic, plus weather, events, ferries, metros, and smarter traffic.', ['Map maker and sandbox', 'World tour and achievements', 'Cars route around traffic'])}
     </div>
-    <p class="hint">Classic and Plus keep separate progress. Version 39.</p>
+    <p class="hint">Classic and Plus keep separate progress. Version 41.</p>
     ${settingsRow()}
   </div>`);
   sheetCard.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { setEdition(b.dataset.mode); SET.lastMode = b.dataset.mode; saveSet(); showMenu(); });
@@ -2883,7 +2912,7 @@ function frame(ts){
   now = ts/1000; const rdt = Math.min(0.05, now - last); last = now; if (G) G.fdt = rdt;
   requestAnimationFrame(frame);
   try {
-    if (G && !G.over && !G.modal && G.speed > 0) { G.acc = Math.min(1, (G.acc || 0) + rdt*G.speed); while (G.acc >= 0.025 && !G.over && !G.modal) { update(0.025); G.acc -= 0.025; } }
+    if (G && !G.over && (!G.modal || (isDuel() && !G.pending)) && G.speed > 0) { G.acc = Math.min(1, (G.acc || 0) + rdt*G.speed); while (G.acc >= 0.025 && !G.over && !G.pending && (!G.modal || isDuel())) { update(0.025); G.acc -= 0.025; } }
     if (G && !G.over && !G.modal && G.speed > 0 && now - lastSave > 8) saveGame();
     render(); updateHud();
   } catch (err) { if (!frame.warned) { frame.warned = true; console.error(err); } }

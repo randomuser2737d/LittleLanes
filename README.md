@@ -2,14 +2,14 @@
 
 A calm road-building puzzle game for every device. Draw roads between houses and workplaces in real cities, keep the traffic moving, and see how many weeks your city can last.
 
-Made by Enoch (game design) with help from Claude (code). Inspired by the style of Mini Motorways; all code, maps and art here are original.
+Made by Enoch (game design) with help from Claude (code). All code, maps and art here are original.
 
 ## Play
 - Open the game's web address in any browser, or install it as an app (see [INSTALL.md](INSTALL.md)).
 - It works offline once it has been opened or installed.
 
 ## Two modes
-- **Classic:** the pure puzzle, close to Mini Motorways. Roads, diagonal roads, bridges, tunnels, 5-tile roundabouts, smart traffic lights and motorways. You get a weekly upgrade choice, and the city grows. There are daily and weekly puzzles, Endless and Expert modes, and city challenges at 1,000 trips.
+- **Classic:** the pure puzzle, the core road puzzle. Roads, diagonal roads, bridges, tunnels, 5-tile roundabouts, smart traffic lights and motorways. You get a weekly upgrade choice, and the city grows. There are daily and weekly puzzles, Endless and Expert modes, and city challenges at 1,000 trips.
 - **Plus:** everything in Classic, plus extras:
   - ferries, metro lines, airports, warehouse trucks and ambulances
   - weather, rush hour and events

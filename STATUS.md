@@ -1,14 +1,14 @@
-# Little Lanes — build status (Nov 12, version 37)
+# Little Lanes — build status (Nov 16, version 39)
 
 Single-file game: `index.html` (HTML + vanilla JS + Canvas 2D, no libraries). Plan and design decisions live in the "Little Lanes — Game Design & Build Plan" doc.
 
 ## Two modes in one app (version 13)
-- Home screen with **Classic** (Mini Motorways-style essentials) and **Plus** (everything, "Free for now"; a one-time $1.99 or 1-month trial is a later idea, not built)
+- Home screen with **Classic** (the essentials) and **Plus** (everything, "Free for now"; a one-time $1.99 or 1-month trial is a later idea, not built)
 - Separate progress and save slots per mode (`littlelanes.classic.v1` / `littlelanes.v1`); shared settings (`littlelanes.settings`): theme Auto/Light/Dark, colorblind shapes, sound on/off
 - Classic hides: ferries, metro, airports, warehouse/trucks, ambulances, rush hour/game days/carnival, road work, weather and floods, drawbridges and trains, apartments, Silver challenges, Gold themes, world tour, achievements/car styles, planning mode, map maker, sandbox, practice town, seasonal decorations. Classic keeps replay and photo mode
 - `PLUS()` gates every Plus-only feature in the code
 
-## Mini Motorways-style details (both modes)
+## Core rules (both modes)
 - Start with 20 road tiles (10 with Tight budget); no free weekly roads. Each Sunday pick 1 of 2 upgrade sets: Road tiles +30; Bridges +2 with 15 roads; Tunnels +2 with 15 roads; Roundabouts +2 with 10 roads; Traffic lights +3 with 10 roads; Motorway +1; (Plus) Ferry +1 with 10, Metro +1 with 10. At least one of the two choices always includes roads
 - Tools join the pool by week (bridges/tunnels week 1 if the terrain needs them, roundabouts 2, lights 3, motorway 4, Plus ferry 3, metro 7), weighted per city (UPG_BIAS)
 - The first time a tool is offered in a game, a "New upgrade unlocked" card shows before the choice
@@ -31,12 +31,12 @@ Single-file game: `index.html` (HTML + vanilla JS + Canvas 2D, no libraries). Pl
 ## Version 32 (real traffic jams)
 - Cars no longer "ghost" through each other after waiting 5 s: a jam stays a jam until it clears (a 25 s safety valve remains only for genuine dead-ends)
 - A car keeps a crossing blocked until it is fully through it (0.62 tiles past, was 0.32), and cars keep a bigger gap (0.62 tiles, was 0.5); a car can't enter a road until the car ahead has moved on
-- Result: busy crossings, driveways and full parking lots now back traffic up, and badly planned roads can gridlock, as in the original. Roundabouts, traffic lights and motorways matter much more
+- Result: busy crossings, driveways and full parking lots now back traffic up, and badly planned roads can gridlock. Roundabouts, traffic lights and motorways matter much more
 - Removed the 3× speed button (and key); speeds are pause, 1× and 2×
 
 ## Version 31 (much harder, both modes)
 - Cars drive at 1.15 tiles/s (was 1.6)
-- The first city area is bigger (17×11 instead of 14×9) and grows in larger steps, so everything looks smaller and cars look slower, like the original
+- The first city area is bigger (17×11 instead of 14×9) and grows in larger steps, so everything looks smaller and cars look slower
 - Workplaces want visitors about twice as often (every 5 s at the start, down to 2.6 s later; was 9.5 s → 3.4 s). A workplace now needs 2–3 houses, not 1
 - New houses always appear at least ~5 tiles from their own workplace
 - A new workplace appears every week from week 2 (was every other week); new colors still every 3 weeks
@@ -49,7 +49,7 @@ Single-file game: `index.html` (HTML + vanilla JS + Canvas 2D, no libraries). Pl
 - "Install app" button in Settings (home screen and pause menu): uses the browser's install prompt where there is one (Chrome, Edge, Android) and shows step-by-step instructions on iPhone/iPad and Mac Safari. Hidden once installed
 
 ## Version 29 (harsher traffic, both modes)
-- Cars are slower (speed 2.1 → 1.6 tiles/s), closer to Mini Motorways
+- Cars are slower (speed 2.1 → 1.6 tiles/s), at a calmer pace
 - A car that gets home rests in its driveway for 3.5 s before it can leave again, so one house can't clear a whole workplace by bouncing back and forth (each house still has 2 cars)
 - Cars stay parked at work 1.6 s (was 0.9)
 - Turns are slower (corner speed 62% → 50%), and every crossing slows cars a little even going straight (roundabouts don't)
@@ -67,7 +67,7 @@ Three optional Plus toggles in the toolbar (remembered between games, hidden in 
   - Cape Town (drives left): Table Bay, Table Mountain and Lion's Head, False Bay
   - Toronto (drives right): Lake Ontario and the Toronto Islands, the Don and Humber rivers
 - Each has two challenges, a Gold map theme (Plus) and its own upgrade leanings. 18 cities total
-- Classic now has city challenges too, unlocked per city at 1,000 trips (like the original)
+- Classic now has city challenges too, unlocked per city at 1,000 trips
 
 ## Version 26 (City Pack 3)
 - New cities in both modes (Pack 3, unlocks after Hong Kong at 800 trips each):
@@ -77,18 +77,18 @@ Three optional Plus toggles in the toolbar (remembered between games, hidden in 
 - Each has two challenges, a Gold map theme (Plus), and its own upgrade leanings
 - New-workplace pulse now only marks spots where the whole building fits on land
 
-## Version 25 (Mini Motorways mechanics)
+## Version 25 (core mechanics)
 - Roundabouts are a 5-tile plus shape: tap a road or open ground and it fills the center and 4 arms (no road tiles used), drawn as a big circle; cars enter only from the 4 sides and drive around the ring. Erasing any part removes the whole roundabout and gives it back. Upgrade gives 1 roundabout + 20 roads. Old saves: single-tile roundabouts are returned to your stock
 - Motorways can't cross mountains and can't start or end at a roundabout or traffic light; traffic lights can't go on a motorway end, bridge or tunnel
-- Bridges like the original: no junctions on a bridge, and houses can't connect straight onto a bridge or tunnel
+- Bridges: no junctions on a bridge, and houses can't connect straight onto a bridge or tunnel
 - Road upgrades: every tool comes with 20 road tiles (motorway 10). Fixed: version 24 said this but the bridge/tunnel/roundabout/light sets still gave 15/10. The road-only pick is now "skip the tool" and gives 30, sometimes 40
 - Endless reworked: overflowing workplaces lose their 3 oldest visitors and you lose 3 points, no game over. New Endless section in the city menu (for cities you've played) with its own best scores
 - Cars a little slower (speed 2.4 → 2.1)
 - GPS routing in both modes: cars pick the fastest route by travel time (motorway speed, junction delays: lights > plain crossings > roundabouts) with live traffic, and re-route mid-trip when a jam makes another way at least 18% faster
 
-## Version 24 (closer to Mini Motorways + Plus extras)
+## Version 24 (at a calmer pace + Plus extras)
 Classic and Plus:
-- Capacity like the original: a workplace holds 6 waiting pins (8 once it grows); one more starts the red timer
+- Capacity: a workplace holds 6 waiting pins (8 once it grows); one more starts the red timer
 - Parking lots have 3 spaces (grown workplaces get a second lot, 6 total)
 - Grown workplaces become big round buildings
 - Every tool upgrade comes with 20 road tiles (motorway 10); the road-only pick stays 30
@@ -120,7 +120,7 @@ Plus only:
 - Diagonal driveways: houses face any of 8 directions; drag from a house diagonally to turn it
 - Houses redesigned: set back from a driveway pad, idle cars parked on the driveway facing the road; turning animates
 - Workplace lots framed in the building's color (reads as that building's garage); capacity shown as empty pin rings (7 on a new building), overflow pins tinted red
-- Capacity like the original: red timer starts above 7 pins, max 10; cars prefer buildings whose timer is running
+- Capacity: red timer starts above 7 pins, max 10; cars prefer buildings whose timer is running
 - Every upgrade set includes road tiles (motorway now +10 roads)
 - Car horns when a car is stuck ~2 s (rate-limited)
 - Dismissable 4-step tutorial cards with Got it (per mode)
@@ -148,10 +148,10 @@ Plus only:
 - Faint grid dots show while drawing
 - Old saves are converted (lots get a driveway automatically)
 
-## Version 16 (Mini Motorways-style parking lots)
+## Version 16 (core-style parking lots)
 - Every workplace has a 2-tile parking lot along one side of the building, joined to it by a strip in the building's color, with 4 painted stalls and a lane on the open side
 - Roads can connect to either lot tile; cars use whichever is closer
-- Each lot tile holds 2 parked cars; when both stalls are full, the next car waits at the entrance (more lots = more throughput, like the original)
+- Each lot tile holds 2 parked cars; when both stalls are full, the next car waits at the entrance (more lots = more throughput
 - Cars glide into a stall nose-first toward the building, wait, then back out smoothly
 - When a workplace grows (after 30 trips), it gets a second full parking lot on another side
 - Airport and warehouse (Plus) keep their 1-tile lot; old saves with 1-tile lots still load
@@ -238,3 +238,19 @@ Plus only:
 ## Version 37
 - Cleaner menu: compact city cards; tapping a city opens its own panel with Play, Endless, Expert, Sandbox and that city's challenges (locked cities explain how to unlock)
 - Everything else is in collapsible dropdowns: Daily and weekly challenges, My maps and world tour, Map themes, Achievements and car styles, Codes, Settings, How to play
+
+## Version 38
+- Bigger maps: the grid grew from 44x28 to 60x38 tiles at the same tile size, so each city now shows more of its real surroundings (rebuilt from OpenStreetMap coastlines and lakes, with rivers traced further out)
+- The city keeps growing for longer: new stages at week 19 (52x33) and week 23 (the full 60x38); the 44x28 stage now comes at week 15
+- Old Map maker maps and map codes are moved into the middle of the bigger grid automatically. Unfinished games from before reset once; best scores and unlocks stay
+- Leaderboard in each city panel: your top 10 runs on this device (score, week, date)
+- Calendar in "Daily and weekly challenges": every daily puzzle and weekly challenge for the month is shown in advance; today is highlighted, past days show your official score, and new ones unlock on their own
+
+## Ideas for later
+- Duel mode (needs brainstorming): two players on the same seed side by side or turn-based; first to overflow loses, or most trips by week 10. Needs either same-device split screen or a small server for online play
+- Online leaderboards need a small server (for example a free Supabase or Firebase project); the current leaderboard is per device
+
+## Version 39
+- Repeatable games: rules that used the real clock now use game time (new workplaces, newly opened areas, the airport opening), and the game steps in fixed slices. The same seed and the same moves give the same game, which duels and future score checks need
+- Duel a friend (menu dropdown): pick a city and a rule, either Survival (last to overflow wins) or Sprint (most trips by the end of week 10), and get a code like DUEL-0FJSAW-SG. Both players enter it, play the same city with the same houses and workplaces, then swap result codes (RES-…) at the end to see who won. Codes carry a check so typos and mixed-up duels are caught
+- Duel emotes: an emote button in duel games opens 8 preset emotes (Hi, Good luck, Nice road, Oops, Close one, Bring it, GG, Rematch?). They show as a bubble for 2.5 seconds. Limits: one every 3 seconds, 20 per game, and a 10-second cooldown after the same one 3 times in a row. For now they only show on your own screen; online duels will send them to the other player

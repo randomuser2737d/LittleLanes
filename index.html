@@ -114,13 +114,27 @@ p{margin:0;line-height:1.5;color:var(--muted)}
 .opt{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;padding:14px;border-radius:14px;border:1px solid var(--panel-line);background:var(--land);min-width:0}
 .opt:hover:not(:disabled){border-color:var(--accent)}
 .opt:disabled{cursor:default}
+#emoteRing{position:fixed;left:12px;top:calc(env(safe-area-inset-top,0px) + 120px);display:grid;grid-template-columns:repeat(2,auto);gap:6px;background:var(--panel);border:1px solid var(--panel-line);border-radius:16px;padding:8px;box-shadow:0 10px 30px rgba(0,0,0,.18);z-index:5}
+#emoteRing button{border:1px solid var(--panel-line);background:var(--land);border-radius:12px;padding:8px 10px;font-size:14px;text-align:left;white-space:nowrap}
+#emoteRing button:disabled{opacity:.4;cursor:default}
+#emoteBubble{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 110px);transform:translateX(-50%);background:var(--panel);border:2px solid var(--accent);border-radius:18px;padding:10px 16px;font-size:18px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.2);animation:emoteIn .35s cubic-bezier(.2,1.6,.4,1);pointer-events:none;z-index:6}
+@keyframes emoteIn{from{transform:translateX(-50%) scale(.4);opacity:0}to{transform:translateX(-50%) scale(1);opacity:1}}
+@media (prefers-reduced-motion: reduce){ #emoteBubble{animation:none} }
+.calgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px}
+.cal{display:flex;flex-direction:column;gap:2px;padding:8px;border-radius:10px;border:1px solid var(--panel-line);background:var(--panel);font-size:12px;min-width:0}
+.cal.wide{flex-direction:row;flex-wrap:wrap;gap:8px;align-items:center}
+.cal.today{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.cal.past{opacity:.6}
+.cal .tag{align-self:flex-start}
+.lb{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:4px}
+.lb li span{margin-left:8px}
 .drop{border:1px solid var(--panel-line);border-radius:14px;padding:12px 14px;background:var(--land)}
 .drop>summary{cursor:pointer;font-family:var(--display);font-weight:600;font-size:16px;list-style:none;display:flex;justify-content:space-between;align-items:center}
 .drop>summary::-webkit-details-marker{display:none}
 .drop>summary::after{content:'▾';color:var(--muted);transition:transform .15s}
 .drop[open]>summary::after{transform:rotate(180deg)}
 .opt:disabled > *, .opt.dim > *{opacity:.55}
-.thumb{width:100%;aspect-ratio:44/28;border-radius:10px;object-fit:cover;display:block;max-width:100%}
+.thumb{width:100%;aspect-ratio:60/38;border-radius:10px;object-fit:cover;display:block;max-width:100%}
 .opt .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .tag{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--panel-line);color:var(--ink)}
 .medals{display:flex;gap:4px}
@@ -214,6 +228,9 @@ p{margin:0;line-height:1.5;color:var(--muted)}
 <div id="planBar" hidden><span>Planning · city paused</span><button class="btn" id="planCancel">Cancel plan</button><button class="btn primary" id="planBuild">Build plan</button></div>
 <div id="hint" hidden></div>
 <div id="toast" role="status"></div>
+<button id="emoteBtn" class="chip" hidden aria-label="Send an emote" style="position:fixed;left:12px;top:calc(env(safe-area-inset-top,0px) + 72px);font-size:20px;padding:6px 10px;cursor:pointer">😀</button>
+<div id="emoteRing" hidden role="menu" aria-label="Emotes"></div>
+<div id="emoteBubble" hidden></div>
 <div id="sheet" class="sheet"><div class="card" id="sheetCard"></div></div>
 <div id="editor" hidden>
   <div class="ed-top">
@@ -240,86 +257,93 @@ p{margin:0;line-height:1.5;color:var(--muted)}
 (() => {
 'use strict';
 const cv = document.getElementById('cv');
-const W = 44, H = 28, N = W * H;
+const W = 60, H = 38, N = W * H;
+const OW = 44, OH = 28, OX = 8, OY = 5; // maps made before version 38 were 44x28; they sit in the middle of the bigger grid
 const CAR_COLORS = ['#e5484d', '#3e7bfa', '#eea300', '#2fa36b', '#8e5cd9', '#12a5b8'];
 const COLOR_NAMES = ['red', 'blue', 'yellow', 'green', 'purple', 'teal'];
 const SPEED = 1.15, HOME_REST = 3.5, PARK_TIME = 1.6, WEEK_LEN = 45, CAP = 7, MAXPINS = 10, TIMER_FILL = 30, TIMER_DRAIN = 12;
 const MILESTONES = [{k:'b', n:300, name:'Bronze'}, {k:'s', n:600, name:'Silver'}, {k:'g', n:1000, name:'Gold'}];
-const STAGES = [{week:1,size:[17,11]},{week:4,size:[22,14]},{week:7,size:[28,18]},{week:11,size:[35,22]},{week:16,size:[44,28]}];
+const STAGES = [{week:1,size:[17,11]},{week:4,size:[22,14]},{week:7,size:[28,18]},{week:11,size:[35,22]},{week:15,size:[44,28]},{week:19,size:[52,33]},{week:23,size:[60,38]}];
 
 // ---------- terrain (0 land, 1 water, 2 hill) — simplified real geography ----------
 function makeT(fn){ const t = new Uint8Array(N); for (let y=0;y<H;y++) for (let x=0;x<W;x++) t[y*W+x] = fn(x,y); t.fn = fn; return t; }
 const ell = (x,y,cx,cy,rx,ry) => ((x-cx)/rx)**2 + ((y-cy)/ry)**2 < 1;
 const CITIES = [
-  { id:'seattle', name:'Seattle', country:'USA', drive:'right', center:[13,10], bridges:3, tunnels:1, after:null, marks:[{x:9,y:8,k:'tower'}], airport:[14,24], rain:0.45, snow:0.15, ferries:1,
+  { id:'seattle', name:'Seattle', country:'USA', drive:'right', center:[21,15], bridges:3, tunnels:1, after:null, marks:[{x:17,y:13,k:'tower'}], airport:[21,34], rain:0.45, snow:0.15, ferries:1,
     note:'Elliott Bay, Lake Union, Lake Washington with Mercer Island, and Lake Sammamish.',
-    gen: () => decodeT('0213051206190j2214021206180i11051605180b120612061801170c14041205231205160e13041304231205150g1303160221011205150g1303170a150h12031809160g12031908160f14021a071a0b13031b06190b13041b05190c130414021307150g130413051108130h1304120g130h15011202230b1403120c1801230721041303120c19230623031303120e172306230314021209230514230623031402120726041423072104140212072703140g130211072803140g130211082703140g130c250222140g1302120f22150f1203110g22150f120k22') },
-  { id:'amsterdam', name:'Amsterdam', country:'Netherlands', drive:'right', center:[21,12], bridges:4, tunnels:0, after:'seattle', need:300, drawbridge:true, marks:[{x:23,y:8,k:'station'},{x:24,y:8,k:'station'},{x:25,y:8,k:'station'}], airport:[2,24], rain:0.4, snow:0.15,
+    gen: () => decodeT('1b0j130r1b0j130r1b0i140r1b0h150r1b071108170q190113051206190p18022214021206180q19051605180b120e1a061801170c140c1a05231205160e130c1b04231205150g130b1e0221011205150g130b1f0a150h120b1g09160g120b1h08160f140a1i071a0b130b1j06190b130c1j05190c130d1b021307150g130e19051108130h130c1a061208130h15091a02230211081403120c15081b012302110421041303120c15081c2302120223031303120e13081c23031102230314021209230d1c23031201230314021207260e1a23041201210414021207270b11011a07120713021107280b1c08120613021108270b1c091205130c250223071c0912051302120f24061d0912041203110g2406130218091204120k2307130219091104120n240313021a081203110n260213021b08120p280112041a08120p280111061909120o2801') },
+  { id:'amsterdam', name:'Amsterdam', country:'Netherlands', drive:'right', center:[29,17], bridges:4, tunnels:0, after:'seattle', need:300, drawbridge:true, marks:[{x:31,y:13,k:'station'},{x:32,y:13,k:'station'},{x:33,y:13,k:'station'}], airport:[2,34], rain:0.4, snow:0.15,
     note:'Canal rings and the IJ. Drawbridges lift for boats.',
-    gen: () => decodeT('031506180q1407170r1308160s1209150t110a140z05140z05140e130n140a190l14061f0f1102150411011g0315061803120111021d0414071b02110211011b051307150e1a06120813011405110519071109110412041206180n120d160l150z06120z07120z08110z08110z08110z08110z08120z07120p120f120o140f110n160e110i') },
-  { id:'london', name:'London', country:'UK', drive:'left', center:[18,13], bridges:2, tunnels:1, after:'amsterdam', need:400, marks:[{x:18,y:15,k:'clock'}], airport:[2,22], rain:0.35, snow:0.1, fog:0.25,
+    gen: () => decodeT('05110g160z130g160x150g160t190g170o1d0g170l1a0b1506180z071407170z081308160t110e1209150s120f110a140r130q140r130q140e1309140q140a1907140q14061f05140m1102150411011h03140b15061803120111021l0c14071b02110211011j0d1307150e1i0e12081301140511051h0f11091104120412061g0v120d1e05110n150n1304120p120o1304120p120p1203130q110q1103130q110j15021104120q110k1402110w110l1302110w120l1202110w120o120f120f120o120e140f110o120d16071106110o120b190612051201120k120a1b0513041201130z0k110z0o120z0n120o') },
+  { id:'london', name:'London', country:'UK', drive:'left', center:[26,18], bridges:2, tunnels:1, after:'amsterdam', need:400, marks:[{x:26,y:20,k:'clock'}], airport:[2,27], rain:0.35, snow:0.1, fog:0.25,
     note:'The winding Thames. Foggy weeks slow traffic.',
-    gen: () => decodeT('0a260z03260z04230z0z0z0z0z0z0z0z0z0z0z0z0q140z0419021402150m110616011202150l110d12031102130i120e110311041102110f120e12011207110b150f15071207150k12091107120y1205120z011203120z03150z06120z0z0z0z0i2405') },
-  { id:'cairo', name:'Cairo', country:'Egypt', drive:'right', center:[28,10], bridges:3, tunnels:1, after:'london', need:500, marks:[{x:9,y:25,k:'pyramid'},{x:8,y:25,k:'pyramid'},{x:8,y:26,k:'pyramid'}], airport:[40,2], rain:0.03, snow:0, sand:0.2,
+    gen: () => decodeT('0u220z0m240z0l240z0c2208220z0b260z0j260z0j260z0k230z0z0z0z0z0z0z0z0z0z0z0z0z0z0z0z0z0b140p120s190214021503180r1106160112021502140v110d12031102150w120e1103110412071109110f120e1201120d1306120b150f150e14021507150k120h15031107120z0912041205120z0h1203120z0j150z0m120z0z0z0z0z0v240z0l250z0k250z0m210z0d210z0m250n') },
+  { id:'cairo', name:'Cairo', country:'Egypt', drive:'right', center:[36,15], bridges:3, tunnels:1, after:'london', need:500, marks:[{x:17,y:30,k:'pyramid'},{x:16,y:30,k:'pyramid'},{x:16,y:31,k:'pyramid'}], airport:[56,2], rain:0.03, snow:0, sand:0.2,
     note:'The Nile and its islands. Watch for sandstorms.',
-    gen: () => decodeT('0r120z07110z07120z06130z06130z05140z051101120z051101120z051102110z051102110a230r12011109250r1309250s1208260s1208270r1208270r1208260s1209250s1209250s120a230t120z08110z08110z08120z07120z08110z08110z08120z07120e') },
+    gen: () => decodeT('0z01120z0n120z0n110z0o110z0n120z0n120z0n110z0n120z0m130z0m130z0l140z0l1101120z0l1101120z0l1102110z0l1102110a230z0812011109250z081309250z091208260z091208270z081208270z081208260z091209250z091209250z09120a230z0a120z0o110z0o110z0o120z0n120z0o110z0o110z0o120z0n120z0o110z0o110z0o120z0n120z0o110l') },
   // ----- City Pack 1 -----
-  { id:'bangkok', name:'Bangkok', country:'Thailand', drive:'left', center:[25,11], bridges:3, tunnels:0, after:'london', need:600, pack:1, flood:true, marks:[{x:17,y:10,k:'temple'}], airport:[38,24], rain:0.5, snow:0,
+  { id:'bangkok', name:'Bangkok', country:'Thailand', drive:'left', center:[33,16], bridges:3, tunnels:0, after:'london', need:600, pack:1, flood:true, marks:[{x:25,y:15,k:'temple'}], airport:[56,29], rain:0.5, snow:0,
     note:'Chao Phraya bends and canals. Rainy weeks flood riverside roads.',
-    gen: () => decodeT('0j120z07120z07110z07120z07110z07120z07110z08110z07120z07110z07120z08110z08110z08120z08120z08120z08120z08130z08130z08120c120t120a140t12091102120t12071202120u11071103120u12051203120v12041203120w1604120y11071103') },
-  { id:'tokyo', name:'Tokyo', country:'Japan', drive:'left', center:[22,10], bridges:3, tunnels:2, after:'bangkok', need:700, pack:1, rail:17, marks:[{x:18,y:15,k:'tower'}], airport:[23,22], rain:0.35, snow:0.05,
+    gen: () => decodeT('0s120z0o110z0o110z0o110z0n120z0m120z0n120z0n110z0n120z0n110z0n120z0n110z0o110z0n120z0n110z0n120z0o110z0o110z0o120z0o120z0o120z0o120z0o130z0o130z0o120c120z0a120a140z0a12091102120z0a12071202120z0b11071103120z0b12051203120z0c12041203120z0d1604120z0f1107110z0n120z0n110z0n120z0n110z0n120d') },
+  { id:'tokyo', name:'Tokyo', country:'Japan', drive:'left', center:[30,15], bridges:3, tunnels:2, after:'bangkok', need:700, pack:1, rail:22, marks:[{x:26,y:20,k:'tower'}], airport:[30,34], rain:0.35, snow:0.05,
     note:'Sumida River and Tokyo Bay. Trains cross the city.',
-    gen: () => decodeT('0r1105120z011106110z011106110z011106120y1206120b230k1206120a250j1108110a250j1108110b230j1208110x1208120w1109120p13041109120v1209120v1209120v110a120u120a120u110b110t130b110t130a120s14051302160p14031501160p120212011402160p12021702180n120218011a0l13021i0m130112031d0m15021f0n14041d') },
-  { id:'mumbai', name:'Mumbai', country:'India', drive:'left', center:[18,19], bridges:2, tunnels:1, after:'tokyo', need:750, pack:1, flood:true, marks:[{x:18,y:22,k:'arch'}], airport:[23,2], rain:0.5, snow:0,
+    gen: () => decodeT('0y1204120z0h1204120z0i1105110z0i1105120z0h1105120z0h1105120z0h1106110z0h1106110z0h1106120z0f1206120r230k1206120q250j1108110q250j1108110r230j1208110z0e1208120z0d1109120z0613041109120e110w1209120d120w1209120d120w110a120c130v120a120b140v110b110c140t130b110d130t130a120e120s14051302160a120t140315011609130t1202120114021607150t120217021804160t120218011i0t13021q0u130112031l0u15021n0a130i14041l0c130h13051k0d130g14041k0f130f15011l0h120d1s0i130a1t') },
+  { id:'mumbai', name:'Mumbai', country:'India', drive:'left', center:[26,24], bridges:2, tunnels:1, after:'tokyo', need:750, pack:1, flood:true, marks:[{x:26,y:27,k:'arch'}], airport:[31,2], rain:0.5, snow:0,
     note:'A narrow peninsula. Monsoon weeks flood roads by the water.',
-    gen: () => decodeT('1g0m15011g0m15011g01110j16011j0i1q0i1p0i1p0i1o0j1p0i1q0813061r07140111011t081z12071z11081z081z11081c02120212031d21061c0212081c2211051g081c0113041f0612011g041f0315011g041g081g031i071g031i071f021k071e031k071e011f0411091e011e0f1t0f') },
-  { id:'hongkong', name:'Hong Kong', country:'China (SAR)', drive:'left', center:[22,14], bridges:2, tunnels:3, after:'mumbai', need:800, pack:1, marks:[{x:17,y:17,k:'tower'}], airport:[8,7], rain:0.4, snow:0, storm:0.12,
+    gen: () => decodeT('1p0k150a1o0l150a1o0f2402140b1o0f2402140b1o0f240216091o0m15091o0m15091o01110j16091r0i17081r0i17081q0i18081p0i19081n0j1a081n0i1b081n0813061c081n07140111011j041m081q041n071p0112021m081o0311021l081n081l081c021202120b1l21061c02120g1k2211051g0g1k0113041f0612091o041f0315091o041g0g1o031i0f1o031i0f1n021k0f1m031k0f1m011f04110h1m011e0n1z120n1z120n1z130m1z140l1z150k1z1507130a') },
+  { id:'hongkong', name:'Hong Kong', country:'China (SAR)', drive:'left', center:[30,19], bridges:2, tunnels:3, after:'mumbai', need:800, pack:1, marks:[{x:25,y:22,k:'tower'}], airport:[1,17], rain:0.4, snow:0, storm:0.12,
     note:'Victoria Harbour and steep hills. Typhoon weeks hit hard.',
-    gen: () => decodeT('0z051405170q11011d02110p12021a04110b230b1301150114072404250c15011102130511012405240c1502160412240l15021604120g240515021604140e250415021d02120c230614021d03110o11021i06140d1l06150c1k07160611051m011a0313051q03150213051f061406130114051d0l15051d03250d15051d03250f140111021e03230h13011i0925081m09240916011h0k14031j05110b16021c011604120711031j031d0511031k021d04120318') },
+    gen: () => decodeT('0h290z0h270o110f120c240q130212021205120z061c06110z061502150z0d1502140e170q11011502140113051902110p1202150213011f04110b230b130114041d0114072404250c16041b011102130511012405240c17031a03160412240l190119041604120g2405190215071604140e2504190213091d02120c23061c0a1d03110o190a1i06140d190314011k06150c120116041n071606110716051p011a03130716041u031502130716041j0614061301140419041h0l150419041h03250d150618031h03250f140111031t03230h1301130117011m0925081f0214021f0924091601180116011h0k14031f011j05110b160218011j011604120711031g031g031d0511031g031h021d0412031g031g031d0314031f0213011c0211031b0314031k011g011f0114021k021f01110419021p021g031c021l') },
   // ----- City Pack 2 -----
-  { id:'istanbul', name:'Istanbul', country:'Turkey', drive:'right', center:[18,18], bridges:3, tunnels:1, after:'london', need:800, pack:2, marks:[{x:19,y:18,k:'dome'}], airport:[2,2], rain:0.25, snow:0.08, ferries:2,
+  { id:'istanbul', name:'Istanbul', country:'Turkey', drive:'right', center:[26,23], bridges:3, tunnels:1, after:'london', need:800, pack:2, marks:[{x:27,y:23,k:'dome'}], airport:[2,2], rain:0.25, snow:0.08, ferries:2,
     note:'The Bosphorus splits two continents. Starts with 2 ferries.',
-    gen: () => decodeT('0u130z06120z07120z07120z07120z0612220z0413220z0412230z04120z06130z06130z05130z04140z03150w1204140z1103140z02160z06130z06130z06130z02180w1d0u1d0t1g0p1l0i12021m0h1r0h1v0d') },
-  { id:'sydney', name:'Sydney', country:'Australia', drive:'left', center:[20,16], bridges:2, tunnels:2, after:'istanbul', need:800, pack:2, marks:[{x:21,y:14,k:'shells'}], airport:[14,24], rain:0.25, snow:0, storm:0.12, ferries:1,
+    gen: () => decodeT('0z03150z0l150z0l140w130k140v150j140z01110j130z0m120z0n120z0n120z0n120z0m12220z0k13220z0k12230z0k120z0m130z0m130z0l130z0k140z0j150z0d1204140z0g1103140z0i160z0m130z0m130z0m130z0i180z0d1d0z0b1d0z0a1g0z061l0y12021m0x1r0p11071v0l13041y0j1z180h1z190g1z1a0f1z1b0e') },
+  { id:'sydney', name:'Sydney', country:'Australia', drive:'left', center:[28,21], bridges:2, tunnels:2, after:'istanbul', need:800, pack:2, marks:[{x:29,y:19,k:'shells'}], airport:[22,34], rain:0.25, snow:0, storm:0.12, ferries:1,
     note:'A harbour full of inlets. Summer storms roll in.',
-    gen: () => decodeT('0r1504180q1703180r1704160r1705150s1704150s1802160t1603160t1602170u1e0e120e1e0e120e1e0e120e1e0e12061m0e12061m0e13051m0e13051c01190e13051b02190e13061903190z190z190z190z190x1b0x1b0w1c0w1c0w1c0v1d') },
-  { id:'sanfrancisco', name:'San Francisco', country:'USA', drive:'right', center:[16,11], bridges:2, tunnels:3, after:'sydney', need:800, pack:2, marks:[{x:16,y:10,k:'tower'}], airport:[18,23], rain:0.15, snow:0, fog:0.35,
+    gen: () => decodeT('0z0a1f0z0a1f0z0a1f0z091g0z0212051g0z15041g0y17031g0z17041e0z17051d0z0117041d0z0118021e0z0216031e0z0216021f0z031m0m120e1m0m120e1m0m120e1m0m12061u0m12061u0m13051u0m13051c011h0m13051b021h0m130619031h0z081h0z081h0z081h0z081h0z061j0z061j0z051k0z051k0z051k0z041l0z031m0z031m0z031m0z031m0z041l') },
+  { id:'sanfrancisco', name:'San Francisco', country:'USA', drive:'right', center:[24,16], bridges:2, tunnels:3, after:'sydney', need:800, pack:2, marks:[{x:24,y:15,k:'tower'}], airport:[24,35], rain:0.15, snow:0, fog:0.35,
     note:'The Bay and steep hills. Famous for fog.',
-    gen: () => decodeT('051p0b23061o0a24061o0a24061o0a24061e011a092411021h01160d241k01180b241s0g150212011204190j150a21011a0h150d180i140e180i110h180i110h1a01110e110i1c0d110h1g0a110822081g09110724071i031202110724081n01110j1g051102120b22051g08120b22061g071203110g1f071202120g1g061203110e1j05120h1l03130f1o01150f1q') },
-  { id:'rio', name:'Rio de Janeiro', country:'Brazil', drive:'right', center:[22,10], bridges:2, tunnels:3, after:'sanfrancisco', need:800, pack:2, marks:[{x:24,y:15,k:'statue'}], airport:[17,2], rain:0.3, snow:0, carnival:true,
+    gen: () => decodeT('0b13051i0x14041j0y140114011e0z0217031e0z0216031g0m120b1p0b2308130b1o0a2408130b1o0a2408140a1o0a250715091e011a092408160112021h01160d24081s01180b24081z110o1d0212011204190r1d0a21011a0p1d0d180q1c0e180q190h180q190h1a01110m190i1c0l190h1g0i190822081g0h190724071i03120a190724081n09190j1g05110a1a0b22051g0g1a0b22061g0f1a03110g1f0f1a02120g1g0e1a03110e1j0d1a0h1l0311081a0f1o0113071b0823041r071b0725031s061b0724031u051b0f1u041b0g1u031b0f1v03') },
+  { id:'rio', name:'Rio de Janeiro', country:'Brazil', drive:'right', center:[30,15], bridges:2, tunnels:3, after:'sanfrancisco', need:800, pack:2, marks:[{x:32,y:20,k:'statue'}], airport:[25,2], rain:0.3, snow:0, carnival:true,
     note:'Guanabara Bay and granite peaks. Carnival brings big crowds.',
-    gen: () => decodeT('0o1i0p1h0q12021e0t1d0u1e0u1f0t1204190z01160z051502110z01180z1c0w1c0w1701140v1803110e240f160i270421071a0e280324041c0d280324071a0d26042212071b0o13051c0p12031e0q11021f0h24071g03110d25071f02130d23011m01150e1o0115081u0213071w') },
-  { id:'newyork', name:'New York', country:'USA', drive:'right', center:[20,9], bridges:3, tunnels:1, after:'hongkong', need:800, pack:3, marks:[{x:8,y:22,k:'statue'}], airport:[40,24], rain:0.35, snow:0.25, ferries:1,
+    gen: () => decodeT('0p1s0x11031m0z021n0z021m0z041l0z061i0z061h0z0712021e0z0a1d0z0b1e0z0b1f0z0a1204190z0h160z0l1502110z0h180z0g1c0z0d1c0z0d1701140z0c1803110u240f160y270421071a07120l280324041c05130l280324071a03140m26042212071h0y13051k0x12031m0y11021n0p24071o0b110d25071r06130d23011y05150e1z110515081z140913071z150517071z1z1z1z1z1z1z1z11') },
+  { id:'newyork', name:'New York', country:'USA', drive:'right', center:[28,14], bridges:3, tunnels:1, after:'hongkong', need:800, pack:3, marks:[{x:16,y:27,k:'statue'}], airport:[56,34], rain:0.35, snow:0.25, ferries:1,
     note:'Manhattan between the Hudson and the East River, with the harbor to the south.',
-    gen: () => decodeT('0j130a14011704110d130b14031404120d130711061705110d130714041801130d1308130611031301130d1308120d1102120c130o1202110c1209110e1302110b1308120v1208120k13091208110x1207120x1206120x1306120l110b1306120k120b1306120k110b1406120k110c1207120x1207110x1305130w1402160v1804110u190x1a0w1c0w1b0x1a0y1a0t') },
-  { id:'paris', name:'Paris', country:'France', drive:'right', center:[23,14], bridges:4, tunnels:1, after:'newyork', need:800, pack:3, marks:[{x:12,y:14,k:'tower'},{x:11,y:9,k:'arch'}], airport:[40,2], rain:0.4, snow:0.1,
+    gen: () => decodeT('0h120b120r110h1309130k1106110h120a120h11021201160s130c12031c0r130c1i0r130a14011701120h110d130b14031402110h120d13071106170l110d13071404180g140d130813061103130h130d1308120d110i120c130o120i110c1209110e140h110b1308120z0c1208120z0113091208110z0e1207120k120r1206120m110q1306120z02110b1306120z01120b1306120z01110b1406120x1101120c1207120x130d1207110y130c1305130y130b1402160y130a1804110y120a190z0313081a0z0314061c0z0214071b0z0215071a0z0413081a0z04130a190z02130a1b0z13081d0z0112091c0z0212081c0z03') },
+  { id:'paris', name:'Paris', country:'France', drive:'right', center:[31,19], bridges:4, tunnels:1, after:'newyork', need:800, pack:3, marks:[{x:20,y:19,k:'tower'},{x:19,y:14,k:'arch'}], airport:[56,2], rain:0.4, snow:0.1,
     note:'The Seine winds through the middle; Montmartre rises in the north.',
-    gen: () => decodeT('0z0z0z0z0z0m210z06250z04250z05230z0e240z05240z05240z0x160z021303130y1207130v120a130t110d120r120e130o120h110o110i120m120j120k120l120j110n120h120o120g110q110f120q120z08130z081307') },
-  { id:'singapore', name:'Singapore', country:'Singapore', drive:'left', center:[24,17], bridges:3, tunnels:2, after:'paris', need:800, pack:3, marks:[{x:26,y:20,k:'temple'}], airport:[40,12], rain:0.55, snow:0,
+    gen: () => decodeT('0z0z0z0w130z0k130z0k130z0l130z0k130z0m110z0n120z0m120j210z03110i250z120i250y120k230z110t240p120t240o120u240o110z0o110f160z03110e1303130z120d1207130x120c120a130v120c110d120u110c120e130s110b120h110s110b110i120q120a120j120p1209120l120o1209110n120n1208120o120m1208110q110n1107120q120m1106120s130k1204120v130i1203120y130g1202120z02130f1101130z03130e130z07120d120z091208') },
+  { id:'singapore', name:'Singapore', country:'Singapore', drive:'left', center:[32,22], bridges:3, tunnels:2, after:'paris', need:800, pack:3, marks:[{x:34,y:25,k:'temple'}], airport:[48,17], rain:0.55, snow:0,
     note:'An island city: the Johor Strait to the north, Marina Bay and the sea to the south.',
-    gen: () => decodeT('0b1106170h120a12051205130f12091907130e12081203130a130c1306130h1502110614061103110i150119051203120c1107130316041402120c120713021603140q1b03130f120c13031303110f140j1202120f130k12011201120a23120n1302110a230p120z07120z07120c110t110c120l1402130211051104110i1c0212011a0e1f0312021103130d1g031208130111091h0312051101160113021k01140311011b031p031e021q021z1z1z1j') },
+    gen: () => decodeT('0z0f130z0l140z0m130y110m160v140j150o1106170h140o12051205130f140n1907130e150l1203130a130c170i130h150211061a0g1103110i15011a03130e1203120c110713031408120c1402120c120713021606120b140q1c05120b130f120c13031503130b110f140j1a0a120f130k1a091201120a23120o17081302110a230p1802180z071i0z071i0c110t1h0c120l14021j0211051104110i1s0212011a0e1v0312021103130d1w031208130111091x0312051101160113021z1101140311011b031z16031e021z17021z1z1z1z1z1z1z1z1z1q031z1e0315031z1e051303') },
   // ----- City Pack 4 -----
-  { id:'seoul', name:'Seoul', country:'South Korea', drive:'right', center:[21,10], bridges:4, tunnels:2, after:'rio', need:800, pack:4, marks:[{x:22,y:11,k:'tower'},{x:20,y:8,k:'temple'}], airport:[2,11], rain:0.35, snow:0.3,
+  { id:'seoul', name:'Seoul', country:'South Korea', drive:'right', center:[29,15], bridges:4, tunnels:2, after:'rio', need:800, pack:4, marks:[{x:30,y:16,k:'tower'},{x:28,y:13,k:'temple'}], airport:[6,16], rain:0.35, snow:0.3,
     note:'The wide Han River splits the city; Bukhansan, Namsan and Gwanak peaks all around.',
-    gen: () => decodeT('0z0z0z0z0z0i220z07220z0y110z08120z031104130z011106120y1207130w1209130c230e120c120b230e110e130p120g130m120j140a1206120m14061b0p1905130u150z0z0z0z0z0z0z0z0z0z0l') },
-  { id:'capetown', name:'Cape Town', country:'South Africa', drive:'left', center:[16,9], bridges:2, tunnels:3, after:'seoul', need:800, pack:4, marks:[{x:14,y:5,k:'dome'}], airport:[40,16], rain:0.25, snow:0,
+    gen: () => decodeT('0p290z0g290z0g290z0i250z0z0z0z0z0x120z0n130z0o120l220z01130j220z02130z0a110d130z06130f120z03130i130z01120l120y120n130w120p130c230e120s120b230e110u130p120w130m120z140a1206120z0314061b0z061905130z0b150z0z0z0z0z0z0z0z0z0z0z0z0z0z0z08230z0k260z0j270z0j250z0z0k') },
+  { id:'capetown', name:'Cape Town', country:'South Africa', drive:'left', center:[24,14], bridges:2, tunnels:3, after:'seoul', need:800, pack:4, marks:[{x:22,y:10,k:'dome'}], airport:[48,21], rain:0.25, snow:0,
     note:'Table Bay to the north, Table Mountain and Lion\'s Head over the city, False Bay to the south-east.',
-    gen: () => decodeT('1p0j1p0j1p0j1p0j1o0k1d04160l1d04160l1b07120o1a0y1a0y1a230v1a01210w1a06220q1a06220q1a270r1901270r1902250s190z1802250t1603270s1603270s1504270s1506230u140z05140z05130z06120z07110z08') },
-  { id:'toronto', name:'Toronto', country:'Canada', drive:'right', center:[21,13], bridges:3, tunnels:1, after:'capetown', need:800, pack:4, marks:[{x:21,y:17,k:'tower'}], airport:[2,11], rain:0.3, snow:0.45,
+    gen: () => decodeT('1z0p1x0r1x0r1x0r1x0r1x0r1x0r1x0r1x0r1w0s1l04160t1l04160t1j07120w1i0z071i0z071i230z041i01210z051i06220y1i06220y1i270z1h01270z1h02250z011h0z081g02250z021e03270z011e03270z011d04270z011d06230z031c0z0d1c0z0d1b0z0e1a0z0f190z0g1a0z0f1b03120i120o1c02130i110o1h0i110o1h0i110o') },
+  { id:'toronto', name:'Toronto', country:'Canada', drive:'right', center:[29,18], bridges:3, tunnels:1, after:'capetown', need:800, pack:4, marks:[{x:29,y:22,k:'tower'}], airport:[2,16], rain:0.3, snow:0.45,
     note:'Lake Ontario and the Toronto Islands to the south, the Don and Humber rivers cutting north.',
-    gen: () => decodeT('0z0y110z08110h110p110g1206110h120g1205120h120g1206110h120g1206120g120d1507110g120c1607120f120b1708110f120b1708120e120a1808120e12091909120e11081a09120e11051d0a120d11041e0a120c12031f0b1101110814031f0b130716021f0b180217011f0c17021n0c17021n0b1x0b1x0b1x081z11041z15031z16') },
+    gen: () => decodeT('0x120z0n120z0n120o110b110l120n120b120k110l150c110k110j170c120j110i180c120j110h190d110j110g1a0d120h120g1a0d120h120g1a0e110h120g1a0e120g120d1d0f110g120c1e0f120f120b1f0g110f120b1f0g120e120a1g0g120e12091h0h120e11081i0h120e11051l0i120d11041m0i120c12031n0j1101110814031n0j130716021n0j180217011n0k17021v0k17021v0j1z160j1z160j1z160g1z190c1z1d0b1z1e0b1z1e0b1z1e081z1h061z1j051z1k') },
 ];
-const PRACTICE = { id:'practice', name:'Practice town', country:'Made-up', drive:'right', center:[22,14], bridges:1, tunnels:0, after:null, marks:[],
+const PRACTICE = { id:'practice', name:'Practice town', country:'Made-up', drive:'right', center:[30,19], bridges:1, tunnels:0, after:null, marks:[],
   note:'Learn the tools, no game over', practice:true,
-  gen: () => makeT((x,y) => { if (ell(x,y,30,9,2.5,1.8)) return 1; if (ell(x,y,13,19,1.5,1.2)) return 2; return 0; }) };
+  gen: () => makeT((x,y) => { if (ell(x,y,38,14,2.5,1.8)) return 1; if (ell(x,y,21,24,1.5,1.2)) return 2; if (ell(x,y,6,30,4,3)) return 1; return 0; }) };
 const ALL_CITIES = () => [PRACTICE, ...CITIES, ...customCities()];
 function encodeT(t){ let out = '', run = 1; for (let i=1;i<=t.length;i++) { if (i < t.length && t[i] === t[i-1] && run < 35) run++; else { out += t[i-1] + run.toString(36); run = 1; } } return out; }
+function runTotal(str){ let n = 0; for (let i=0;i+1<str.length;i+=2) n += parseInt(str[i+1], 36) || 0; return n; }
+function upgradeMap(m){ if (!m || typeof m.t !== 'string' || runTotal(m.t) !== OW*OH) return m;
+  const old = new Uint8Array(OW*OH); let k = 0; for (let i=0;i+1<m.t.length && k<old.length;i+=2) { const v = +m.t[i], n = parseInt(m.t[i+1], 36); for (let j=0;j<n && k<old.length;j++) old[k++] = v > 2 ? 0 : v; }
+  const t = new Uint8Array(N); for (let y=0;y<OH;y++) for (let x=0;x<OW;x++) t[(y+OY)*W + x+OX] = old[y*OW+x];
+  return {...m, t: encodeT(t), center: Array.isArray(m.center) ? [(m.center[0]|0)+OX, (m.center[1]|0)+OY] : m.center}; }
 function decodeT(str){ const t = new Uint8Array(N); let k = 0; for (let i=0;i+1<str.length && k<N;i+=2) { const v = +str[i], n = parseInt(str[i+1], 36); for (let j=0;j<n && k<N;j++) t[k++] = v > 2 ? 0 : v; } return t; }
 const cleanName = v => String(v ?? '').replace(/[<>&"'`\\]/g, '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 24) || 'My city';
 const cleanId = v => /^m[0-9a-z]{1,16}$/.test(String(v)) ? String(v) : 'm' + Math.abs([...String(v)].reduce((a,c) => (a*31 + c.charCodeAt(0)) | 0, 7)).toString(36);
 function landNear(t, c){ let land = 0; for (let dy=-4;dy<=4;dy++) for (let dx=-6;dx<=6;dx++) { const X=c[0]+dx, Y=c[1]+dy; if (X>=0&&Y>=0&&X<W&&Y<H&&t[Y*W+X]===0) land++; } return land; }
 // shared map codes and saved maps come from outside: rebuild them from checked fields only
 function cleanMap(m){
+  m = upgradeMap(m);
   if (!m || typeof m !== 'object' || typeof m.t !== 'string' || m.t.length > 4*N || !/^[0-9a-z]*$/.test(m.t) || !Array.isArray(m.center)) return null;
   const c = [Math.min(W-1, Math.max(0, m.center[0]|0)), Math.min(H-1, Math.max(0, m.center[1]|0))];
   if (landNear(decodeT(m.t), c) < 40) return null;
@@ -422,6 +446,8 @@ function loadStore(ed){
   for (const k of ['best','endless','expert','chal']) { const o = store[k]; if (!o || typeof o !== 'object' || Array.isArray(o)) { if (k==='best'||k==='endless') store[k] = {}; else delete store[k]; continue; } for (const id in o) o[id] = num(o[id]); }
   for (const k of ['daily','weekly']) { const o = store[k]; if (!o || typeof o !== 'object' || Array.isArray(o)) { store[k] = {}; continue; } for (const id in o) { const r = o[id]; o[id] = r && typeof r === 'object' ? {first: r.first === null ? null : num(r.first), best: num(r.best), top: (Array.isArray(r.top) ? r.top : []).slice(0,5).map(num)} : {first:null, best:0, top:[]}; } }
   for (const k of ['tour','tut']) if (store[k] !== undefined) store[k] = num(store[k]);
+  if (store.lb && typeof store.lb === 'object' && !Array.isArray(store.lb)) { const lb = {}; for (const id of Object.keys(store.lb)) if (/^[a-z]+$/.test(id) && Array.isArray(store.lb[id])) lb[id] = store.lb[id].slice(0, 10).filter(Array.isArray).map(r => [num(r[0]), num(r[1]), num(r[2])]); store.lb = lb; } else delete store.lb;
+  store.admin = store.admin === true;
   if (store.carStyle !== undefined && typeof store.carStyle !== 'string') delete store.carStyle;
   if (store.theme !== undefined && typeof store.theme !== 'string') delete store.theme;
 }
@@ -451,7 +477,7 @@ const isMetro = (a,b) => !!(G && G.metro && G.metro.size && G.metro.has(mkey(a,b
 const edgeLen = (a,b) => (isMw(a,b) || isFerry(a,b) || isMetro(a,b)) ? Math.hypot(ix(a)-ix(b), iy(a)-iy(b)) : (ix(a)!==ix(b) && iy(a)!==iy(b)) ? Math.SQRT2 : 1;
 const isDiag = (a,b) => ix(a)!==ix(b) && iy(a)!==iy(b);
 function todayKey(){ const d=new Date(); return d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate(); }
-function weekKey(){ const d=new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())); const day=d.getUTCDay()||7; d.setUTCDate(d.getUTCDate()+4-day); const y0=new Date(Date.UTC(d.getUTCFullYear(),0,1)); return d.getUTCFullYear()*100 + Math.ceil(((d-y0)/864e5+1)/7); }
+function weekKey(when){ const t = when || new Date(); const d=new Date(Date.UTC(t.getFullYear(), t.getMonth(), t.getDate())); const day=d.getUTCDay()||7; d.setUTCDate(d.getUTCDate()+4-day); const y0=new Date(Date.UTC(d.getUTCFullYear(),0,1)); return d.getUTCFullYear()*100 + Math.ceil(((d-y0)/864e5+1)/7); }
 function makeCode(key, score){ const n = key*100000 + Math.min(99999, score); const chk = (n % 1295 * 37 + 11) % 1296; return n.toString(36).toUpperCase() + '-' + chk.toString(36).toUpperCase().padStart(2,'0'); }
 function readCode(code){
   const m = /^([0-9A-Z]+)-([0-9A-Z]{2})$/.exec(String(code).trim().toUpperCase()); if (!m) return null;
@@ -488,8 +514,83 @@ function unlockAch(id){
   setTimeout(() => toast(`Achievement: ${a.name}` + (style ? ` · ${style.name} cars unlocked` : ''), 3200), 400);
   setTimeout(() => { tone(880,.12,.04,'triangle'); tone(1175,.2,.03,'triangle'); }, 400);
 }
-function challengeFor(kind){
-  const key = kind==='daily' ? todayKey() : weekKey();
+// ---------- duels: both players play the same city with the same seed, then swap result codes ----------
+const DUEL_RULES = {S: 'Survival: whoever overflows later wins', W: 'Sprint: most trips by the end of week 10'};
+function duelChk(str){ let h = 7; for (const ch of str) h = (h*31 + ch.charCodeAt(0)) % 1679616; return h.toString(36).toUpperCase().padStart(4, '0'); }
+function makeDuel(cityId, rule){ const k = CITIES.findIndex(c => c.id === cityId), seed = 1 + Math.floor(Math.random()*1679615); const body = `${k.toString(36).toUpperCase()}${seed.toString(36).toUpperCase().padStart(4,'0')}${rule}`; return `DUEL-${body}-${duelChk(body).slice(0,2)}`; }
+function readDuel(code){ const m = /^DUEL-([0-9A-Z])([0-9A-Z]{4})([SW])-([0-9A-Z]{2})$/.exec(String(code||'').trim().toUpperCase()); if (!m) return null;
+  const body = m[1]+m[2]+m[3]; if (duelChk(body).slice(0,2) !== m[4]) return null; const city = CITIES[parseInt(m[1], 36)]; if (!city) return null;
+  return {code: `DUEL-${body}-${m[4]}`, city, seed: parseInt(m[2], 36), rule: m[3]}; }
+// a result says how far you got in that duel: score, week reached, and whether the city overflowed
+function makeResult(duelCode, score, week, lost){ const body = `${Math.min(99999, score).toString(36).toUpperCase().padStart(4,'0')}${Math.min(99, week).toString(36).toUpperCase().padStart(2,'0')}${lost ? 'L' : 'F'}`; return `RES-${body}-${duelChk(duelCode + body)}`; }
+function readResult(duelCode, code){ const m = /^RES-([0-9A-Z]{4})([0-9A-Z]{2})([LF])-([0-9A-Z]{4})$/.exec(String(code||'').trim().toUpperCase()); if (!m) return null;
+  if (duelChk(duelCode + m[1]+m[2]+m[3]) !== m[4]) return {bad: true}; return {score: parseInt(m[1], 36), week: parseInt(m[2], 36), lost: m[3] === 'L'}; }
+function duelVerdict(rule, me, them){
+  const a = rule === 'W' ? [me.score, me.week] : [me.lost ? me.week : 99, me.score], b = rule === 'W' ? [them.score, them.week] : [them.lost ? them.week : 99, them.score];
+  if (a[0] !== b[0]) return a[0] > b[0] ? 1 : -1; if (a[1] !== b[1]) return a[1] > b[1] ? 1 : -1; return 0; }
+function duelSection(){
+  const open = CITIES.filter(unlocked);
+  return `<p class="hint">Make a code and send it to a friend. You both play the same city with the same houses and workplaces, then swap result codes to see who won.</p>
+    <div class="btnrow" style="align-items:center"><select id="duelCity" style="${INP}">${open.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}</select>
+    <select id="duelRule" style="${INP}"><option value="S">Survival (last to overflow)</option><option value="W">Sprint (most trips by week 10)</option></select>
+    <button class="btn primary" id="duelMake">Make duel code</button></div>
+    <div class="btnrow" style="align-items:center"><span class="tag" id="duelOut" style="font-size:15px;padding:6px 12px;user-select:text" hidden></span><button class="btn" id="duelCopy" hidden>Copy</button><button class="btn primary" id="duelPlayMine" hidden>Play it</button></div>
+    <form class="btnrow" id="duelJoin" style="align-items:center"><input id="duelIn" placeholder="Friend's duel code, e.g. DUEL-0AB12S-7Q" autocomplete="off" style="${INP}"><button class="btn" type="submit">Play duel</button></form>
+    <div class="small">Compare results</div>
+    <form class="stack" id="duelCmp" style="gap:6px"><input id="cmpDuel" placeholder="Duel code" autocomplete="off" style="${INP}"><input id="cmpMe" placeholder="Your result code" autocomplete="off" style="${INP}"><input id="cmpThem" placeholder="Friend's result code" autocomplete="off" style="${INP}"><div class="btnrow" style="align-items:center"><button class="btn" type="submit">Who won?</button><span class="hint" id="cmpOut"></span></div></form>`;
+}
+// ---------- emotes: a fixed set, no typing. In code duels they show on your own screen (online duels will send them) ----------
+const EMOTES = [['👋','Hi!'],['🍀','Good luck!'],['🛣️','Nice road!'],['🚗💥','Oops…'],['😅','That was close!'],['🔥','Bring it!'],['🤝','GG'],['🔁','Rematch?']];
+const EMO = {last: -99, sent: 0, streak: 0, prev: -1, coolUntil: -99};
+function emoteReady(){ return now - EMO.last >= 3 && EMO.sent < 20 && now >= EMO.coolUntil; }
+function sendEmote(k){
+  if (!emoteReady()) { toast(EMO.sent >= 20 ? 'That’s all the emotes for this game' : 'Wait a moment before the next emote'); return; }
+  EMO.streak = k === EMO.prev ? EMO.streak + 1 : 1; EMO.prev = k; EMO.last = now; EMO.sent++;
+  if (EMO.streak >= 3) { EMO.coolUntil = now + 10; EMO.streak = 0; }
+  const b = el('emoteBubble'); b.textContent = EMOTES[k][0] + ' ' + EMOTES[k][1]; b.hidden = false; b.style.animation = 'none'; void b.offsetWidth; b.style.animation = '';
+  clearTimeout(sendEmote.t); sendEmote.t = setTimeout(() => { b.hidden = true; }, 2500); tone(880, .08, .03, 'triangle');
+  el('emoteRing').hidden = true;
+}
+function showEmoteUI(on){ el('emoteBtn').hidden = !on; if (!on) { el('emoteRing').hidden = true; el('emoteBubble').hidden = true; } }
+document.getElementById('emoteBtn').onclick = () => { const r = el('emoteRing'); r.innerHTML = EMOTES.map(([e, t], k) => `<button data-emo="${k}" ${emoteReady() ? '' : 'disabled'}>${e} ${t}</button>`).join(''); r.hidden = !r.hidden; r.querySelectorAll('[data-emo]').forEach(b => b.onclick = () => sendEmote(+b.dataset.emo)); };
+function startDuel(d){ newGame({kind:'duel', city: d.city, mods:[], seed: d.seed, duel: d}); toast(`Duel: ${DUEL_RULES[d.rule]}. Your friend gets the same city.`, 3500); }
+function wireDuel(){
+  const q = id => sheetCard.querySelector(id); if (!q('#duelMake')) return;
+  let made = null;
+  q('#duelMake').onclick = () => { made = makeDuel(q('#duelCity').value, q('#duelRule').value); q('#duelOut').textContent = made; for (const id of ['#duelOut','#duelCopy','#duelPlayMine']) q(id).hidden = false; };
+  q('#duelCopy').onclick = () => navigator.clipboard?.writeText(made).then(() => toast('Duel code copied. Send it to a friend.'), () => toast('Select the code to copy it'));
+  q('#duelPlayMine').onclick = () => { const d = readDuel(made); if (d) startDuel(d); };
+  q('#duelJoin').onsubmit = e => { e.preventDefault(); const d = readDuel(q('#duelIn').value); if (!d) { toast("That duel code doesn't look right"); return; } startDuel(d); };
+  q('#duelCmp').onsubmit = e => { e.preventDefault(); const d = readDuel(q('#cmpDuel').value); const out = q('#cmpOut');
+    if (!d) { out.textContent = 'Check the duel code.'; return; }
+    const me = readResult(d.code, q('#cmpMe').value), them = readResult(d.code, q('#cmpThem').value);
+    if (!me || !them) { out.textContent = 'Check both result codes.'; return; }
+    if (me.bad || them.bad) { out.textContent = "A result code doesn't belong to this duel."; return; }
+    const v = duelVerdict(d.rule, me, them);
+    out.textContent = `${v > 0 ? 'You win!' : v < 0 ? 'Your friend wins.' : "It's a tie!"} You: ${me.score} trips, week ${me.week}${me.lost ? ' (overflowed)' : ''}. Friend: ${them.score} trips, week ${them.week}${them.lost ? ' (overflowed)' : ''}.`; };
+}
+function duelEndHtml(lost){
+  const d = G.cfg.duel, res = makeResult(d.code, G.score, G.week, lost);
+  return `<p>Duel <b>${d.code}</b> · ${DUEL_RULES[d.rule]}</p><div class="btnrow" style="align-items:center"><span class="tag" style="font-size:15px;padding:6px 12px;user-select:text" id="resTxt">${res}</span><button class="btn" id="copyRes">Copy result code</button></div>
+    <form class="btnrow" id="resCmp" style="align-items:center"><input id="resThem" placeholder="Friend's result code" autocomplete="off" style="${INP}"><button class="btn" type="submit">Who won?</button></form><p class="hint" id="resOut">Send your result code to your friend, and paste theirs here.</p>`;
+}
+function wireDuelEnd(lost){
+  const q = id => sheetCard.querySelector(id); if (!q('#copyRes')) return;
+  const d = G.cfg.duel, me = {score: G.score, week: G.week, lost};
+  q('#copyRes').onclick = () => navigator.clipboard?.writeText(q('#resTxt').textContent).then(() => toast('Result code copied'), () => toast('Select the code to copy it'));
+  q('#resCmp').onsubmit = e => { e.preventDefault(); const them = readResult(d.code, q('#resThem').value);
+    q('#resOut').textContent = !them ? "That result code doesn't look right." : them.bad ? "That result code is from a different duel." :
+      (v => `${v > 0 ? 'You win!' : v < 0 ? 'Your friend wins.' : "It's a tie!"} Friend: ${them.score} trips, week ${them.week}${them.lost ? ' (overflowed)' : ''}.`)(duelVerdict(d.rule, me, them)); };
+}
+// Sprint duels end after week 10 with no overflow
+function finishSprint(){
+  G.over = true; clearSave(); tone(784,.4,.05,'triangle');
+  showSheet(`<div class="stack"><div><div class="small">Duel finished · week 10 done</div><h2>${G.score} trips</h2></div>${statsLine()}${duelEndHtml(false)}
+    <div class="btnrow"><button class="btn primary" id="toMenu">Back to menu</button></div></div>`, true);
+  el('bottom').hidden = true; sheetCard.querySelector('#toMenu').onclick = () => showMenu(); wireDuelEnd(false);
+}
+function challengeFor(kind, at){
+  const key = at || (kind==='daily' ? todayKey() : weekKey());
   const r = mulberry32(key*7919 + (kind==='daily'?1:2));
   const city = CITIES[Math.floor(r()*CITIES.length)];
   const pool = MODS.slice(); const mods = [];
@@ -539,11 +640,12 @@ function newGame(cfg, bare){
   G.camFrom = null; setCamTarget(true);
   if (!bare) { spawnDest(0, true); spawnHouse(0, true); spawnHouse(0, true); if (cfg.kind === 'sandbox') { for (const c of [1,2]) { spawnDest(c); spawnHouse(c, true); spawnHouse(c, true); } } }
   document.getElementById('top').hidden = false; document.getElementById('bottom').hidden = false;
-  document.getElementById('cityName').textContent = city.name + ({daily:' · Daily', weekly:' · Weekly', expert:' · Expert', challenge:' · Challenge', sandbox:' · Sandbox', tour:` · Tour ${(cfg.tourIdx||0)+1}/${(cfg.tourIds||[]).length}`}[cfg.kind] || '');
+  document.getElementById('cityName').textContent = city.name + ({daily:' · Daily', weekly:' · Weekly', expert:' · Expert', challenge:' · Challenge', sandbox:' · Sandbox', tour:` · Tour ${(cfg.tourIdx||0)+1}/${(cfg.tourIds||[]).length}`, duel:' · Duel'}[cfg.kind] || '');
   document.getElementById('cityMeta').textContent = (cfg.kind==='classic' || cfg.kind==='expert' || cfg.kind==='sandbox') ? `${city.country} · drives ${city.drive}` : cfg.kind==='challenge' ? `${cfg.chName} · goal ${cfg.goal}` : cfg.kind==='tour' ? `Tour total so far: ${cfg.tourTotal||0}` : cfg.mods.map(m=>m.name).join(' · ');
   if (G) G.plan = null; el('planBar').hidden = true; el('planBtn').classList.remove('on');
   for (const sel of ['[data-tool=ferry]','[data-tool=metro]','#planBtn','#trafBtn','#statsBtn','#nightBtn']) document.querySelector(sel).hidden = !PLUS();
   setSpeed(1); setTool('draw'); closeSheet();
+  Object.assign(EMO, {last: -99, sent: 0, streak: 0, prev: -1, coolUntil: -99}); showEmoteUI(cfg.kind === 'duel');
   if (!bare) { tone(523, .3, .04); saveGame(); }
 }
 
@@ -559,7 +661,7 @@ const buildable = i => inRect(G.rect, i) && G.revealAt[i] <= now;
 
 // ---------- spawning ----------
 function countColor(c){ let h=0,d=0; for (const o of G.houses) if (o.color===c) h++; for (const o of G.dests) if (o.color===c) d++; return {h,d}; }
-function freeLand(i){ return i>=0 && i<N && G.occ[i]===0 && G.terrain[i]===0 && (!PLUS() || iy(i) !== G.city.rail) && inRect(G.rect,i) && (G.revealAt[i] <= now || G.time < 0.5); }
+function freeLand(i){ return i>=0 && i<N && G.occ[i]===0 && G.terrain[i]===0 && (!PLUS() || iy(i) !== G.city.rail) && inRect(G.rect,i) ; }
 function neighbors8(i){ const x=ix(i), y=iy(i), r=[]; for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) { if (!dx && !dy) continue; const X=x+dx, Y=y+dy; if (X>=0&&Y>=0&&X<W&&Y<H) r.push(Y*W+X); } return r; }
 function diagFree(a, b){ if (!isDiag(a,b)) return true; const p = iy(a)*W + ix(b), q = iy(b)*W + ix(a); return !hasEdge(p, q); }
 function neighbors4(i){ const x=ix(i), y=iy(i), r=[]; if(x>0)r.push(i-1); if(x<W-1)r.push(i+1); if(y>0)r.push(i-W); if(y<H-1)r.push(i+W); return r; }
@@ -582,7 +684,7 @@ function spawnHouse(color, near){
     if (t < 50) { const R = G.rect, cx = ix(cand), cy = iy(cand); if (cx===R.x || cy===R.y || cx===R.x+R.w-1 || cy===R.y+R.h-1) continue; }
     if (neighbors4(cand).some(n => G.occ[n]===3 || G.occ[n]===4)) continue;
     if (anchors.length && Math.min(...anchors.map(a=>Math.hypot(ix(a)-ix(cand), iy(a)-iy(cand)))) < 2) continue;
-    // like the original, homes sit a little way out from their workplace, so one house can't do all the work
+    // homes sit a little way out from their workplace, so one house can't do all the work
     if (t < 50 && G.dests.some(d => d.color === color && Math.hypot(d.x + 0.5 - ix(cand), d.y + 0.5 - iy(cand)) < 5.5)) continue;
     spot = cand;
   }
@@ -621,7 +723,7 @@ function spawnDest(color, start, at){
     if (start || at) break;
   }
   if (!best) return null;
-  const d = {x:best.x, y:best.y, body:best.body, ent:best.ent[0], ents:[], lots:[], level:1, served:0, color, pins:0, claimed:0, pinT:0, timer:0, born:now, pq: color < 0 ? [] : null, cby: {}};
+  const d = {x:best.x, y:best.y, body:best.body, ent:best.ent[0], ents:[], lots:[], level:1, served:0, color, pins:0, claimed:0, pinT:0, timer:0, born:now, bornT:G.time, pq: color < 0 ? [] : null, cby: {}};
   for (const b of d.body){ G.occ[b] = 3; G.destAt.set(b, d); }
   G.dests.push(d);
   addLot(d, best.ent);
@@ -659,7 +761,7 @@ function turnHouse(h, n){
 }
 
 // ---------- graph ----------
-// bridges and tunnels like the original: no junctions on a bridge, and houses can't join a bridge or tunnel directly
+// bridges and tunnels: no junctions on a bridge, and houses can't join a bridge or tunnel directly
 function linkOK(a, b){
   for (const [p, q] of [[a,b],[b,a]]) {
     if (G.round.has(p) && !(Math.abs(ix(p)-ix(q)) + Math.abs(iy(p)-iy(q)) === 1)) return false;
@@ -1054,7 +1156,7 @@ function update(dt){
   G.returning = G.returning.filter(r => r.t > 0);
   { let j = 0; for (const c of G.cars) if (c.stuck > 1) j++; G.stats.jam = Math.max(G.stats.jam||0, j); }
   for (const d of G.dests) {
-    if (now < d.born + 0.6 || d.color === -2) continue;
+    if (G.time < (d.bornT ?? -9) + 0.6 || d.color === -2) continue;
     d.pinT += dt; const iv = pinInterval(d);
     if (d.pinT >= iv) { d.pinT -= iv * (0.85 + rng()*0.3); if (d.pins < MAXPINS + ((d.level||1)-1)*3) { if (d.pq) { const cols = [...new Set(G.houses.map(h=>h.color))]; d.pq.push(cols[Math.floor(rng()*cols.length)] || 0); d.pins = d.pq.length; } else d.pins++; d.pinAt = now; } }
     if (G.endless && (G.city.practice || G.cfg.kind === 'sandbox')) { d.timer = 0; continue; }
@@ -1063,7 +1165,7 @@ function update(dt){
     if (d.timer > 0.5) { d.beatT = (d.beatT || 0) - dt; if (d.beatT <= 0) { d.beatT = 1.1 - d.timer*0.6; tone(180 + d.timer*120, .09, .035, 'square'); } } else d.beatT = 0;
     if (d.timer >= 1) {
       if (!G.endless) { gameOver(d); return; }
-      // endless, like the original: the oldest visitors give up and you lose points, but the game goes on
+      // endless: the oldest visitors give up and you lose points, but the game goes on
       const drop = Math.min(3, d.pins); if (d.pq) d.pq.splice(0, drop); d.pins -= drop; d.claimed = Math.min(d.claimed, d.pins);
       const lose = Math.min(G.score, 3); G.score -= lose; d.timer = 0;
       toast(`The ${d.color < 0 ? 'airport' : COLOR_NAMES[d.color] + ' workplace'} overflowed: -${lose}`, 1800); tone(196,.25,.04,'triangle');
@@ -1071,6 +1173,7 @@ function update(dt){
   }
   G.houseT += dt; if (G.houseT >= houseInterval()) { G.houseT = 0; if (G.houses.length < houseCap()) spawnHouse(); }
   landIncoming();
+  if (G.airportAt !== undefined && G.time >= G.airportAt) { G.airportAt = undefined; const ap = G.city.airport; if (!G.dests.some(d => d.color === -1) && spawnDest(-1, false, ap)) toast(`The ${G.city.name} airport opened. It takes cars of every color.`, 3500); }
   if (G.endless && !G.city.practice && G.cfg.kind !== 'sandbox' && !G.city.custom) { store.endless = store.endless || {}; if (G.score > (store.endless[G.city.id]||0)) { store.endless[G.city.id] = G.score; G.endDirty = true; } }
   if (PLUS() && G.week >= 4 && !G.city.practice) { G.ambT += dt; if (G.ambT > 40) { G.ambT = 0; spawnAmbulance(); } }
   if (G.wh) { G.truckT += dt; if (G.truckT > 7) { G.truckT = 0; spawnTruck(); } }
@@ -1200,7 +1303,7 @@ const ICON = {
   ferry: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h16l-2.5 5h-11z"/><path d="M8 14V9h7l2 5"/><path d="M2 21c2 0 2-1 4-1s2 1 4 1 2-1 4-1 2 1 4 1 2-1 4-1"/></svg>',
   mway: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 19 L21 5"/><path d="M5 21 L23 7" opacity=".4"/><circle cx="3" cy="19" r="2" fill="currentColor"/><circle cx="21" cy="5" r="2" fill="currentColor"/></svg>',
 };
-// Weekly upgrade sets, Mini Motorways style: no free weekly roads; road tiles come in bundles,
+// Weekly upgrade sets: no free weekly roads; road tiles come in bundles,
 // bridges and tunnels come bundled with roads, bigger tools join the pool as the game goes on.
 const rd = n => G.mods.has('tight') ? Math.round(n/2) : n;
 const UPG = {
@@ -1225,6 +1328,7 @@ const UPG_BIAS = {
 };
 function rectHas(t){ const r=G.rect; for (let y=r.y;y<r.y+r.h;y++) for (let x=r.x;x<r.x+r.w;x++) if (G.terrain[y*W+x]===t) return true; return false; }
 function weekEnd(){
+  if (G.cfg.kind === 'duel' && G.cfg.duel && G.cfg.duel.rule === 'W' && G.week >= 10) { finishSprint(); return; }
   (G.weekly = G.weekly || []).push(G.score); G.week++; if (G.week === 10) unlockAch('w10'); if (G.week === 20) unlockAch('w20'); if (G.week === 12 && !G.usedRound) unlockAch('noround');
   const nextStage = STAGES[G.stage+1];
   const willExpand = nextStage && G.week >= nextStage.week;
@@ -1291,7 +1395,7 @@ function showUpgrade(){
     saveGame();
   });
 }
-// like the original: a soft pulse marks where a new workplace is coming, a few seconds before it appears
+// a soft pulse marks where a new workplace is coming, a few seconds before it appears
 function announceDest(color, withHouses){
   const R = G.rect; let best = null, bs = -1;
   for (let k=0; k<40; k++) {
@@ -1322,7 +1426,7 @@ function expandStage(){
   setCamTarget(false);
   const ap = G.city.airport;
   if (PLUS() && ap && !G.dests.some(d => d.color === -1) && ap[0] >= G.rect.x && ap[0] < G.rect.x+G.rect.w && ap[1] >= G.rect.y && ap[1] < G.rect.y+G.rect.h) {
-    const g0 = G; setTimeout(() => { if (G === g0 && !G.over && !G.dests.some(d => d.color === -1) && spawnDest(-1, false, ap)) toast(`The ${G.city.name} airport opened. It takes cars of every color.`, 3500); }, 2600);
+    G.airportAt = G.time + 2.6;
   }
   tone(523,.5,.03,'triangle'); setTimeout(()=>tone(784,.6,.03,'triangle'),180);
 }
@@ -1339,7 +1443,9 @@ function statsLine(){
 function gameOver(d){
   G.over = true; G.failDest = d; clearSave();
   const cfg = G.cfg; let extra = '';
-  if (G.city.practice) {
+  if (cfg.kind === 'duel' && cfg.duel) {
+    extra = duelEndHtml(true);
+  } else if (G.city.practice) {
     extra = '<p>Practice runs are not scored. Ready for Seattle?</p>';
   } else if (cfg.kind === 'expert') {
     store.expert = store.expert || {}; const prev = store.expert[G.city.id] || 0; store.expert[G.city.id] = Math.max(prev, G.score);
@@ -1353,6 +1459,7 @@ function gameOver(d){
     store.chal = store.chal || {}; const prev = store.chal[cfg.key] || 0; store.chal[cfg.key] = Math.max(prev, G.score);
     extra = `<p>${G.score >= cfg.goal ? 'Challenge complete!' : `Goal: ${cfg.goal} trips.`} Best: <b>${store.chal[cfg.key]}</b></p>`;
   } else if (cfg.kind === 'classic') {
+    if (!G.city.custom && !G.city.practice) { store.lb = store.lb || {}; store.lb[G.city.id] = [...(store.lb[G.city.id] || []), [G.score, G.week, Date.now()]].sort((a,b) => b[0]-a[0]).slice(0, 10); }
     const prev = store.best[G.city.id] || 0; store.best[G.city.id] = Math.max(prev, G.score);
     const nxs = CITIES.filter(c => c.after === G.city.id), bst = store.best[G.city.id];
     extra = `<p>Best in ${G.city.name}: <b>${bst}</b>${G.score>prev?' (new best)':''}</p>${PLUS() ? medalRow(bst) : ''}${nxs.map(nx => `<p class="hint">${bst >= nx.need ? `${nx.name} is unlocked.` : `${nx.need - bst} more trips to unlock ${nx.name} (needs ${nx.need}).`}</p>`).join('')}`;
@@ -1415,7 +1522,7 @@ function showOver(d, extra){
     ${PLUS() ? weekChart() : ''}
     ${extra}
     <div class="btnrow">
-      ${PLUS() && !G.usedSecond && !G.city.practice && G.cfg.kind !== 'daily' && G.cfg.kind !== 'weekly' ? '<button class="btn primary" id="second">Second chance</button>' : ''}
+      ${PLUS() && !G.usedSecond && !G.city.practice && G.cfg.kind !== 'duel' && G.cfg.kind !== 'daily' && G.cfg.kind !== 'weekly' ? '<button class="btn primary" id="second">Second chance</button>' : ''}
       <button class="btn primary" id="again">Play again</button>
       <button class="btn" id="endless">Keep building (Endless)</button>
       <button class="btn" id="watch">Watch replay</button>
@@ -1429,6 +1536,7 @@ function showOver(d, extra){
   const wb = sheetCard.querySelector('#watch'); if (!G.frames || G.frames.length < 3) wb.hidden = true; else wb.onclick = () => { closeSheet(); G.replay = {t0: now, d, extra}; G.view = {z:1, px:0, py:0}; el('top').hidden = true; el('bottom').hidden = true; };
   const sc = sheetCard.querySelector('#second');
   if (sc) sc.onclick = () => { G.usedSecond = true; G.over = false; d.pins = Math.max(0, d.pins - 4); d.claimed = Math.min(d.claimed, d.pins); d.timer = 0; G.view = {z:1, px:0, py:0}; closeSheet(); el('bottom').hidden = false; setSpeed(0); toast('Second chance: 4 pins cleared. Press play when ready. Only once per game.', 3500); };
+  if (G.cfg.kind === 'duel' && G.cfg.duel) { sheetCard.querySelector('#endless').hidden = true; sheetCard.querySelector('#again').textContent = 'Play this duel again'; wireDuelEnd(true); }
   sheetCard.querySelector('#endless').onclick = () => { el('bottom').hidden = false; G.over = false; G.endless = true; G.view = {z:1, px:0, py:0}; for (const x of G.dests) x.timer = 0; closeSheet(); toast('Endless mode: no game over, scores saved separately', 3000); };
 }
 
@@ -1774,7 +1882,7 @@ function serialize(){
   for (const c of G.cars) if (!c.kind) back.set(c.home, (back.get(c.home)||0) + 1);
   for (const r of G.returning) back.set(r.h, (back.get(r.h)||0) + 1);
   for (const r of (G.resting||[])) back.set(r.h, (back.get(r.h)||0) + 1);
-  return { v:1, mv:2, ed: EDITION, cfg:{kind:G.cfg.kind, key:G.cfg.key||null, goal:G.cfg.goal||0, chName:G.cfg.chName||'', tourIds:G.cfg.tourIds||null, tourIdx:G.cfg.tourIdx||0, tourTotal:G.cfg.tourTotal||0, cityId:G.city.id, modIds:[...G.mods], seed:G.cfg.seed}, rng: rng.get(),
+  return { v:1, mv:3, ed: EDITION, cfg:{kind:G.cfg.kind, duel:G.cfg.duel ? G.cfg.duel.code : null, key:G.cfg.key||null, goal:G.cfg.goal||0, chName:G.cfg.chName||'', tourIds:G.cfg.tourIds||null, tourIdx:G.cfg.tourIdx||0, tourTotal:G.cfg.tourTotal||0, cityId:G.city.id, modIds:[...G.mods], seed:G.cfg.seed}, rng: rng.get(),
     road: roadState(), houses: G.houses.map(h => [h.i, h.color, h.idle + (back.get(h)||0), h.trips||0, !!h.apt, h.face||0]),
     dests: G.dests.map(d => [d.x, d.y, d.ent, d.color, d.pins, d.pinT, d.timer, d.pq, entsOf(d), d.level||1, d.served||0, lotsOf(d).map(l => [l.t, l.gate, l.face])]),
     week:G.week, weekT:G.weekT, time:G.time, houseT:G.houseT, score:G.score, endless:G.endless, colors:G.colors, stage:G.stage, portrait:!!G.portrait, wk:(G.weekly||[]).slice(-200), sec:!!G.usedSecond, incoming:G.incoming||[],
@@ -1784,8 +1892,8 @@ function restore(S){
   try {
     if (S.ed && S.ed !== EDITION) setEdition(S.ed);
     const city = ALL_CITIES().find(c => c.id === S.cfg.cityId); if (!city || S.v !== 1) return false;
-    if (!city.custom && S.mv !== 2) { setTimeout(() => toast('The city maps were redrawn to match the real places, so your unfinished game was reset. Your best scores are safe.', 4500), 400); return false; }
-    newGame({kind:S.cfg.kind, key:S.cfg.key, goal:S.cfg.goal, chName:S.cfg.chName, tourIds:S.cfg.tourIds, tourIdx:S.cfg.tourIdx, tourTotal:S.cfg.tourTotal, city, mods: MODS.filter(m => S.cfg.modIds.includes(m.id)), seed:S.cfg.seed}, true);
+    if ((!city.custom && S.mv !== 3) || (city.custom && S.mv !== 3)) { setTimeout(() => toast('The maps got bigger in this version, so your unfinished game was reset. Your best scores are safe.', 4500), 400); return false; }
+    newGame({kind:S.cfg.kind, duel: S.cfg.duel ? readDuel(S.cfg.duel) : undefined, key:S.cfg.key, goal:S.cfg.goal, chName:S.cfg.chName, tourIds:S.cfg.tourIds, tourIdx:S.cfg.tourIdx, tourTotal:S.cfg.tourTotal, city, mods: MODS.filter(m => S.cfg.modIds.includes(m.id)), seed:S.cfg.seed}, true);
     rng = mulberry32(S.rng);
     Object.assign(G, {week:S.week, weekT:S.weekT, time:S.time, houseT:S.houseT, score:S.score, endless:S.endless, colors:S.colors, stage:S.stage});
     G.incoming = (Array.isArray(S.incoming) ? S.incoming : []).filter(i => i && Number.isInteger(i.color) && i.color >= 0 && i.color < CAR_COLORS.length).map(i => ({color:i.color, houses:!!i.houses, at: Array.isArray(i.at) ? [i.at[0]|0, i.at[1]|0] : null, t: +i.t || 0}));
@@ -2034,7 +2142,7 @@ function patchHouseLayer(tiles, pick){
 }
 function buildHouseLayer(pick){
   try {
-    const k = 40; let c = G.houseCanvas; if (!c) { c = G.houseCanvas = document.createElement('canvas'); c.width = W*k; c.height = H*k; }
+    const k = 32; let c = G.houseCanvas; if (!c) { c = G.houseCanvas = document.createElement('canvas'); c.width = W*k; c.height = H*k; }
     const g = c.getContext('2d'); g.setTransform(1,0,0,1,0,0); g.clearRect(0, 0, c.width, c.height); g.scale(k, k);
     const keep = ctx; ctx = g;
     try { for (const h of G.houses) if (pick(h)) drawHouse(h); } finally { ctx = keep; }
@@ -2145,7 +2253,7 @@ function render(){
     ctx.beginPath(); ctx.moveTo(0, y-.12); ctx.lineTo(W, y-.12); ctx.moveTo(0, y+.12); ctx.lineTo(W, y+.12); ctx.stroke();
     ctx.lineWidth = 0.07; ctx.beginPath(); for (let x=0; x<W; x+=0.5) { ctx.moveTo(x+.25, y-.2); ctx.lineTo(x+.25, y+.2); } ctx.stroke(); ctx.globalAlpha = 1;
   }
-  // while drawing, faint dots mark the tile grid (like the original)
+  // while drawing, faint dots mark the tile grid
   if (stroke && stroke.mode === 'draw' && G.rect) {
     const R = G.rect; ctx.fillStyle = TH.muted; ctx.globalAlpha = 0.28;
     for (let y=R.y; y<R.y+R.h; y++) for (let x=R.x; x<R.x+R.w; x++) { const i = y*W+x; if (G.occ[i] === 0 && G.terrain[i] === 0) { ctx.beginPath(); ctx.arc(x+.5, y+.5, 0.045, 0, 7); ctx.fill(); } }
@@ -2279,7 +2387,7 @@ function render(){
     }
     // building
     const lvl = d.level || 1, pop = d.grew ? Math.max(0, 1 - (now - d.grew)*1.5) : 0, sz = (0.88 + 0.12*pop)*k;
-    // a grown workplace becomes a big round building, like the original
+    // a grown workplace becomes a big round building
     const R0 = lvl >= 2 && d.color >= 0 ? sz*0.98 : 0.24, R1 = lvl >= 2 && d.color >= 0 ? sz*0.72 : 0.14;
     ctx.fillStyle = 'rgba(0,0,0,.16)'; rr(cx-sz+0.08, cy-sz+0.14, sz*2, sz*2, R0); ctx.fill();
     ctx.fillStyle = col; rr(cx-sz, cy-sz, sz*2, sz*2, R0); ctx.fill();
@@ -2482,7 +2590,7 @@ function updateHud(){
   el('nRoads').parentElement.classList.toggle('low', G.roads > 0 && G.roads <= 5);
   el('nRoads').textContent = G.roads; el('nBridge').textContent = G.bridges; el('nTunnel').textContent = G.tunnels;
   for (const [id, v] of [['nRoads',G.roads],['nBridge',G.bridges],['nTunnel',G.tunnels],['nRound',G.rounds],['nLight',G.lightsN],['nMway',G.mwN],['nFerry',G.ferryN],['nMetro',G.metroN]]) el(id).parentElement.classList.toggle('zero', v <= 0);
-  // like the original: a tool's button only appears once you've received it in this game
+  // a tool's button only appears once you've received it in this game
   G.got = G.got || new Set();
   for (const [id, v, used] of [['nBridge',G.bridges,G.bridgeEntry.size],['nTunnel',G.tunnels,G.tunnelEntry.size],['nRound',G.rounds,G.round.size],['nLight',G.lightsN,G.lights.size],['nMway',G.mwN,G.mw.size],['nFerry',G.ferryN,G.ferry.size],['nMetro',G.metroN,G.metro.size]]) {
     if (v > 0 || used > 0) G.got.add(id);
@@ -2505,7 +2613,7 @@ function achSection(){
     <div class="small">Car style</div><div class="btnrow">${CAR_STYLES.map(cs => `<button class="btn${(store.carStyle||'classic')===cs.id?' primary':''}" data-style="${cs.id}" ${n >= cs.need ? '' : 'disabled'} title="${n >= cs.need ? '' : 'Earn '+cs.need+' achievements'}">${cs.name}${n >= cs.need ? '' : ' · '+cs.need+' achievements'}</button>`).join('')}</div>`;
 }
 // ---------- map maker ----------
-const ED = { t: null, center: [22,14], paint: '0', brush: 1, id: null, down: false };
+const ED = { t: null, center: [30,19], paint: '0', brush: 1, id: null, down: false };
 function openEditor(m){
   ED.t = m ? decodeT(m.t) : new Uint8Array(N); ED.center = m ? m.center.slice() : [22,14]; ED.id = m ? m.id : null;
   el('edName').value = m ? m.name : ''; el('edDrive').value = m ? m.drive : 'right';
@@ -2650,7 +2758,7 @@ function showHome(){
       ${card('classic', 'Classic', '<span class="tag">Simple</span>', 'The pure road puzzle. Roads, bridges, tunnels, roundabouts, lights, and motorways.', ['18 real cities', 'Daily and weekly challenges', 'Replays and photo mode'])}
       ${card('plus', 'Plus', '<span class="tag">Free for now</span>', 'Everything in Classic, plus weather, events, ferries, metros, and smarter traffic.', ['Map maker and sandbox', 'World tour and achievements', 'Cars route around traffic'])}
     </div>
-    <p class="hint">Classic and Plus keep separate progress. Version 37.</p>
+    <p class="hint">Classic and Plus keep separate progress. Version 39.</p>
     ${settingsRow()}
   </div>`);
   sheetCard.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { setEdition(b.dataset.mode); SET.lastMode = b.dataset.mode; saveSet(); showMenu(); });
@@ -2677,7 +2785,8 @@ function showCity(c, paused){
       ${canExpert ? `<button class="btn" data-go="expert">Expert${(store.expert||{})[c.id] ? ' · best ' + store.expert[c.id] : ''}</button>` : ''}
       ${PLUS() && !c.practice ? '<button class="btn" data-go="sandbox">Sandbox</button>' : ''}</div>
       ${canEndless ? '<p class="hint">Endless: no game over; an overflowing workplace costs 3 points. Expert: roads lock after 30 seconds, no undo, one upgrade choice.</p>' : ''}
-      ${chals.length ? `<div class="small">City challenges</div><div class="grid2">${chals.map(x => `<button class="opt" data-chal="${c.id}:${x.id}"><div class="row"><h3>${x.name}</h3>${(ch[x.id]||0) >= x.goal ? '<span class="tag">done</span>' : ''}</div><p>${x.desc}</p><span class="hint">${ch[x.id] ? 'Best ' + ch[x.id] : 'Not played yet'}</span></button>`).join('')}</div>` : ''}`
+      ${chals.length ? `<div class="small">City challenges</div><div class="grid2">${chals.map(x => `<button class="opt" data-chal="${c.id}:${x.id}"><div class="row"><h3>${x.name}</h3>${(ch[x.id]||0) >= x.goal ? '<span class="tag">done</span>' : ''}</div><p>${x.desc}</p><span class="hint">${ch[x.id] ? 'Best ' + ch[x.id] : 'Not played yet'}</span></button>`).join('')}</div>` : ''}
+      ${(store.lb||{})[c.id] && store.lb[c.id].length ? `<div class="small">Leaderboard · your top runs on this device</div><ol class="lb">${store.lb[c.id].map(([sc, wk, at], k) => `<li><b>${sc}</b> trips<span class="hint">week ${wk} · ${new Date(at).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</span></li>`).join('')}</ol>` : ''}`
     : `<p class="hint">Locked. Reach ${c.need || 300} trips in ${prev ? prev.name : 'the previous city'} to open it, or enter a code in the Codes section.</p>`}
   </div>`);
   const seed = () => (Date.now() & 0x7fffffff);
@@ -2693,7 +2802,19 @@ function showCity(c, paused){
     newGame({kind:'challenge', key:x.id, goal:x.goal, chName:x.name, city: c, mods: MODS.filter(m => x.mods.includes(m.id)), seed: seed()}); });
   sheet.scrollTop = 0;
 }
+// the whole month's puzzles are fixed in advance (they come from the date), so show them as a calendar
+function monthPlan(){
+  const t = new Date(), y = t.getFullYear(), m = t.getMonth(), days = new Date(y, m+1, 0).getDate(), today = todayKey();
+  const cells = []; for (let d=1; d<=days; d++) { const key = y*10000 + (m+1)*100 + d, ch = challengeFor('daily', key), rec = store.daily[key];
+    cells.push(`<div class="cal${key === today ? ' today' : key < today ? ' past' : ''}"><b>${d}</b><span>${ch.city.name}</span><span class="hint">${ch.mods.map(x => x.name).join(' + ')}</span>${rec && rec.first !== null ? `<span class="tag">${rec.first}</span>` : key > today ? '<span class="hint">coming</span>' : ''}</div>`); }
+  const weeks = new Map(); for (let d=1; d<=days; d++) { const k = weekKey(new Date(y, m, d)); if (!weeks.has(k)) weeks.set(k, d); }
+  const wk = weekKey();
+  return `<div class="small">${t.toLocaleDateString(undefined, {month:'long', year:'numeric'})} · daily puzzles</div><div class="calgrid">${cells.join('')}</div>
+    <div class="small">Weekly challenges this month</div><div class="stack" style="gap:6px">${[...weeks].map(([k, d]) => { const ch = challengeFor('weekly', k), rec = store.weekly[k]; return `<div class="cal wide${k === wk ? ' today' : k < wk ? ' past' : ''}"><b>From ${new Date(y, m, d).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</b><span>${ch.city.name}</span><span class="hint">${ch.mods.map(x => x.name).join(' + ')}</span>${rec ? `<span class="tag">best ${rec.best}</span>` : ''}</div>`; }).join('')}</div>
+    <p class="hint">Only today's puzzle and this week's challenge can be played. New ones unlock on their own as the days go by.</p>`;
+}
 function showMenu(paused){
+  showEmoteUI(false);
   const daily = challengeFor('daily'), weekly = challengeFor('weekly');
   const saved = paused ? null : loadSave();
   const savedCity = saved && ALL_CITIES().find(c => c.id === saved.cfg.cityId);
@@ -2717,12 +2838,13 @@ function showMenu(paused){
     ${paused ? '<div class="btnrow"><button class="btn primary" id="resume">Resume</button><button class="btn" id="photo">Photo mode</button></div>' : ''}
     ${savedCity ? `<div class="btnrow"><button class="btn primary" id="cont">Continue ${savedCity.name} · week ${saved.week} · ${saved.score} trips</button></div>` : ''}
     <div class="small">Cities · tap one for its options</div><div class="grid2">${cityCards}</div>
-    ${drop('Daily and weekly challenges', `<div class="grid2">${chCard(daily, dRec, 'Daily puzzle')}${chCard(weekly, wRec, 'Weekly challenge')}</div>
+    ${drop('Daily and weekly challenges', `<div class="grid2">${chCard(daily, dRec, 'Daily puzzle')}${chCard(weekly, wRec, 'Weekly challenge')}</div>${monthPlan()}
       <div class="small">Check a friend's daily code</div>
       <form class="btnrow" id="codeForm" style="align-items:center"><input id="codeIn" placeholder="e.g. 3ABC12-4F" autocomplete="off" style="${INP}"><button class="btn" type="submit">Check</button><span class="hint" id="codeOut"></span></form>`)}
     ${PLUS() ? drop('My maps and world tour', mapsSection() + tourSection()) : ''}
     ${PLUS() && themeSection() ? drop('Map themes', themeSection()) : ''}
     ${PLUS() ? drop('Achievements and car styles', achSection()) : ''}
+    ${drop('Duel a friend', duelSection())}
     ${drop('Codes', `<form class="btnrow" id="unlockForm" style="align-items:center"><input id="unlockIn" placeholder="Enter a code" autocomplete="off" style="${INP}"><button class="btn" type="submit">Redeem</button></form>${store.admin ? '<p class="hint">Admin code active: everything is unlocked in Classic and Plus.</p>' : ''}`)}
     ${drop('Settings', settingsRow())}
     ${drop('How to play', `<p class="hint">${HELP}</p>`)}
@@ -2733,7 +2855,7 @@ function showMenu(paused){
   sheetCard.querySelector('#unlockForm').onsubmit = e => { e.preventDefault(); if (redeemCode(sheetCard.querySelector('#unlockIn').value)) { toast('Code accepted! Everything is unlocked.', 3000); tone(784,.3,.05,'triangle'); applyTheme(); showMenu(paused); } else toast("That code doesn't work"); };
   sheetCard.querySelector('#codeForm').onsubmit = e => { e.preventDefault(); const r = readCode(sheetCard.querySelector('#codeIn').value); const mine = r && store.daily[r.key];
     sheetCard.querySelector('#codeOut').textContent = !r ? "That code doesn't look right. Check for typos." : `${r.score} trips on the ${r.date} daily.` + (mine ? ` Your official score that day: ${mine.first}.` : ''); };
-  wireSettings(() => showMenu(paused));
+  wireSettings(() => showMenu(paused)); wireDuel();
   const hb = sheetCard.querySelector('#homeBtn'); if (hb) hb.onclick = showHome;
   sheetCard.querySelectorAll('[data-city]').forEach(b => b.onclick = () => showCity(ALL_CITIES().find(c=>c.id===b.dataset.city), paused));
   sheetCard.querySelectorAll('details.drop').forEach(d => d.addEventListener('toggle', () => { if (d.open) OPEN.add(d.dataset.drop); else OPEN.delete(d.dataset.drop); }));
@@ -2761,7 +2883,7 @@ function frame(ts){
   now = ts/1000; const rdt = Math.min(0.05, now - last); last = now; if (G) G.fdt = rdt;
   requestAnimationFrame(frame);
   try {
-    if (G && !G.over && !G.modal && G.speed > 0) { let t = rdt*G.speed; while (t > 0 && !G.over) { const d = Math.min(0.025, t); update(d); t -= d; } }
+    if (G && !G.over && !G.modal && G.speed > 0) { G.acc = Math.min(1, (G.acc || 0) + rdt*G.speed); while (G.acc >= 0.025 && !G.over && !G.modal) { update(0.025); G.acc -= 0.025; } }
     if (G && !G.over && !G.modal && G.speed > 0 && now - lastSave > 8) saveGame();
     render(); updateHud();
   } catch (err) { if (!frame.warned) { frame.warned = true; console.error(err); } }

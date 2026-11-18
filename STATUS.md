@@ -1,4 +1,4 @@
-# Little Lanes — build status (Nov 18, version 43 beta)
+# Little Lanes — build status (Nov 18, version 45)
 
 Single-file game: `index.html` (HTML + vanilla JS + Canvas 2D, no libraries). Plan and design decisions live in the "Little Lanes — Game Design & Build Plan" doc.
 
@@ -277,3 +277,13 @@ Plus only:
 - Progress sync: unlocks, medals and achievements merge between devices when signed in
 - Live duel section, replacing code duels: create a 4-letter room, a friend joins, both press Ready, a shared countdown, and both games start at the same moment. During play: the opponent strip shows their score, week, danger bar and mini map, plus emotes both ways. Survival: first to overflow loses. Sprint: most trips by the end of week 10. A player gone for 30 s loses. Rematch goes back to the lobby
 - New files: online.js, duel.js, vendor/supabase.js (supabase-js 2.119.1, saved inside the game). Security settings now allow the game's Supabase server
+
+## Version 44
+- Tested online play against the real server (Nov 18): guest sign-in, nickname, friend code, score upload, leaderboard, and a live duel (room, lobby, Ready, the same start for both players, opponent strip, emotes both ways, and the win screen when the opponent overflows) all work
+- Fixed: a game can only end once, so a score is never sent twice
+- Known: the lobby can take a few seconds to show a player who just joined
+
+## Version 45
+- Cleaner online menus: matching rounded fields and dropdowns, same-size buttons, and a wide letter-spaced room code box
+- Copy buttons for your friend code and the room code (in a dashed code box)
+- Red error banner at the top, with a close button, for mistakes like a wrong or empty code, a taken nickname, or no connection. Good news (copied, friend request sent) still shows as the normal message

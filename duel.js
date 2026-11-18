@@ -15,7 +15,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&am
 const num = (v, lo, hi, d) => { v = +v; return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : (d || 0); };
 const safe = f => function () { try { return f.apply(this, arguments); } catch (e) { try { console.error('duel.js', e); } catch (_) {} } };
 const $ = id => document.getElementById(id);
-const toast = (m, ms) => { try { HK.toast(m, ms); } catch (_) {} };
+const toast = (m, ms) => { try { if (/copied|sent to|welcome|moved here|accepted|saved|added/i.test(m) || !HK.error) HK.toast(m, ms); else HK.error(m); } catch (_) {} };
 // a duel needs a signed-in player who has picked a nickname (LLOnline.profile())
 const online = () => { const O = window.LLOnline; try { return O && O.sb && O.user && O.user() && O.profile && O.profile() ? O : null; } catch (_) { return null; } };
 const myNick = () => { const p = online() && window.LLOnline.profile(); return String((p && p.nickname) || 'Player').slice(0, 20); };
@@ -48,7 +48,7 @@ function boxHtml() {
   const row = (p, label) => `<div class="btnrow" style="align-items:center;gap:8px"><b>${esc(label)}</b><span class="tag">${p ? (p.ready ? 'Ready' : 'Not ready') : 'waiting…'}</span></div>`;
   const hostMeta = host || (S.host ? {city: S.city, rule: S.rule} : null);
   const playing = S.phase === 'countdown' || S.phase === 'playing';
-  return `<div class="stack"><div><div class="small">Room</div><h3>Room ${esc(S.room)} · ${opp ? 'friend joined' : 'waiting for a friend'}</h3>
+  return `<div class="stack"><div><div class="small">Room</div><div class="btnrow" style="align-items:center"><span class="codebox"><span class="small">Room code</span><b>${esc(S.room)}</b><button class="btn" id="ldCopy" type="button">Copy</button></span><span class="hint">${opp ? 'Friend joined' : 'Send this code to a friend'}</span></div>
     ${hostMeta && hostMeta.city ? `<p class="hint">${esc(cityName(hostMeta.city))} · ${esc(RULES[hostMeta.rule] || '')}</p>` : ''}</div>
     ${row(me, (me ? me.nick : myNick()) + ' (you)')}${row(opp, opp ? opp.nick : 'Friend')}
     <div class="btnrow" style="align-items:center">${playing ? '' : `<button class="btn primary" id="ldReady" ${opp && S.phase === 'lobby' ? '' : 'disabled'}>${S.ready ? 'Not ready' : 'Ready'}</button>`}<button class="btn" id="ldLeave">Leave room</button><span class="hint" id="ldCount">${esc(S.countText || S.msg || '')}</span></div></div>`;
@@ -74,6 +74,7 @@ function wireBox() {
     if (!/^[A-HJ-NP-Z]{4}$/.test(code)) { toast('A room code is 4 letters'); return; }
     join(code, false, null, 'S');
   });
+  if ((el = q('ldCopy'))) el.onclick = safe(() => { const t = S.room; try { navigator.clipboard.writeText(t).then(() => HK.toast('Room code copied: ' + t), () => HK.toast('Room code: ' + t, 4000)); } catch (_) { HK.toast('Room code: ' + t, 4000); } });
   if ((el = q('ldReady'))) el.onclick = safe(() => { if (S.phase === 'lobby') { S.ready = !S.ready; track(); refresh(); } });
   if ((el = q('ldLeave'))) el.onclick = safe(() => leave());
 }

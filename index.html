@@ -114,6 +114,17 @@ p{margin:0;line-height:1.5;color:var(--muted)}
 .opt{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;padding:14px;border-radius:14px;border:1px solid var(--panel-line);background:var(--land);min-width:0}
 .opt:hover:not(:disabled){border-color:var(--accent)}
 .opt:disabled{cursor:default}
+#errBar{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 12px);transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:12px;max-width:calc(100% - 32px);background:#d63c3c;color:#fff;border-radius:14px;padding:10px 10px 10px 16px;font-weight:600;font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.25);animation:errIn .25s ease-out}
+#errBar button{border:0;background:rgba(255,255,255,.2);color:#fff;border-radius:9px;width:28px;height:28px;font-size:13px;cursor:pointer;flex:none}
+@keyframes errIn{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
+.drop input,.drop select{font:inherit!important;font-size:15px!important;min-height:44px;box-sizing:border-box;padding:9px 12px!important;border-radius:12px!important;border:1px solid var(--panel-line)!important;background:var(--panel)!important;color:var(--ink)!important;min-width:0}
+.drop select{cursor:pointer;padding-right:30px!important}
+.drop .btn{min-height:44px;padding:10px 18px;font-weight:600}
+.drop .btnrow{gap:10px}
+.drop input#ldCode{width:7.5em;flex:0 0 auto;text-align:center;letter-spacing:.3em;font-weight:700;text-transform:uppercase}
+.codebox{display:inline-flex;align-items:center;gap:8px;padding:6px 6px 6px 12px;border-radius:12px;border:1px dashed var(--panel-line);background:var(--panel)}
+.codebox b{font-size:16px;letter-spacing:.12em}
+@media (prefers-reduced-motion: reduce){ #errBar{animation:none} }
 #emoteRing{position:fixed;left:12px;top:calc(env(safe-area-inset-top,0px) + 120px);display:grid;grid-template-columns:repeat(2,auto);gap:6px;background:var(--panel);border:1px solid var(--panel-line);border-radius:16px;padding:8px;box-shadow:0 10px 30px rgba(0,0,0,.18);z-index:5}
 #emoteRing button{border:1px solid var(--panel-line);background:var(--land);border-radius:12px;padding:8px 10px;font-size:14px;text-align:left;white-space:nowrap}
 #emoteRing button:disabled{opacity:.4;cursor:default}
@@ -228,6 +239,7 @@ p{margin:0;line-height:1.5;color:var(--muted)}
 <div id="planBar" hidden><span>Planning · city paused</span><button class="btn" id="planCancel">Cancel plan</button><button class="btn primary" id="planBuild">Build plan</button></div>
 <div id="hint" hidden></div>
 <div id="toast" role="status"></div>
+<div id="errBar" role="alert" hidden><span id="errMsg"></span><button id="errX" aria-label="Close">✕</button></div>
 <button id="emoteBtn" class="chip" hidden aria-label="Send an emote" style="position:fixed;left:12px;top:calc(env(safe-area-inset-top,0px) + 72px);font-size:20px;padding:6px 10px;cursor:pointer">😀</button>
 <div id="emoteRing" hidden role="menu" aria-label="Emotes"></div>
 <div id="emoteBubble" hidden></div>
@@ -585,9 +597,12 @@ window.LLHooks = (() => {
       showSheet(`<div class="stack"><div><div class="small">Duel over · week ${G.week}</div><h2>${title}</h2></div><div><div class="big">${G.score}</div><p>trips completed</p></div>${statsLine()}${html || ''}<div class="btnrow"><button class="btn primary" id="toMenu">Back to menu</button></div></div>`, true);
       sheetCard.querySelector('#toMenu').onclick = () => showMenu(); if (!was) tone(784, .4, .05, 'triangle'); },
     oppStrip: () => el('oppStrip'),
+    // red banner at the top for mistakes (bad code, empty box, no connection)
+    error(msg, ms = 3800){ const b = el('errBar'); el('errMsg').textContent = msg; b.hidden = false; b.style.animation = 'none'; void b.offsetWidth; b.style.animation = ''; clearTimeout(H._errT); H._errT = setTimeout(() => { b.hidden = true; }, ms); tone(220, .12, .04, 'square'); },
   };
   return H;
 })();
+document.getElementById('errX').onclick = () => { document.getElementById('errBar').hidden = true; };
 function startDuel(d){ store.duelTries = store.duelTries && typeof store.duelTries === 'object' ? store.duelTries : {}; const n = (store.duelTries[d.code] || 0) + 1; store.duelTries[d.code] = n; const ks = Object.keys(store.duelTries); if (ks.length > 60) delete store.duelTries[ks[0]]; save();
   newGame({kind:'duel', city: d.city, mods:[], seed: d.seed, duel: d}); G.duelTry = n; if (n > 1) setTimeout(() => toast(`Attempt ${n} at this duel. Your result code shows it to your friend.`, 3500), 3600); toast(`Duel: ${DUEL_RULES[d.rule]}. Your friend gets the same city.`, 3500); }
 function wireDuel(){
@@ -1499,6 +1514,7 @@ function statsLine(){
     ${G.bonus ? `<div><div class="small">Ambulance bonus</div><h3>+${G.bonus}</h3></div>` : ''}${G.stats.deliveries ? `<div><div class="small">Deliveries</div><h3>${G.stats.deliveries}</h3></div>` : ''}</div>`;
 }
 function gameOver(d){
+  if (G.over) return; // a game only ends once (keeps scores from being sent twice)
   G.over = true; G.failDest = d; clearSave(); if (G.cfg.kind === 'duel') G.lostDuel = true;
   LLHooks.emit('gameover', {city: G.city.id, edition: EDITION, kind: G.cfg.kind === 'classic' ? (G.endless ? 'endless' : 'normal') : G.cfg.kind, key: G.cfg.key || null, score: G.score, week: G.week, live: !!(G.cfg.duel && G.cfg.duel.live), practice: !!G.city.practice, custom: !!G.city.custom});
   const cfg = G.cfg; let extra = '';
@@ -2823,7 +2839,7 @@ function showHome(){
       ${card('classic', 'Classic', '<span class="tag">Simple</span>', 'The pure road puzzle. Roads, bridges, tunnels, roundabouts, lights, and motorways.', ['18 real cities', 'Daily and weekly challenges', 'Replays and photo mode'])}
       ${card('plus', 'Plus', '<span class="tag">Free for now</span>', 'Everything in Classic, plus weather, events, ferries, metros, and smarter traffic.', ['Map maker and sandbox', 'World tour and achievements', 'Cars route around traffic'])}
     </div>
-    <p class="hint">Classic and Plus keep separate progress. Version 43.</p>
+    <p class="hint">Classic and Plus keep separate progress. Version 45.</p>
     ${settingsRow()}
   </div>`);
   sheetCard.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { setEdition(b.dataset.mode); SET.lastMode = b.dataset.mode; saveSet(); showMenu(); });

@@ -20,7 +20,7 @@
   // ---------- helpers ----------
   const esc = s => String(s == null ? '' : s).replace(/[&<>"'`]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;'}[c]));
   const inp = typeof INP === 'string' ? INP : (typeof globalThis.INP === 'string' ? globalThis.INP : 'font:inherit;padding:9px 12px;border-radius:12px;border:1px solid var(--panel-line);background:var(--land);color:var(--ink);min-width:0;flex:1 1 160px');
-  const toast = (m, ms) => { try { H.toast(m, ms); } catch (e) {} };
+  const toast = (m, ms) => { try { if (/copied|sent to|welcome|moved here|accepted|saved|added/i.test(m) || !H.error) H.toast(m, ms); else H.error(m); } catch (e) {} };
   const rerender = () => { try { H.menu(); } catch (e) {} };
   const NICK_RE = /^[A-Za-z0-9_-]{3,16}$/;
   const BAD = ['fuck', 'shit', 'bitch', 'cunt', 'dick', 'cock', 'penis', 'vagina', 'pussy', 'whore', 'slut', 'nigg', 'fag', 'rape', 'nazi', 'hitler', 'porn', 'sex', 'anal', 'asshole', 'bastard', 'damn', 'crap', 'retard', 'suicide', 'kill', 'tits', 'boob', 'cum', 'wank', 'twat', 'dildo', 'milf', 'kkk', 'admin', 'moderator'];
@@ -156,7 +156,7 @@
     const p = S.profile;
     const code = S.showCode && S.session ? `<div class="stack"><p class="hint">Warning: using this code on a new device moves your account there. Keep it private.</p><input readonly id="llCode" style="${inp}" value="${esc(S.session.refresh_token)}"><div class="btnrow"><button class="btn" id="llCopy">Copy</button><button class="btn" id="llHide">Hide</button></div></div>` : '';
     return `<div class="stack">
-      <div class="btnrow"><span class="tag">${esc(p.nickname)}</span><span class="small">Friend code: <b>${esc(p.friend_code)}</b></span></div>
+      <div class="btnrow"><span class="tag">${esc(p.nickname)}</span><span class="codebox"><span class="small">Friend code</span><b>${esc(p.friend_code)}</b><button class="btn" id="llCopyFc" type="button">Copy</button></span></div>
       <div class="btnrow"><button class="btn" id="llXfer">Transfer code</button><button class="btn" id="llOut">Sign out</button></div>${code}
       <details><summary class="small">Have a transfer code?</summary><div class="btnrow" style="margin-top:8px"><input id="llTin" style="${inp}" placeholder="Paste transfer code" autocomplete="off"><button class="btn" id="llTuse">Use code</button></div></details>
       <div class="small"><b>Friends</b></div>
@@ -195,6 +195,10 @@
       S.showCode = true; rerender();
     });
     guard(q('#llHide'), async () => { S.showCode = false; rerender(); });
+    guard(q('#llCopyFc'), async () => {
+      const t = S.profile && S.profile.friend_code; if (!t) return;
+      try { await navigator.clipboard.writeText(t); H.toast('Friend code copied: ' + t); } catch (e) { H.toast('Your friend code is ' + t, 4000); }
+    });
     guard(q('#llCopy'), async () => {
       const t = S.session && S.session.refresh_token; if (!t) return;
       try { await navigator.clipboard.writeText(t); toast('Transfer code copied'); } catch (e) { const i = q('#llCode'); if (i) { i.select(); } toast('Select the code and copy it'); }

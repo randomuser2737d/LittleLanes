@@ -2,6 +2,32 @@
 
 Single-file game: `index.html` (HTML + vanilla JS + Canvas 2D, no libraries). Plan and design decisions live in the "Little Lanes — Game Design & Build Plan" doc.
 
+## v54 (Nov 18)
+- Co-op parties (new coop.js): 2 to 4 players, same city seed, team score is the total. Host picks Team survival (team out when anyone overflows) or Team sprint (10 weeks). Team strip with every teammate's score, danger bar and connection dot; 📣 Ping menu (Help, Get bridges, Keep going...); emotes reach teammates; team best saved.
+- Group chats: pick a name from a list, invite friends (up to 8 people); invitees must tap Join. Same pre-written messages, history (last 40), live delivery, unread counts, invite more, leave.
+- Notifications: in the installed app, turn on in Profile and account; shows system notifications for messages, group chats, invites and friend requests while the app is open in the background.
+- Later: shared-city co-op with turns; notifications when the app is fully closed (needs web push + server function).
+
+## v53 (Nov 18)
+- Message history saved online (new messages table): chat bubbles with each friend (last 40); works when the friend is offline, and they get "You have N new messages" next time.
+- 35 pre-written messages in 5 tabs: Ask, Duel, Answer, Cheer, Ideas.
+- Only accepted friends can be messaged (database rule); server limit 30 messages per 5 min; messages older than 30 days are deleted.
+
+## v52 (Nov 18)
+- Online is now its own page from the home screen (🌐 Online card, part of Plus). Removed from the Classic/Plus menus (a shortcut button remains in the Plus menu).
+- Online page: profile header with friends-online, requests and new-messages counts; then Friends (open), Live duel, Leaderboards, Profile and account.
+- Friend tools: search (5+ friends), cancel sent requests, friend count. Back to menu after a live duel returns to the Online page.
+
+## v51 (Nov 18)
+- Quick messages to friends: 14 pre-written messages (free to play?, duel Survival/Sprint, join my room with the room code attached, yes/no/5 minutes, GG, rematch, bye...). No free typing.
+- Only friends who are online receive them; messages from non-friends are ignored. Limit: 1 every 3 s, 20 per 5 min.
+- Messages list with Reply and Copy room code; red dot on the menu button for unread messages; sound + green banner on arrival.
+
+## v50 (Nov 18)
+- Friends: live online status (green online, yellow playing/in a duel, gray offline), online friends listed first with a count.
+- Tap a friend to see their profile: icon, color, motto, status, best scores per city, friends-since date, and Remove friend (tap twice).
+- "Appear offline" checkbox.
+
 ## v49 (Nov 18)
 - Profile customization: icon (24), color (9), motto from a fixed list (no free text), nickname change once a day.
 - Transfer codes: 5 wrong tries then a lockout that doubles (1 min up to 1 day); showing your code limited to 3 times per 10 min and hides after 1 minute; stronger warning.

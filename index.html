@@ -584,7 +584,7 @@ window.LLHooks = (() => {
     storeFor(ed){ try { return JSON.parse(localStorage.getItem(SKEYS[ed])) || {}; } catch (e) { return {}; } },
     writeStoreFor(ed, obj){ try { localStorage.setItem(SKEYS[ed], JSON.stringify(obj)); if (ed === EDITION) loadStore(ed); } catch (e) {} },
     cities: () => CITIES.map(c => ({id: c.id, name: c.name, unlocked: unlocked(c)})),
-    toast: (m, ms) => toast(m, ms), tone: (...a) => tone(...a), menu: () => { if (menuOpen && !sheet.hidden) showMenu(menuOpen.paused); }, // only redraws a menu that is already open
+    toast: (m, ms) => toast(m, ms), tone: (...a) => tone(...a), menu: () => { if (menuOpen && !sheet.hidden) { if (menuOpen.online) showOnline(); else showMenu(menuOpen.paused); } }, // only redraws a menu that is already open
     // live duels: both players call this at the same moment with the same values
     startLiveDuel({cityId, seed, rule, room}){ const city = CITIES.find(c => c.id === cityId); if (!city) return false;
       newGame({kind:'duel', city, mods:[], seed: seed|0, duel: {code: 'LIVE-' + room, city, seed: seed|0, rule: rule === 'W' ? 'W' : 'S', live: true}}); return true; },
@@ -597,7 +597,7 @@ window.LLHooks = (() => {
     // the duel is decided from outside (opponent overflowed, left, or time ran out): stop the game and show a card
     endDuel(title, html){ if (!G) return; const was = G.over; G.over = true; clearSave(); el('bottom').hidden = true; showEmoteUI(false);
       showSheet(`<div class="stack"><div><div class="small">Duel over · week ${G.week}</div><h2>${title}</h2></div><div><div class="big">${G.score}</div><p>trips completed</p></div>${statsLine()}${html || ''}<div class="btnrow"><button class="btn primary" id="toMenu">Back to menu</button></div></div>`, true);
-      sheetCard.querySelector('#toMenu').onclick = () => showMenu(); if (!was) tone(784, .4, .05, 'triangle'); },
+      sheetCard.querySelector('#toMenu').onclick = () => (G && G.cfg.duel && G.cfg.duel.live ? showOnline() : showMenu()); if (!was) tone(784, .4, .05, 'triangle'); },
     oppStrip: () => el('oppStrip'),
     // red banner at the top for mistakes (bad code, empty box, no connection)
     ok(msg, ms = 2600){ const b = el('errBar'); el('errMsg').textContent = '✓ ' + msg; b.classList.add('good'); b.hidden = false; b.style.animation = 'none'; void b.offsetWidth; b.style.animation = ''; clearTimeout(H._errT); H._errT = setTimeout(() => { b.hidden = true; }, ms); tone(880, .08, .03, 'triangle'); },
@@ -2837,6 +2837,25 @@ function installApp(){
   sheetCard.querySelector('#instOk').onclick = () => { closeSheet(); if (!G) showHome(); };
 }
 function THUMBS_CLEAR(){ for (const k in THUMBS) delete THUMBS[k]; }
+// Online is part of Plus: anyone who has Plus gets it (Plus is free for now)
+const PLUS_ACCESS = () => true;
+const ONLINE_ORDER = ['Online', 'Friends', 'Group chats', 'Live duel', 'Co-op party', 'Leaderboards', 'Profile and account'];
+function showOnline(){
+  if (!PLUS_ACCESS()) { showHome(); return; }
+  if (EDITION !== 'plus') setEdition('plus');
+  showSheet.menu = {online: true};
+  showEmoteUI(false); el('oppStrip').hidden = true;
+  const secs = ONLINE_ORDER.map(t => LLHooks._sections.find(s => s.title === t)).filter(Boolean).concat(LLHooks._sections.filter(s => !ONLINE_ORDER.includes(s.title)));
+  if (!OPEN.has('·online-init')) { OPEN.add('·online-init'); OPEN.add('Friends'); }
+  showSheet(`<div class="stack">
+    <div class="menu-head"><button class="btn" id="homeBtn2" aria-label="Back to home">← Home</button><div><div class="small">Little Lanes Plus</div><h2>Online</h2></div></div>
+    ${secs.length ? '' : '<p class="hint">Online features could not load. Check your connection and reload.</p>'}
+    ${secs.map(sec => sec.title === 'Online' ? `<div class="stack">${sec.html()}</div>` : drop(sec.title, sec.html())).join('')}
+  </div>`);
+  sheetCard.querySelector('#homeBtn2').onclick = () => showHome();
+  sheetCard.querySelectorAll('details.drop').forEach(d => d.addEventListener('toggle', () => { if (d.open) OPEN.add(d.dataset.drop); else OPEN.delete(d.dataset.drop); }));
+  for (const sec of secs) { try { sec.wire && sec.wire(sheetCard); } catch (e) { console.error(e); } }
+}
 function showHome(){
   menuOpen = null;
   if (G && !G.over) { saveGame(); }
@@ -2851,10 +2870,12 @@ function showHome(){
       ${card('classic', 'Classic', '<span class="tag">Simple</span>', 'The pure road puzzle. Roads, bridges, tunnels, roundabouts, lights, and motorways.', ['18 real cities', 'Daily and weekly challenges', 'Replays and photo mode'])}
       ${card('plus', 'Plus', '<span class="tag">Free for now</span>', 'Everything in Classic, plus weather, events, ferries, metros, and smarter traffic.', ['Map maker and sandbox', 'World tour and achievements', 'Cars route around traffic'])}
     </div>
-    <p class="hint">Classic and Plus keep separate progress. Version 49.</p>
+    ${PLUS_ACCESS() ? `<button class="mode" data-online="1" style="grid-template-columns:auto 1fr"><span style="width:64px;height:64px;border-radius:18px;display:grid;place-items:center;font-size:34px;background:var(--accent,#e5622b)">🌐</span><span class="mode-body"><span class="mode-row"><span class="mode-title">Online</span><span class="tag">Plus</span></span><span class="mode-desc">Friends, quick messages, live duels, and leaderboards.</span></span></button>` : ''}
+    <p class="hint">Classic and Plus keep separate progress. Version 54.</p>
     ${settingsRow()}
   </div>`);
   sheetCard.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { setEdition(b.dataset.mode); SET.lastMode = b.dataset.mode; saveSet(); showMenu(); });
+  const ob = sheetCard.querySelector('[data-online]'); if (ob) ob.onclick = () => showOnline();
   wireSettings(showHome);
 }
 const INP = 'font:inherit;padding:9px 12px;border-radius:12px;border:1px solid var(--panel-line);background:var(--land);color:var(--ink);min-width:0;flex:1 1 160px';
@@ -2938,7 +2959,7 @@ function showMenu(paused){
     ${PLUS() ? drop('My maps and world tour', mapsSection() + tourSection()) : ''}
     ${PLUS() && themeSection() ? drop('Map themes', themeSection()) : ''}
     ${PLUS() ? drop('Achievements and car styles', achSection()) : ''}
-    ${LLHooks._sections.map(sec => drop(sec.title, sec.html())).join('')}
+    ${PLUS_ACCESS() ? '<div class="btnrow"><button class="btn" id="goOnline">🌐 Online: friends, duels, leaderboards</button></div>' : ''}
     ${drop('Codes', `<form class="btnrow" id="unlockForm" style="align-items:center"><input id="unlockIn" placeholder="Enter a code" autocomplete="off" style="${INP}"><button class="btn" type="submit">Redeem</button></form>${store.admin ? '<p class="hint">Admin code active: everything is unlocked in Classic and Plus.</p>' : ''}`)}
     ${drop('Settings', settingsRow())}
     ${drop('How to play', `<p class="hint">${HELP}</p>`)}
@@ -2949,7 +2970,7 @@ function showMenu(paused){
   sheetCard.querySelector('#unlockForm').onsubmit = e => { e.preventDefault(); if (redeemCode(sheetCard.querySelector('#unlockIn').value)) { toast('Code accepted! Everything is unlocked.', 3000); tone(784,.3,.05,'triangle'); applyTheme(); showMenu(paused); } else LLHooks.error(sheetCard.querySelector('#unlockIn').value.trim() ? "That code doesn't work" : 'Type a code first'); };
   sheetCard.querySelector('#codeForm').onsubmit = e => { e.preventDefault(); const r = readCode(sheetCard.querySelector('#codeIn').value); const mine = r && store.daily[r.key];
     if (!r) LLHooks.error(sheetCard.querySelector('#codeIn') && !sheetCard.querySelector('#codeIn').value.trim() ? 'Type a code first' : "That score code doesn't look right"); sheetCard.querySelector('#codeOut').textContent = !r ? "That code doesn't look right. Check for typos." : `${r.score} trips on the ${r.date} daily.` + (mine ? ` Your official score that day: ${mine.first}.` : ''); };
-  wireSettings(() => showMenu(paused)); for (const sec of LLHooks._sections) { try { sec.wire && sec.wire(sheetCard); } catch (e) { console.error(e); } } LLHooks.emit('menu', sheetCard);
+  wireSettings(() => showMenu(paused)); { const go = sheetCard.querySelector('#goOnline'); if (go) go.onclick = () => showOnline(); } LLHooks.emit('menu', sheetCard);
   const hb = sheetCard.querySelector('#homeBtn'); if (hb) hb.onclick = showHome;
   sheetCard.querySelectorAll('[data-city]').forEach(b => b.onclick = () => showCity(ALL_CITIES().find(c=>c.id===b.dataset.city), paused));
   sheetCard.querySelectorAll('details.drop').forEach(d => d.addEventListener('toggle', () => { if (d.open) OPEN.add(d.dataset.drop); else OPEN.delete(d.dataset.drop); }));
@@ -2998,6 +3019,7 @@ requestAnimationFrame(frame);
 <script src="vendor/supabase.js"></script>
 <script src="online.js"></script>
 <script src="duel.js"></script>
+<script src="coop.js"></script>
 <script>
 // installed app: look for a new version on every launch and whenever the app comes back to the front
 if ('serviceWorker' in navigator) addEventListener('load', () => {

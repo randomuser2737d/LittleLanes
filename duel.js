@@ -79,6 +79,7 @@ function wireBox() {
   if ((el = q('ldLeave'))) el.onclick = safe(() => leave());
 }
 HK.addMenuSection('Live duel', () => `<div id="ldBox">${boxHtml()}</div>`, safe(() => refresh()));
+window.LLDuelRoom = () => (S && S.phase === 'lobby' && S.host && S.room) ? S.room : null;
 if (window.LLOnline && window.LLOnline.onChange) { try { window.LLOnline.onChange(safe(() => { if (!online() && S.room) leave(); else refresh(); })); } catch (_) {} }
 
 // ---------- channel ----------

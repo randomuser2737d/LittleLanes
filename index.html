@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://degjdzoflgrfovaxlyfj.supabase.co wss://degjdzoflgrfovaxlyfj.supabase.co; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#eef2ef">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -231,6 +231,7 @@ p{margin:0;line-height:1.5;color:var(--muted)}
 <button id="emoteBtn" class="chip" hidden aria-label="Send an emote" style="position:fixed;left:12px;top:calc(env(safe-area-inset-top,0px) + 72px);font-size:20px;padding:6px 10px;cursor:pointer">😀</button>
 <div id="emoteRing" hidden role="menu" aria-label="Emotes"></div>
 <div id="emoteBubble" hidden></div>
+<div id="oppStrip" class="chip" hidden style="position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 66px);z-index:4;gap:10px;font-size:13px"></div>
 <div id="sheet" class="sheet"><div class="card" id="sheetCard"></div></div>
 <div id="editor" hidden>
   <div class="ed-top">
@@ -547,6 +548,7 @@ const EMO = {last: -99, sent: 0, streak: 0, prev: -1, coolUntil: -99};
 function emoteReady(){ return now - EMO.last >= 3 && EMO.sent < 20 && now >= EMO.coolUntil; }
 function sendEmote(k){
   if (!emoteReady()) { toast(EMO.sent >= 20 ? 'That’s all the emotes for this game' : 'Wait a moment before the next emote'); return; }
+  LLHooks.emit('emote', k);
   EMO.streak = k === EMO.prev ? EMO.streak + 1 : 1; EMO.prev = k; EMO.last = now; EMO.sent++;
   if (EMO.streak >= 3) { EMO.coolUntil = now + 10; EMO.streak = 0; }
   const b = el('emoteBubble'); b.textContent = EMOTES[k][0] + ' ' + EMOTES[k][1]; b.hidden = false; b.style.animation = 'none'; void b.offsetWidth; b.style.animation = '';
@@ -555,6 +557,37 @@ function sendEmote(k){
 }
 function showEmoteUI(on){ el('emoteBtn').hidden = !on; if (!on) { el('emoteRing').hidden = true; el('emoteBubble').hidden = true; } }
 document.getElementById('emoteBtn').onclick = () => { const r = el('emoteRing'); r.innerHTML = EMOTES.map(([e, t], k) => `<button data-emo="${k}" ${emoteReady() ? '' : 'disabled'}>${e} ${t}</button>`).join(''); r.hidden = !r.hidden; r.querySelectorAll('[data-emo]').forEach(b => b.onclick = () => sendEmote(+b.dataset.emo)); };
+// ---------- hooks for the online scripts (online.js, duel.js); the game works without them ----------
+window.LLHooks = (() => {
+  const on = {}, sections = [];
+  const H = {
+    emit(ev, data){ for (const f of (on[ev] || [])) { try { f(data); } catch (e) { console.error(e); } } },
+    on(ev, f){ (on[ev] = on[ev] || []).push(f); },                // events: 'gameover', 'emote', 'menu', 'newgame'
+    addMenuSection(title, html, wire){ sections.push({title, html, wire}); },
+    _sections: sections,
+    edition: () => EDITION,
+    store: () => store, saveStore: () => save(),
+    storeFor(ed){ try { return JSON.parse(localStorage.getItem(SKEYS[ed])) || {}; } catch (e) { return {}; } },
+    writeStoreFor(ed, obj){ try { localStorage.setItem(SKEYS[ed], JSON.stringify(obj)); if (ed === EDITION) loadStore(ed); } catch (e) {} },
+    cities: () => CITIES.map(c => ({id: c.id, name: c.name, unlocked: unlocked(c)})),
+    toast: (m, ms) => toast(m, ms), tone: (...a) => tone(...a), menu: () => showMenu(),
+    // live duels: both players call this at the same moment with the same values
+    startLiveDuel({cityId, seed, rule, room}){ const city = CITIES.find(c => c.id === cityId); if (!city) return false;
+      newGame({kind:'duel', city, mods:[], seed: seed|0, duel: {code: 'LIVE-' + room, city, seed: seed|0, rule: rule === 'W' ? 'W' : 'S', live: true}}); return true; },
+    inLiveDuel: () => !!(G && G.cfg && G.cfg.kind === 'duel' && G.cfg.duel && G.cfg.duel.live && !G.over),
+    duelState(){ if (!G || G.cfg.kind !== 'duel') return null; let danger = 0; for (const d of G.dests) danger = Math.max(danger, d.timer || 0);
+      return {score: G.score, week: G.week, weekT: G.weekT, danger, over: !!G.over, lost: !!G.lostDuel, cityId: G.city.id}; },
+    miniMap(){ if (!G) return null; const roads = []; for (const [a, set] of G.adj) for (const b of set) if (a < b && G.occ[a] === 1 && G.occ[b] === 1) roads.push(a, b);
+      return {W, H, rect: {...G.rect}, roads, houses: G.houses.map(h => [h.i, h.color]), dests: G.dests.map(d => [d.x, d.y, d.color])}; },
+    showEmote(text){ const b = el('emoteBubble'); b.textContent = text; b.hidden = false; b.style.animation = 'none'; void b.offsetWidth; b.style.animation = ''; clearTimeout(H._et); H._et = setTimeout(() => { b.hidden = true; }, 2500); tone(660, .08, .03, 'triangle'); },
+    // the duel is decided from outside (opponent overflowed, left, or time ran out): stop the game and show a card
+    endDuel(title, html){ if (!G) return; const was = G.over; G.over = true; clearSave(); el('bottom').hidden = true; showEmoteUI(false);
+      showSheet(`<div class="stack"><div><div class="small">Duel over · week ${G.week}</div><h2>${title}</h2></div><div><div class="big">${G.score}</div><p>trips completed</p></div>${statsLine()}${html || ''}<div class="btnrow"><button class="btn primary" id="toMenu">Back to menu</button></div></div>`, true);
+      sheetCard.querySelector('#toMenu').onclick = () => showMenu(); if (!was) tone(784, .4, .05, 'triangle'); },
+    oppStrip: () => el('oppStrip'),
+  };
+  return H;
+})();
 function startDuel(d){ store.duelTries = store.duelTries && typeof store.duelTries === 'object' ? store.duelTries : {}; const n = (store.duelTries[d.code] || 0) + 1; store.duelTries[d.code] = n; const ks = Object.keys(store.duelTries); if (ks.length > 60) delete store.duelTries[ks[0]]; save();
   newGame({kind:'duel', city: d.city, mods:[], seed: d.seed, duel: d}); G.duelTry = n; if (n > 1) setTimeout(() => toast(`Attempt ${n} at this duel. Your result code shows it to your friend.`, 3500), 3600); toast(`Duel: ${DUEL_RULES[d.rule]}. Your friend gets the same city.`, 3500); }
 function wireDuel(){
@@ -587,7 +620,9 @@ function wireDuelEnd(lost){
 }
 // Sprint duels end after week 10 with no overflow
 function finishSprint(){
-  G.over = true; clearSave(); tone(784,.4,.05,'triangle');
+  G.over = true; clearSave();
+  LLHooks.emit('gameover', {city: G.city.id, edition: EDITION, kind: 'duel', key: null, score: G.score, week: G.week, live: !!(G.cfg.duel && G.cfg.duel.live), sprintDone: true});
+  if (G.cfg.duel && G.cfg.duel.live) return; // duel.js shows the result tone(784,.4,.05,'triangle');
   showSheet(`<div class="stack"><div><div class="small">Duel finished · week 10 done</div><h2>${G.score} trips</h2></div>${statsLine()}${duelEndHtml(false)}
     <div class="btnrow"><button class="btn primary" id="toMenu">Back to menu</button></div></div>`, true);
   el('bottom').hidden = true; sheetCard.querySelector('#toMenu').onclick = () => showMenu(); wireDuelEnd(false);
@@ -648,6 +683,7 @@ function newGame(cfg, bare){
   if (G) G.plan = null; el('planBar').hidden = true; el('planBtn').classList.remove('on');
   for (const sel of ['[data-tool=ferry]','[data-tool=metro]','#planBtn','#trafBtn','#statsBtn','#nightBtn']) document.querySelector(sel).hidden = !PLUS();
   setSpeed(1); setTool('draw'); closeSheet();
+  LLHooks.emit('newgame', {kind: cfg.kind, live: !!(cfg.duel && cfg.duel.live)}); el('oppStrip').hidden = !(cfg.duel && cfg.duel.live);
   Object.assign(EMO, {last: -99, sent: 0, streak: 0, prev: -1, coolUntil: -99}); showEmoteUI(cfg.kind === 'duel');
   document.querySelector('[data-speed="0"]').hidden = cfg.kind === 'duel'; if (cfg.kind === 'duel') el('planBtn').hidden = true;
   if (!bare && cfg.kind === 'daily') { const r = store.daily[cfg.key] || {first:null, best:0, top:[]};
@@ -674,7 +710,12 @@ function neighbors8(i){ const x=ix(i), y=iy(i), r=[]; for (let dy=-1;dy<=1;dy++)
 function diagFree(a, b){ if (!isDiag(a,b)) return true; const p = iy(a)*W + ix(b), q = iy(b)*W + ix(a); return !hasEdge(p, q); }
 function neighbors4(i){ const x=ix(i), y=iy(i), r=[]; if(x>0)r.push(i-1); if(x<W-1)r.push(i+1); if(y>0)r.push(i-W); if(y<H-1)r.push(i+W); return r; }
 
-function spawnHouse(color, near){
+// each new house or workplace draws from its own random stream (seed + how many have spawned), so where it lands
+// doesn't depend on how the player built their roads; two duel players get the same city as long as possible
+function spawnRng(fn){ const keep = rng; G.spawnN = (G.spawnN || 0) + 1; rng = mulberry32(((G.cfg.seed|0) * 31 + G.spawnN * 7919) | 0); try { return fn(); } finally { rng = keep; } }
+function spawnHouse(color, near){ return spawnRng(() => spawnHouse0(color, near)); }
+function spawnDest(color, start, at){ return spawnRng(() => spawnDest0(color, start, at)); }
+function spawnHouse0(color, near){
   if (color === undefined) {
     let best=0, bs=Infinity;
     for (let c=0;c<G.colors;c++){ const {h,d} = countColor(c); const r = h/(Math.max(1,d)*3) + rng()*0.5; if (r<bs){bs=r;best=c;} }
@@ -703,7 +744,7 @@ function spawnHouse(color, near){
   return h;
 }
 
-function spawnDest(color, start, at){
+function spawnDest0(color, start, at){
   const r = G.rect;
   let best = null;
   for (let t=0; t<120; t++){
@@ -1458,9 +1499,12 @@ function statsLine(){
     ${G.bonus ? `<div><div class="small">Ambulance bonus</div><h3>+${G.bonus}</h3></div>` : ''}${G.stats.deliveries ? `<div><div class="small">Deliveries</div><h3>${G.stats.deliveries}</h3></div>` : ''}</div>`;
 }
 function gameOver(d){
-  G.over = true; G.failDest = d; clearSave();
+  G.over = true; G.failDest = d; clearSave(); if (G.cfg.kind === 'duel') G.lostDuel = true;
+  LLHooks.emit('gameover', {city: G.city.id, edition: EDITION, kind: G.cfg.kind === 'classic' ? (G.endless ? 'endless' : 'normal') : G.cfg.kind, key: G.cfg.key || null, score: G.score, week: G.week, live: !!(G.cfg.duel && G.cfg.duel.live), practice: !!G.city.practice, custom: !!G.city.custom});
   const cfg = G.cfg; let extra = '';
-  if (cfg.kind === 'duel' && cfg.duel) {
+  if (cfg.kind === 'duel' && cfg.duel && cfg.duel.live) {
+    extra = '<div id="liveDuelEnd"><p class="hint">Waiting for your opponent…</p></div>';
+  } else if (cfg.kind === 'duel' && cfg.duel) {
     extra = duelEndHtml(true);
   } else if (G.city.practice) {
     extra = '<p>Practice runs are not scored. Ready for Seattle?</p>';
@@ -1553,7 +1597,8 @@ function showOver(d, extra){
   const wb = sheetCard.querySelector('#watch'); if (!G.frames || G.frames.length < 3) wb.hidden = true; else wb.onclick = () => { closeSheet(); G.replay = {t0: now, d, extra}; G.view = {z:1, px:0, py:0}; el('top').hidden = true; el('bottom').hidden = true; };
   const sc = sheetCard.querySelector('#second');
   if (sc) sc.onclick = () => { G.usedSecond = true; G.over = false; d.pins = Math.max(0, d.pins - 4); d.claimed = Math.min(d.claimed, d.pins); d.timer = 0; G.view = {z:1, px:0, py:0}; closeSheet(); el('bottom').hidden = false; setSpeed(0); toast('Second chance: 4 pins cleared. Press play when ready. Only once per game.', 3500); };
-  if (G.cfg.kind === 'duel' && G.cfg.duel) { sheetCard.querySelector('#endless').hidden = true; sheetCard.querySelector('#again').textContent = 'Play this duel again'; wireDuelEnd(true); }
+  if (G.cfg.kind === 'duel' && G.cfg.duel && G.cfg.duel.live) { sheetCard.querySelector('#endless').hidden = true; sheetCard.querySelector('#again').hidden = true; const w = sheetCard.querySelector('#watch'); if (w) w.hidden = true; }
+  else if (G.cfg.kind === 'duel' && G.cfg.duel) { sheetCard.querySelector('#endless').hidden = true; sheetCard.querySelector('#again').textContent = 'Play this duel again'; wireDuelEnd(true); }
   sheetCard.querySelector('#endless').onclick = () => { el('bottom').hidden = false; G.over = false; G.endless = true; G.view = {z:1, px:0, py:0}; for (const x of G.dests) x.timer = 0; closeSheet(); toast('Endless mode: no game over, scores saved separately', 3000); };
 }
 
@@ -1915,7 +1960,7 @@ function serialize(){
     road: roadState(), houses: G.houses.map(h => [h.i, h.color, h.idle + (back.get(h)||0), h.trips||0, !!h.apt, h.face||0]),
     dests: G.dests.map(d => [d.x, d.y, d.ent, d.color, d.pins, d.pinT, d.timer, d.pq, entsOf(d), d.level||1, d.served||0, lotsOf(d).map(l => [l.t, l.gate, l.face])]),
     week:G.week, weekT:G.weekT, time:G.time, houseT:G.houseT, score:G.score, endless:G.endless, colors:G.colors, stage:G.stage, portrait:!!G.portrait, wk:(G.weekly||[]).slice(-200), sec:!!G.usedSecond, incoming:G.incoming||[],
-    ms:[...G.milestonesHit], dof: G.dailyOfficial, pending:G.pending||null, got:[...(G.got||[])], seen:[...(G.seen||[])], bonus:G.bonus, weather:G.weather, saved: Date.now() };
+    ms:[...G.milestonesHit], dof: G.dailyOfficial, sn: G.spawnN || 0, pending:G.pending||null, got:[...(G.got||[])], seen:[...(G.seen||[])], bonus:G.bonus, weather:G.weather, saved: Date.now() };
 }
 function restore(S){
   try {
@@ -1926,7 +1971,7 @@ function restore(S){
     rng = mulberry32(S.rng);
     Object.assign(G, {week:S.week, weekT:S.weekT, time:S.time, houseT:S.houseT, score:S.score, endless:S.endless, colors:S.colors, stage:S.stage});
     G.incoming = (Array.isArray(S.incoming) ? S.incoming : []).filter(i => i && Number.isInteger(i.color) && i.color >= 0 && i.color < CAR_COLORS.length).map(i => ({color:i.color, houses:!!i.houses, at: Array.isArray(i.at) ? [i.at[0]|0, i.at[1]|0] : null, t: +i.t || 0}));
-    G.milestonesHit = new Set(S.ms); G.dailyOfficial = S.dof; G.got = new Set(S.got || []); G.seen = new Set(S.seen || ['roads']);
+    G.milestonesHit = new Set(S.ms); G.dailyOfficial = S.dof; G.spawnN = +S.sn || 0; G.got = new Set(S.got || []); G.seen = new Set(S.seen || ['roads']);
     G.portrait = !!S.portrait; G.rect = stageRect(G.stage); G.weekly = (Array.isArray(S.wk) ? S.wk : []).map(v => Math.max(0, v|0)); G.usedSecond = !!S.sec;
     for (let i=0;i<N;i++) G.revealAt[i] = inRect(G.rect,i) ? now - 1 : 1e9;
     for (const [i, color, idle, trips, apt, face] of S.houses) { const h = {i, color, idle, born: now-1, trips: trips||0, apt: !!apt, face: face||0}; G.houses.push(h); G.houseAt.set(i, h); G.occ[i] = 2; }
@@ -2455,17 +2500,8 @@ function render(){
     }
     ctx.globalAlpha = 1;
   }
-  // ---- houses: settled houses are drawn once into a layer that is redrawn only when one changes ----
-  { const live = h => now - h.born < 0.4 || (h.turned && now - h.turned < 0.3);
-    const base = (SET.cb ? 'c' : '') + TH.road + TH['road-edge'] + G.houses.length, sig = new Map();
-    for (const h of G.houses) if (!live(h)) sig.set(h.i, (h.face||0) + ',' + h.color + (h.apt ? 'a' : '') + Math.min(h.idle + (h.rest||0), 4));
-    const prev = G.houseSig, changed = [];
-    if (prev && G.houseBase === base && G.houseLayer) { for (const [i, v] of sig) if (prev.get(i) !== v) changed.push(i); for (const i of prev.keys()) if (!sig.has(i)) changed.push(i); }
-    if (!prev || G.houseBase !== base || !G.houseLayer || changed.length > 40) G.houseLayer = buildHouseLayer(h => sig.has(h.i));
-    else if (changed.length) patchHouseLayer(changed, h => sig.has(h.i));
-    G.houseSig = sig; G.houseBase = base;
-    if (G.houseLayer) ctx.drawImage(G.houseLayer, 0, 0, W, H);
-    for (const h of G.houses) if (!G.houseLayer || live(h)) drawHouse(h); }
+  // ---- houses: each house look (color, driveway, parked cars) is a cached picture, drawn fresh every frame ----
+  for (const h of G.houses) drawHouse(h);
   for (const [a,b] of mets) for (const t of [a,b]) {
     const x = ix(t)+.5, y = iy(t)+.5;
     ctx.fillStyle = '#8e5cd9'; ctx.beginPath(); ctx.arc(x, y, 0.3, 0, 7); ctx.fill();
@@ -2787,7 +2823,7 @@ function showHome(){
       ${card('classic', 'Classic', '<span class="tag">Simple</span>', 'The pure road puzzle. Roads, bridges, tunnels, roundabouts, lights, and motorways.', ['18 real cities', 'Daily and weekly challenges', 'Replays and photo mode'])}
       ${card('plus', 'Plus', '<span class="tag">Free for now</span>', 'Everything in Classic, plus weather, events, ferries, metros, and smarter traffic.', ['Map maker and sandbox', 'World tour and achievements', 'Cars route around traffic'])}
     </div>
-    <p class="hint">Classic and Plus keep separate progress. Version 41.</p>
+    <p class="hint">Classic and Plus keep separate progress. Version 43.</p>
     ${settingsRow()}
   </div>`);
   sheetCard.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { setEdition(b.dataset.mode); SET.lastMode = b.dataset.mode; saveSet(); showMenu(); });
@@ -2843,7 +2879,7 @@ function monthPlan(){
     <p class="hint">Only today's puzzle and this week's challenge can be played. New ones unlock on their own as the days go by.</p>`;
 }
 function showMenu(paused){
-  showEmoteUI(false);
+  showEmoteUI(false); el('oppStrip').hidden = true;
   const daily = challengeFor('daily'), weekly = challengeFor('weekly');
   const saved = paused ? null : loadSave();
   const savedCity = saved && ALL_CITIES().find(c => c.id === saved.cfg.cityId);
@@ -2873,7 +2909,7 @@ function showMenu(paused){
     ${PLUS() ? drop('My maps and world tour', mapsSection() + tourSection()) : ''}
     ${PLUS() && themeSection() ? drop('Map themes', themeSection()) : ''}
     ${PLUS() ? drop('Achievements and car styles', achSection()) : ''}
-    ${drop('Duel a friend', duelSection())}
+    ${LLHooks._sections.map(sec => drop(sec.title, sec.html())).join('')}
     ${drop('Codes', `<form class="btnrow" id="unlockForm" style="align-items:center"><input id="unlockIn" placeholder="Enter a code" autocomplete="off" style="${INP}"><button class="btn" type="submit">Redeem</button></form>${store.admin ? '<p class="hint">Admin code active: everything is unlocked in Classic and Plus.</p>' : ''}`)}
     ${drop('Settings', settingsRow())}
     ${drop('How to play', `<p class="hint">${HELP}</p>`)}
@@ -2884,7 +2920,7 @@ function showMenu(paused){
   sheetCard.querySelector('#unlockForm').onsubmit = e => { e.preventDefault(); if (redeemCode(sheetCard.querySelector('#unlockIn').value)) { toast('Code accepted! Everything is unlocked.', 3000); tone(784,.3,.05,'triangle'); applyTheme(); showMenu(paused); } else toast("That code doesn't work"); };
   sheetCard.querySelector('#codeForm').onsubmit = e => { e.preventDefault(); const r = readCode(sheetCard.querySelector('#codeIn').value); const mine = r && store.daily[r.key];
     sheetCard.querySelector('#codeOut').textContent = !r ? "That code doesn't look right. Check for typos." : `${r.score} trips on the ${r.date} daily.` + (mine ? ` Your official score that day: ${mine.first}.` : ''); };
-  wireSettings(() => showMenu(paused)); wireDuel();
+  wireSettings(() => showMenu(paused)); for (const sec of LLHooks._sections) { try { sec.wire && sec.wire(sheetCard); } catch (e) { console.error(e); } } LLHooks.emit('menu', sheetCard);
   const hb = sheetCard.querySelector('#homeBtn'); if (hb) hb.onclick = showHome;
   sheetCard.querySelectorAll('[data-city]').forEach(b => b.onclick = () => showCity(ALL_CITIES().find(c=>c.id===b.dataset.city), paused));
   sheetCard.querySelectorAll('details.drop').forEach(d => d.addEventListener('toggle', () => { if (d.open) OPEN.add(d.dataset.drop); else OPEN.delete(d.dataset.drop); }));
@@ -2929,6 +2965,10 @@ requestAnimationFrame(frame);
 })();
 </script>
 
+<script>window.LL_SUPA = {url: 'https://degjdzoflgrfovaxlyfj.supabase.co', key: 'sb_publishable_pSPxoa7yM8c9198YsOjeHw_S4xbmR0v'};</script>
+<script src="vendor/supabase.js"></script>
+<script src="online.js"></script>
+<script src="duel.js"></script>
 <script>
 // installed app: look for a new version on every launch and whenever the app comes back to the front
 if ('serviceWorker' in navigator) addEventListener('load', () => {

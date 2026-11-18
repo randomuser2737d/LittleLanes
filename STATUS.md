@@ -1,4 +1,4 @@
-# Little Lanes — build status (Nov 16, version 41)
+# Little Lanes — build status (Nov 18, version 43 beta)
 
 Single-file game: `index.html` (HTML + vanilla JS + Canvas 2D, no libraries). Plan and design decisions live in the "Little Lanes — Game Design & Build Plan" doc.
 
@@ -265,3 +265,15 @@ Plus only:
 - Duels and daily/weekly puzzles always use the same play-area shape, even on a phone held upright (it used to get a taller area)
 - Daily puzzle: the first run you start is the official one. Quitting it and starting again makes the official score 0 and the new run practice
 - Still possible, since everything runs on the device: editing saved data in the browser tools. Online play with server score checks fixes that later
+
+## Version 42
+- Fixed houses appearing, disappearing, or showing in the wrong place: the cached house layer from version 35 is gone. Each house is drawn fresh every frame, still from a cached picture of its look, so it stays fast
+- Fairer duels: each new house and workplace uses its own random draw, so where it lands no longer depends on how each player built their roads. In a test with two players building different roads, all houses landed in the same spots
+- Checked duels again: same city for both players, result codes, no pausing, auto-picked upgrades, attempt counter
+
+## Version 43 (online beta, not yet tested against the real server)
+- Online section: guest sign-in with a nickname (filtered), friend code, transfer code to move the account to another device, friends by friend code
+- Leaderboards section: top 20 per city (all time, this month, friends), plus your best. Scores from normal, daily, weekly and expert games upload when signed in
+- Progress sync: unlocks, medals and achievements merge between devices when signed in
+- Live duel section, replacing code duels: create a 4-letter room, a friend joins, both press Ready, a shared countdown, and both games start at the same moment. During play: the opponent strip shows their score, week, danger bar and mini map, plus emotes both ways. Survival: first to overflow loses. Sprint: most trips by the end of week 10. A player gone for 30 s loses. Rematch goes back to the lobby
+- New files: online.js, duel.js, vendor/supabase.js (supabase-js 2.119.1, saved inside the game). Security settings now allow the game's Supabase server

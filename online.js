@@ -20,7 +20,7 @@
   // ---------- helpers ----------
   const esc = s => String(s == null ? '' : s).replace(/[&<>"'`]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;'}[c]));
   const inp = typeof INP === 'string' ? INP : (typeof globalThis.INP === 'string' ? globalThis.INP : 'font:inherit;padding:9px 12px;border-radius:12px;border:1px solid var(--panel-line);background:var(--land);color:var(--ink);min-width:0;flex:1 1 160px');
-  const toast = (m, ms) => { try { if (/copied|sent to|welcome|moved here|accepted|saved|added/i.test(m) || !H.error) H.toast(m, ms); else H.error(m); } catch (e) {} };
+  const toast = (m, ms) => { try { if (/copied|sent to|welcome|moved here|accepted|saved|added/i.test(m)) (H.ok || H.toast)(m); else if (H.error) H.error(m); else H.toast(m, ms); } catch (e) {} };
   const rerender = () => { try { H.menu(); } catch (e) {} };
   const NICK_RE = /^[A-Za-z0-9_-]{3,16}$/;
   const BAD = ['fuck', 'shit', 'bitch', 'cunt', 'dick', 'cock', 'penis', 'vagina', 'pussy', 'whore', 'slut', 'nigg', 'fag', 'rape', 'nazi', 'hitler', 'porn', 'sex', 'anal', 'asshole', 'bastard', 'damn', 'crap', 'retard', 'suicide', 'kill', 'tits', 'boob', 'cum', 'wank', 'twat', 'dildo', 'milf', 'kkk', 'admin', 'moderator'];
@@ -148,26 +148,56 @@
   });
 
   // ---------- Online menu ----------
+  const AVATARS = ['🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚜','🛵','🚲','🚀','🦊','🐱','🐶','🐼','🐸','🦉','🌟','🔥'];
+  const COLORS = ['#e5622b','#d63c3c','#e8a317','#2f9e5b','#1f8a8a','#3b6fd8','#7a4fd1','#c24b9a','#5b6470'];
+  const prof = p => ({avatar: (p && AVATARS.includes(p.avatar)) ? p.avatar : '🚗', color: (p && COLORS.includes(p.color)) ? p.color : COLORS[0], motto: (p && typeof p.motto === 'string') ? p.motto.slice(0, 40) : ''});
+  const MOTTOS = ['', 'Traffic? What traffic?', 'Roundabout fan', 'Bridge builder', 'Never late', 'Highway hero', 'Just one more road', 'GG every time', 'Map explorer', 'Daily puzzle pro'];
+  function profileHtml(p) {
+    const x = prof(p);
+    return `<details id="llProf"><summary class="small"><b>Customize profile</b></summary><div class="stack" style="margin-top:8px">
+      <div class="small">Icon</div><div class="btnrow" style="gap:4px">${AVATARS.map(a => `<button class="btn" type="button" data-av="${a}" style="padding:6px 8px;font-size:20px;${a === x.avatar ? 'outline:3px solid ' + x.color : ''}">${a}</button>`).join('')}</div>
+      <div class="small">Color</div><div class="btnrow" style="gap:6px">${COLORS.map(c => `<button type="button" data-col="${c}" aria-label="color" style="width:30px;height:30px;border-radius:50%;border:3px solid ${c === x.color ? 'var(--ink)' : 'transparent'};background:${c};cursor:pointer"></button>`).join('')}</div>
+      <div class="small">Motto</div><select id="llMotto" style="${inp}">${MOTTOS.map(m => `<option value="${esc(m)}"${m === x.motto ? ' selected' : ''}>${m ? esc(m) : '(none)'}</option>`).join('')}</select>
+      <div class="small">Change nickname</div><div class="btnrow"><input id="llNick2" style="${inp}" maxlength="16" placeholder="${esc(p.nickname)}" autocomplete="off"><button class="btn" id="llNickChg" type="button">Change</button></div>
+      <p class="hint">Nickname changes: once a day.</p></div></details>`;
+  }
+  async function saveProf(patch) {
+    const {error} = await sb.from('profiles').update(patch).eq('id', S.user.id);
+    if (error) { toast(/column/i.test(error.message || '') ? 'Profile styles need the new database update (see supabase-setup.sql)' : (isTaken(error) ? 'That nickname is taken' : 'Could not save profile')); return false; }
+    Object.assign(S.profile, patch); changed(); toast('Profile saved'); rerender(); return true;
+  }
   function onlineHtml() {
     if (!online()) return OFFMSG;
     if (!S.user) return `<div class="stack"><p class="small">Play with friends and climb the leaderboards. No email needed, just a nickname.</p><div class="btnrow"><button class="btn primary" id="llGo">Go online</button></div>
       <details><summary class="small">Have a transfer code?</summary><div class="btnrow" style="margin-top:8px"><input id="llTin" style="${inp}" placeholder="Paste transfer code" autocomplete="off"><button class="btn" id="llTuse">Use code</button></div></details></div>`;
     if (!S.profile) return `<div class="stack"><p class="small">Pick a nickname (3 to 16 letters, numbers, - or _).</p><div class="btnrow"><input id="llNick" style="${inp}" maxlength="16" placeholder="Nickname" autocomplete="off"><button class="btn primary" id="llNickSave">Save</button></div><div class="btnrow"><button class="btn" id="llOut">Sign out</button></div></div>`;
     const p = S.profile;
-    const code = S.showCode && S.session ? `<div class="stack"><p class="hint">Warning: using this code on a new device moves your account there. Keep it private.</p><input readonly id="llCode" style="${inp}" value="${esc(S.session.refresh_token)}"><div class="btnrow"><button class="btn" id="llCopy">Copy</button><button class="btn" id="llHide">Hide</button></div></div>` : '';
+    const code = S.showCode && S.session ? `<div class="stack"><p class="hint">Only use this to move YOUR account to your own device. Never send it to anyone, it works like a password. It hides itself after 1 minute.</p><input readonly id="llCode" style="${inp}" value="${esc(S.session.refresh_token)}"><div class="btnrow"><button class="btn" id="llCopy">Copy</button><button class="btn" id="llHide">Hide</button></div></div>` : '';
     return `<div class="stack">
-      <div class="btnrow"><span class="tag">${esc(p.nickname)}</span><span class="codebox"><span class="small">Friend code</span><b>${esc(p.friend_code)}</b><button class="btn" id="llCopyFc" type="button">Copy</button></span></div>
+      <div class="btnrow" style="align-items:center"><span style="width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-size:24px;background:${prof(p).color}">${prof(p).avatar}</span><span class="stack" style="gap:0"><b style="color:${prof(p).color}">${esc(p.nickname)}</b>${prof(p).motto ? `<span class="hint">${esc(prof(p).motto)}</span>` : ''}</span><span class="codebox"><span class="small">Friend code</span><b>${esc(p.friend_code)}</b><button class="btn" id="llCopyFc" type="button">Copy</button></span></div>
       <div class="btnrow"><button class="btn" id="llXfer">Transfer code</button><button class="btn" id="llOut">Sign out</button></div>${code}
+      ${profileHtml(p)}
       <details><summary class="small">Have a transfer code?</summary><div class="btnrow" style="margin-top:8px"><input id="llTin" style="${inp}" placeholder="Paste transfer code" autocomplete="off"><button class="btn" id="llTuse">Use code</button></div></details>
       <div class="small"><b>Friends</b></div>
       <form class="btnrow" id="llAddF"><input id="llFc" style="${inp}" maxlength="8" placeholder="Friend's code" autocomplete="off"><button class="btn" id="llAdd" type="submit">Add</button></form>
       <div id="llFr" class="stack"><p class="hint">Loading friends...</p></div></div>`;
   }
+  // Transfer-code limits: 5 tries, then a lockout that doubles each time (1, 2, 4... min, max 1 day).
+  function xferLim() { try { const r = JSON.parse(localStorage.getItem('ll.xferLim')); if (r && typeof r === 'object') return {fails: r.fails | 0, until: +r.until || 0, locks: r.locks | 0}; } catch (e) {} return {fails: 0, until: 0, locks: 0}; }
+  function saveLim(r) { try { localStorage.setItem('ll.xferLim', JSON.stringify(r)); } catch (e) {} }
   async function useTransfer(card) {
     const v = (card.querySelector('#llTin').value || '').trim();
-    if (!v || v.length < 6 || v.length > 400) { toast('That code does not look right'); return; }
+    const lim = xferLim(), now = Date.now();
+    if (lim.until > now) { toast('Too many tries. Wait ' + Math.ceil((lim.until - now) / 60000) + ' min and try again.'); return; }
+    if (!v) { toast('Paste a transfer code first'); return; }
+    if (v.length < 6 || v.length > 400 || /\s/.test(v)) { toast('That code does not look right'); return; }
     const {data, error} = await sb.auth.refreshSession({refresh_token: v});
-    if (error || !data || !data.session) { toast('That transfer code did not work'); return; }
+    if (error || !data || !data.session) {
+      lim.fails++;
+      if (lim.fails >= 5) { lim.locks++; lim.fails = 0; lim.until = now + Math.min(86400000, 60000 * Math.pow(2, lim.locks - 1)); saveLim(lim); toast('Too many wrong codes. Transfer is locked for ' + Math.round((lim.until - now) / 60000) + ' min.'); return; }
+      saveLim(lim); toast('That transfer code did not work (' + (5 - lim.fails) + ' tries left)'); return;
+    }
+    saveLim({fails: 0, until: 0, locks: 0});
     await setSession(data.session); S.showCode = false;
     toast(S.profile ? 'Welcome back, ' + S.profile.nickname : 'Account moved here');
     syncProgress(); rerender();
@@ -191,13 +221,31 @@
       await loadProfile(); changed(); syncProgress(); rerender();
     });
     guard(q('#llXfer'), async () => {
+      let shown = []; try { shown = JSON.parse(localStorage.getItem('ll.xferShown')) || []; } catch (e) {}
+      shown = shown.filter(t => Date.now() - t < 600000);
+      if (shown.length >= 3) { toast('You can show the transfer code 3 times every 10 minutes. Try again soon.'); return; }
+      shown.push(Date.now()); try { localStorage.setItem('ll.xferShown', JSON.stringify(shown)); } catch (e) {}
+      clearTimeout(S.hideT); S.hideT = setTimeout(() => { if (S.showCode) { S.showCode = false; rerender(); } }, 60000);
       try { const {data} = await sb.auth.getSession(); if (data && data.session) S.session = data.session; } catch (e) {}
       S.showCode = true; rerender();
     });
+    card.querySelectorAll('[data-av]').forEach(b => guard(b, () => saveProf({avatar: b.dataset.av})));
+    card.querySelectorAll('[data-col]').forEach(b => guard(b, () => saveProf({color: b.dataset.col})));
+    const mo = q('#llMotto'); if (mo) mo.onchange = () => { if (MOTTOS.includes(mo.value)) saveProf({motto: mo.value}); };
+    guard(q('#llNickChg'), async () => {
+      const n = (q('#llNick2').value || '').trim();
+      if (!n) { toast('Type a new nickname first'); return; }
+      if (!NICK_RE.test(n)) { toast('Nickname: 3 to 16 letters, numbers, - or _'); return; }
+      if (badName(n)) { toast('Please pick a different nickname'); return; }
+      let last = 0; try { last = +localStorage.getItem('ll.nickChg') || 0; } catch (e) {}
+      if (Date.now() - last < 86400000) { toast('You can change your nickname once a day'); return; }
+      if (await saveProf({nickname: n})) try { localStorage.setItem('ll.nickChg', String(Date.now())); } catch (e) {}
+    });
+    { const d = q('#llProf'); if (d) { d.open = !!S.profOpen; d.ontoggle = () => { S.profOpen = d.open; }; } }
     guard(q('#llHide'), async () => { S.showCode = false; rerender(); });
     guard(q('#llCopyFc'), async () => {
       const t = S.profile && S.profile.friend_code; if (!t) return;
-      try { await navigator.clipboard.writeText(t); H.toast('Friend code copied: ' + t); } catch (e) { H.toast('Your friend code is ' + t, 4000); }
+      try { await navigator.clipboard.writeText(t); (H.ok || H.toast)('Friend code copied: ' + t); } catch (e) { H.toast('Your friend code is ' + t, 4000); }
     });
     guard(q('#llCopy'), async () => {
       const t = S.session && S.session.refresh_token; if (!t) return;
@@ -229,7 +277,7 @@
     if (!S.user) return;
     const me = S.user.id;
     const [r1, r2] = await Promise.all([sb.from('friends').select('a,b,status').eq('a', me), sb.from('friends').select('a,b,status').eq('b', me)]);
-    const out = {incoming: [], friends: [], ids: []};
+    const out = {incoming: [], sent: [], friends: [], ids: []};
     const rows = [...((r1 && r1.data) || []).map(x => ({other: x.b, status: x.status, mine: true})), ...((r2 && r2.data) || []).map(x => ({other: x.a, status: x.status, mine: false}))];
     const ids = [...new Set(rows.map(r => r.other))];
     const names = {};
@@ -238,16 +286,34 @@
       const nm = names[r.other] || 'Player';
       if (r.status === 'accepted') { out.friends.push({id: r.other, nickname: nm}); out.ids.push(r.other); }
       else if (!r.mine) out.incoming.push({id: r.other, nickname: nm});
+      else out.sent.push({id: r.other, nickname: nm});
     }
     S.friends = out;
+    // tell the player about requests they haven't seen yet, and mark the menu button
+    S.seenReq = S.seenReq || new Set(JSON.parse(localStorage.getItem('ll.seenReq') || '[]'));
+    const fresh = out.incoming.filter(p => !S.seenReq.has(p.id));
+    if (fresh.length) { (H.ok || H.toast)(fresh.length === 1 ? `Friend request from ${fresh[0].nickname}. Open Online to accept.` : `${fresh.length} new friend requests. Open Online to accept.`, 4500);
+      for (const p of fresh) S.seenReq.add(p.id); try { localStorage.setItem('ll.seenReq', JSON.stringify([...S.seenReq].slice(-200))); } catch (e) {} }
+    try { const mb = document.getElementById('menuBtn'); if (mb) mb.classList.toggle('lldot', out.incoming.length > 0); } catch (e) {}
   }
+  // check for new requests every minute while signed in and the game is on screen
+  try { if (typeof setInterval === 'function') setInterval(() => { if (S.user && !(typeof document !== 'undefined' && document.hidden)) loadFriends().catch(() => {}); }, 60000); } catch (e) {}
+  try { const st = document.createElement('style'); st.textContent = '#menuBtn{position:relative}#menuBtn.lldot::after{content:"";position:absolute;top:2px;right:2px;width:10px;height:10px;border-radius:50%;background:#d63c3c;border:2px solid var(--panel)}'; document.head.appendChild(st); } catch (e) {}
   function drawFriends(card) {
     const box = card && card.querySelector('#llFr'); if (!box) return;
     const f = S.friends || {incoming: [], friends: []};
     let h = '';
-    if (f.incoming.length) h += '<div class="small">Requests</div>' + f.incoming.map(p => `<div class="btnrow"><span class="tag">${esc(p.nickname)}</span><button class="btn primary" data-acc="${esc(p.id)}">Accept</button></div>`).join('');
+    h += `<div class="btnrow" style="align-items:center;justify-content:space-between"><div class="small">Friend requests${f.incoming.length ? ' (' + f.incoming.length + ')' : ''}</div><button class="btn" id="llRefFr" type="button">Refresh</button></div>`;
+    h += f.incoming.length ? f.incoming.map(p => `<div class="btnrow" style="align-items:center"><span class="tag">${esc(p.nickname)}</span><button class="btn primary" data-acc="${esc(p.id)}">Accept</button><button class="btn" data-dec="${esc(p.id)}">Decline</button></div>`).join('') : '<p class="hint">No new requests.</p>';
+    if (f.sent && f.sent.length) h += `<p class="hint">Sent, waiting for them to accept: ${f.sent.map(p => esc(p.nickname)).join(', ')}</p>`;
     h += f.friends.length ? '<div class="small">Your friends</div><div class="btnrow">' + f.friends.map(p => `<span class="tag">${esc(p.nickname)}</span>`).join('') + '</div>' : '<p class="hint">No friends yet. Share your friend code.</p>';
     box.innerHTML = h;
+    const rf = box.querySelector('#llRefFr'); if (rf) guard(rf, async () => { await loadFriends(); drawFriends(card); });
+    box.querySelectorAll('[data-dec]').forEach(b => guard(b, async () => {
+      const {error} = await sb.from('friends').delete().eq('a', b.dataset.dec).eq('b', S.user.id);
+      if (error) { toast('Could not decline'); return; }
+      await loadFriends(); drawFriends(card);
+    }));
     box.querySelectorAll('[data-acc]').forEach(b => guard(b, async () => {
       const id = b.dataset.acc;
       const {error} = await sb.from('friends').update({status: 'accepted'}).eq('a', id).eq('b', S.user.id);

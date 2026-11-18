@@ -110,3 +110,15 @@ drop policy if exists "emotes readable" on public.emote_unlocks;
 create policy "emotes readable" on public.emote_unlocks for select using (true);
 drop policy if exists "own emotes" on public.emote_unlocks;
 create policy "own emotes" on public.emote_unlocks for insert with check (user_id = auth.uid());
+
+-- v49: profile customization (safe to run more than once)
+alter table public.profiles add column if not exists avatar text not null default '🚗' check (char_length(avatar) <= 4);
+alter table public.profiles add column if not exists color text not null default '#e5622b' check (color ~ '^#[0-9a-f]{6}$');
+alter table public.profiles add column if not exists motto text not null default '' check (char_length(motto) <= 40);
+alter table public.profiles drop constraint if exists profiles_motto_ok;
+alter table public.profiles add constraint profiles_motto_ok check (motto in ('', 'Traffic? What traffic?', 'Roundabout fan', 'Bridge builder', 'Never late', 'Highway hero', 'Just one more road', 'GG every time', 'Map explorer', 'Daily puzzle pro'));
+-- players can't change their own friend code or id
+create or replace function public.lock_profile_fields() returns trigger language plpgsql as $$
+begin new.id := old.id; new.friend_code := old.friend_code; new.created_at := old.created_at; return new; end $$;
+drop trigger if exists lock_profile_fields on public.profiles;
+create trigger lock_profile_fields before update on public.profiles for each row execute function public.lock_profile_fields();

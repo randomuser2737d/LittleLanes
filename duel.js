@@ -9,13 +9,13 @@ const EM = ['👋 Hi!', '🍀 Good luck!', '🛣️ Nice road!', '🚗💥 Oops�
 const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 const COLORS = ['#e5484d', '#3e7bfa', '#eea300', '#2fa36b', '#8e5cd9', '#12a5b8'];
 const RULES = {S: 'Survival', W: 'Sprint'};
-const WAIT_DONE_MS = 60000, LEFT_MS = 30000, ABSENT_MS = 6000;
+const WAIT_DONE_MS = 60000, LEFT_MS = 60000, ABSENT_MS = 60000; // a player who switches apps gets 60 s to come back
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const num = (v, lo, hi, d) => { v = +v; return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : (d || 0); };
 const safe = f => function () { try { return f.apply(this, arguments); } catch (e) { try { console.error('duel.js', e); } catch (_) {} } };
 const $ = id => document.getElementById(id);
-const toast = (m, ms) => { try { if (/copied|sent to|welcome|moved here|accepted|saved|added/i.test(m) || !HK.error) HK.toast(m, ms); else HK.error(m); } catch (_) {} };
+const toast = (m, ms) => { try { if (/copied|sent to|welcome|moved here|accepted|saved|added/i.test(m)) (HK.ok || HK.toast)(m); else if (HK.error) HK.error(m); else HK.toast(m, ms); } catch (_) {} };
 // a duel needs a signed-in player who has picked a nickname (LLOnline.profile())
 const online = () => { const O = window.LLOnline; try { return O && O.sb && O.user && O.user() && O.profile && O.profile() ? O : null; } catch (_) { return null; } };
 const myNick = () => { const p = online() && window.LLOnline.profile(); return String((p && p.nickname) || 'Player').slice(0, 20); };
@@ -42,7 +42,7 @@ function boxHtml() {
       <button class="btn primary" id="ldMake">Create room</button></div>
       <div class="small">Join a room</div>
       <form class="btnrow" id="ldJoin" style="align-items:center"><input id="ldCode" maxlength="4" placeholder="ABCD" autocomplete="off" style="${INPS};text-transform:uppercase"><button class="btn" type="submit">Join</button></form>
-      <p class="hint">Both players press Ready, then the game starts for both at the same moment.</p></div>`;
+      <p class="hint">Both players press Ready, then the game starts for both at the same moment. No pausing in duels; switching away for more than a minute counts as leaving.</p>${recHtml()}</div>`;
   }
   const ps = peers(), me = ps.find(p => p.me), opp = ps.find(p => !p.me), host = ps.find(p => p.host);
   const row = (p, label) => `<div class="btnrow" style="align-items:center;gap:8px"><b>${esc(label)}</b><span class="tag">${p ? (p.ready ? 'Ready' : 'Not ready') : 'waiting…'}</span></div>`;
@@ -74,7 +74,7 @@ function wireBox() {
     if (!/^[A-HJ-NP-Z]{4}$/.test(code)) { toast('A room code is 4 letters'); return; }
     join(code, false, null, 'S');
   });
-  if ((el = q('ldCopy'))) el.onclick = safe(() => { const t = S.room; try { navigator.clipboard.writeText(t).then(() => HK.toast('Room code copied: ' + t), () => HK.toast('Room code: ' + t, 4000)); } catch (_) { HK.toast('Room code: ' + t, 4000); } });
+  if ((el = q('ldCopy'))) el.onclick = safe(() => { const t = S.room; try { navigator.clipboard.writeText(t).then(() => (HK.ok || HK.toast)('Room code copied: ' + t), () => HK.toast('Room code: ' + t, 4000)); } catch (_) { HK.toast('Room code: ' + t, 4000); } });
   if ((el = q('ldReady'))) el.onclick = safe(() => { if (S.phase === 'lobby') { S.ready = !S.ready; track(); refresh(); } });
   if ((el = q('ldLeave'))) el.onclick = safe(() => leave());
 }
@@ -104,6 +104,7 @@ function join(room, host, city, rule) {
   const ch = O.sb.channel('duel:' + room, {config: {broadcast: {self: false}, presence: {key: me}}});
   S.ch = ch; const mine = S;
   const on = (ev, f) => ch.on('broadcast', {event: ev}, safe(m => { if (S === mine) f((m && m.payload) || {}); }));
+  on('away', () => { if (S === mine) { S.oppAway = Date.now(); renderStrip(); } }); on('back', () => { if (S === mine) { S.oppAway = 0; S.oppStateAt = Date.now(); renderStrip(); HK.toast(S.oppNick + ' is back', 1800); } });
   on('start', onStart); on('state', onState); on('map', onMap); on('emote', onEmote); on('lost', onLost); on('done', onDone);
   ch.on('presence', {event: 'sync'}, safe(() => { if (S === mine) onSync(); }));
   ch.on('presence', {event: 'leave'}, safe(() => { if (S === mine) onSync(); }));
@@ -160,10 +161,16 @@ function onStart(p) {
   let delay = 4000; if (Number.isFinite(+p.startAt) && Number.isFinite(+p.sentAt)) delay = num(+p.startAt - +p.sentAt, 0, 10000, 4000);
   const at = Date.now() + delay, mine = S;
   let last = -1;
-  const tickCd = () => { const n = Math.max(0, Math.ceil((at - Date.now()) / 1000)); if (n === last) return; last = n; S.countText = n > 0 ? 'Starting in ' + n + '…' : 'Go!'; if (n > 0) toast(String(n), 900); const c = $('ldCount'); if (c) c.textContent = S.countText; };
+  const tickCd = () => { const n = Math.max(0, Math.ceil((at - Date.now()) / 1000)); if (n === last) return; last = n; S.countText = n > 0 ? 'Starting in ' + n + '…' : 'Go!'; bigCount(n > 0 ? String(n) : 'Go!'); const c = $('ldCount'); if (c) c.textContent = S.countText; };
   tickCd(); S.cdT = setInterval(safe(() => { if (S === mine) tickCd(); }), 200);
   S.goT = setTimeout(safe(() => { if (S === mine) go(); }), delay);
   refresh();
+}
+function bigCount(t) {
+  try { if (typeof document === 'undefined' || !document.body) return; let el = document.getElementById('ldBig');
+    if (!el) { el = document.createElement('div'); el.id = 'ldBig'; el.style.cssText = 'position:fixed;inset:0;display:grid;place-items:center;pointer-events:none;z-index:70;font:800 120px var(--display,system-ui);color:var(--accent,#e5622b);text-shadow:0 6px 30px rgba(0,0,0,.25);transition:opacity .3s'; document.body.appendChild(el); }
+    el.textContent = t; el.style.opacity = '1'; if (el.animate) el.animate([{transform:'scale(1.6)', opacity:0}, {transform:'scale(1)', opacity:1}], {duration: 300});
+    clearTimeout(bigCount.t); bigCount.t = setTimeout(() => { el.style.opacity = '0'; }, t === 'Go!' ? 700 : 950); } catch (_) {}
 }
 function go() {
   if (S.phase !== 'countdown') return;
@@ -171,13 +178,17 @@ function go() {
   S.phase = 'playing'; S.countText = '';
   let ok = false; try { ok = HK.startLiveDuel({cityId: S.city, seed: S.seed, rule: S.rule, room: S.room}); } catch (_) {}
   if (!ok) { toast('Could not start the duel'); S.phase = 'lobby'; refresh(); return; }
-  S.oppStateAt = Date.now(); S.absentSince = 0; S.ticks = 0; S.oppState = null; S.mm = null; S.oppLost = false; S.oppDone = null; S.myDone = null; S.myLost = false; S.ui = null;
+  S.oppStateAt = Date.now(); S.absentSince = 0; S.ticks = 0; S.tallied = false; S.warned = false; S.oppAway = 0; S.oppState = null; S.mm = null; S.oppLost = false; S.oppDone = null; S.myDone = null; S.myLost = false; S.ui = null;
   buildStrip(); const mine = S;
   S.tickT = setInterval(safe(() => { if (S === mine) tick(); }), 1000);
   tick();
 }
+try { if (typeof document !== 'undefined' && document.addEventListener) document.addEventListener('visibilitychange', () => { try { if (S.phase === 'playing') send(document.hidden ? 'away' : 'back', {}); } catch (_) {} }); } catch (_) {}
 function tick() {
   if (S.phase !== 'playing') return;
+  try { const strip = HK.oppStrip(); if (strip && HK.inLiveDuel()) { if (strip.hidden && !(typeof document !== 'undefined' && document.querySelector('#sheet:not([hidden])'))) strip.hidden = false; if (!strip.querySelector('.ldC')) buildStrip(); } } catch (_) {}
+  try { const u = S.ui; if (u && u.dot) { const age = Date.now() - S.oppStateAt; u.dot.style.background = S.oppAway ? '#f2b311' : age < 3500 ? '#2f9e5b' : age < 12000 ? '#f2b311' : '#d63c3c'; u.dot.title = age < 3500 && !S.oppAway ? 'Connected' : 'Away or reconnecting'; }
+    if (u && u.lead && (S.oppAway || Date.now() - S.oppStateAt > 4000)) { const since = S.oppAway || S.oppStateAt, left = Math.max(0, Math.ceil((LEFT_MS - (Date.now() - since)) / 1000)); u.lead.textContent = 'away · ' + left + 's'; u.lead.style.color = '#b7791f'; } } catch (_) {}
   S.ticks++;
   let st = null; try { st = HK.duelState(); } catch (_) {}
   if (st) send('state', {score: st.score | 0, week: st.week | 0, danger: Math.round(num(st.danger, 0, 1, 0) * 100) / 100, over: !!st.over, lost: !!st.lost});
@@ -222,6 +233,19 @@ function onDone(p) {
 }
 HK.on('emote', safe(k => { if (S.ch && typeof k === 'number' && Number.isInteger(k) && k >= 0 && k <= 7) send('emote', {k}); }));
 
+// ---------- your duel record, kept on this device ----------
+function getRec() { try { const r = JSON.parse(localStorage.getItem('ll.duelRec')); if (r && typeof r === 'object') return {w: r.w | 0, l: r.l | 0, t: r.t | 0, hist: Array.isArray(r.hist) ? r.hist.slice(0, 5) : []}; } catch (_) {} return {w: 0, l: 0, t: 0, hist: []}; }
+function tally(res, mine, theirs) {
+  if (S.tallied) return; S.tallied = true;
+  try { const r = getRec(); r[res] = (r[res] | 0) + 1; r.hist.unshift({o: String(S.oppNick).slice(0, 20), r: res, m: mine == null ? null : mine | 0, t: theirs == null ? null : theirs | 0, at: Date.now()}); r.hist = r.hist.slice(0, 5); localStorage.setItem('ll.duelRec', JSON.stringify(r)); } catch (_) {}
+}
+function recHtml() {
+  const r = getRec(); if (!r.w && !r.l && !r.t) return '';
+  const word = {w: 'Won', l: 'Lost', t: 'Tie'};
+  return `<div class="small">Your duel record</div><div class="btnrow" style="align-items:center"><span class="tag">${r.w} won</span><span class="tag">${r.l} lost</span>${r.t ? `<span class="tag">${r.t} tied</span>` : ''}</div>` +
+    (r.hist.length ? `<p class="hint">Recent: ${r.hist.map(h => `${word[h.r] || ''} vs ${esc(h.o)}${h.m != null && h.t != null ? ` (${h.m}–${h.t})` : ''}`).join(' · ')}</p>` : '');
+}
+function myScore() { try { const st = HK.duelState(); return st ? st.score | 0 : null; } catch (_) { return null; } }
 // ---------- ending ----------
 function stopPlay() { for (const k of ['tickT']) if (S[k]) clearInterval(S[k]); for (const k of ['waitT']) if (S[k]) clearTimeout(S[k]); S.tickT = S.waitT = null; }
 function endInner(text) { return `<p>${text}</p><div class="btnrow"><button class="btn" id="ldRematch">Rematch</button></div>`; }
@@ -245,6 +269,7 @@ function oppLost(score) {
   let playing = false; try { playing = HK.inLiveDuel(); } catch (_) {}
   if (!playing) return;
   S.oppLost = true; stopPlay(); S.phase = 'ended';
+  tally('w', myScore(), score);
   showEnd('You win! 🏆', `${esc(S.oppNick)} overflowed with ${score} trips.`);
   record(S.host ? 'p1' : 'p2', null, score);
 }
@@ -253,7 +278,7 @@ function oppLeft() {
   if (S.rule === 'W' && S.myDone) { decide(true); return; }
   let playing = false; try { playing = HK.inLiveDuel(); } catch (_) {}
   stopPlay(); S.phase = 'ended';
-  if (playing) { try { HK.endDuel('Your opponent left — you win', ''); } catch (_) {} }
+  if (playing) { tally('w', myScore(), S.oppState ? S.oppState.score : null); try { HK.endDuel('You win! 🏆', `<p class="hint">${esc(S.oppNick)} left the duel or was away for over a minute.</p>`); } catch (_) {} }
   record(S.host ? 'p1' : 'p2', null, null);
 }
 function decide(left) {
@@ -263,6 +288,7 @@ function decide(left) {
   const note = S.oppDone ? '' : left ? ' (they left)' : " (they didn't finish)";
   stopPlay(); S.phase = 'ended';
   const t = mine > theirs ? 'You win! 🏆' : mine < theirs ? 'You lost.' : "It's a tie!";
+  tally(mine > theirs ? 'w' : mine < theirs ? 'l' : 't', mine, theirs);
   fillEnd(endInner(`${t} You had ${mine} trips, ${esc(S.oppNick)} had ${theirs}${note}.`));
   record(mine === theirs ? 'tie' : (mine > theirs) === S.host ? 'p1' : 'p2', S.host ? mine : theirs, S.host ? theirs : mine);
 }
@@ -274,6 +300,7 @@ HK.on('gameover', safe(d => {
     S.myLost = true; stopPlay(); S.phase = 'ended';
     const sendLost = () => send('lost', {score, week}); sendLost(); setTimeout(safe(sendLost), 500); setTimeout(safe(sendLost), 1500);
     const theirs = S.oppState ? S.oppState.score : 0;
+    tally('l', score, theirs);
     fillEnd(endInner(`You lost. ${esc(S.oppNick)} had ${theirs} trips.`));
     record(S.host ? 'p2' : 'p1', S.host ? score : theirs, S.host ? theirs : score);
   } else {
@@ -294,26 +321,46 @@ function rematch() {
 // ---------- opponent strip ----------
 function buildStrip() {
   const strip = HK.oppStrip(); if (!strip) return;
-  strip.innerHTML = '<b class="ldN"></b><span class="ldS">0</span><span class="ldW">wk 1</span>' +
+  strip.innerHTML = '<i class="ldDot" title="Connection" style="width:9px;height:9px;border-radius:50%;background:#2f9e5b;display:inline-block"></i><b class="ldN"></b><span class="ldS">0</span><span class="ldW">wk 1</span><span class="ldL" style="font-weight:600"></span>' +
     '<span style="display:inline-block;width:38px;height:6px;border-radius:3px;background:rgba(128,128,128,.35);overflow:hidden;vertical-align:middle"><i class="ldD" style="display:block;height:100%;width:0;background:#e5484d"></i></span>' +
-    '<canvas class="ldC" width="60" height="38" style="border-radius:4px;background:#e9e4d8;cursor:pointer;vertical-align:middle"></canvas>';
+    '<canvas class="ldC" width="108" height="68" title="Tap for a big view" style="border-radius:6px;background:#e9e4d8;cursor:zoom-in;vertical-align:middle"></canvas>';
   const q = s => strip.querySelector(s);
-  S.ui = {n: q('.ldN'), s: q('.ldS'), w: q('.ldW'), d: q('.ldD'), c: q('.ldC')};
+  S.ui = {n: q('.ldN'), s: q('.ldS'), w: q('.ldW'), d: q('.ldD'), c: q('.ldC'), dot: q('.ldDot'), lead: q('.ldL'), strip};
   if (S.ui.n) S.ui.n.textContent = S.oppNick;
-  if (S.ui.c) S.ui.c.onclick = safe(() => { S.big = !S.big; S.ui.c.width = S.big ? 240 : 60; S.ui.c.height = S.big ? 152 : 38; drawMap(); });
+  if (S.ui.c) S.ui.c.onclick = safe(() => openBigMap());
   drawMap();
+}
+function openBigMap() {
+  if (typeof document === 'undefined') return;
+  let ov = document.getElementById('ldMapBig');
+  if (!ov) {
+    ov = document.createElement('div'); ov.id = 'ldMapBig';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:65;display:grid;place-items:center;background:rgba(0,0,0,.45);cursor:zoom-out';
+    ov.innerHTML = '<div style="background:var(--panel,#fff);color:var(--ink,#111);border-radius:18px;padding:14px;box-shadow:0 20px 50px rgba(0,0,0,.3);display:flex;flex-direction:column;gap:8px;align-items:center;max-width:94vw"><b class="ldBigT" style="font-size:15px"></b><canvas class="ldBigC" style="border-radius:10px;max-width:90vw;height:auto"></canvas><span style="font-size:12px;opacity:.7">Tap anywhere to close</span></div>';
+    ov.onclick = () => { ov.hidden = true; S.bigOpen = false; };
+    document.body.appendChild(ov);
+  }
+  const c = ov.querySelector('.ldBigC'), w = Math.min(560, Math.floor(window.innerWidth * 0.88)); c.width = w; c.height = Math.round(w * 38 / 60);
+  ov.hidden = false; S.bigOpen = true; drawMap();
 }
 function renderStrip() {
   const u = S.ui; if (!u) return;
   if (u.n) u.n.textContent = S.oppNick;
-  const st = S.oppState; if (st) { if (u.s) u.s.textContent = String(st.score); if (u.w) u.w.textContent = 'wk ' + st.week; if (u.d) u.d.style.width = Math.round(st.danger * 100) + '%'; }
+  const st = S.oppState; if (st) { if (u.s) u.s.textContent = String(st.score); if (u.w) u.w.textContent = S.rule === 'W' ? 'wk ' + Math.min(st.week, 10) + '/10' : 'wk ' + st.week; if (u.d) u.d.style.width = Math.round(st.danger * 100) + '%';
+    const me = myScore(); if (u.lead && me != null && !S.oppAway) { const d = me - st.score; u.lead.textContent = d > 0 ? 'you +' + d : d < 0 ? 'you −' + (-d) : 'tied'; u.lead.style.color = d > 0 ? '#2f9e5b' : d < 0 ? '#d63c3c' : ''; }
+    if (u.strip) u.strip.style.boxShadow = st.danger > 0.7 ? '0 0 0 2px #d63c3c' : '';
+    if (st.danger > 0.7 && !S.warned) { S.warned = true; HK.toast(S.oppNick + ' is close to overflowing!', 2500); } else if (st.danger < 0.3) S.warned = false; }
   drawMap();
 }
 function drawMap() {
-  const u = S.ui, mm = S.mm; if (!u || !u.c || !u.c.getContext) return;
+  try { if (S.bigOpen && typeof document !== 'undefined') { const ov = document.getElementById('ldMapBig'); if (ov && !ov.hidden) { drawMapOn(ov.querySelector('.ldBigC')); ov.querySelector('.ldBigT').textContent = S.oppNick + "'s city · " + (S.oppState ? S.oppState.score + ' trips · week ' + S.oppState.week : 'waiting for their map…'); } } } catch (_) {}
+  const u = S.ui; if (!u || !u.c) return; drawMapOn(u.c);
+}
+function drawMapOn(canvas) {
+  const u = {c: canvas}, mm = S.mm; if (!u.c || !u.c.getContext) return;
   const g = u.c.getContext('2d'); if (!g) return;
   const cw = u.c.width, ch = u.c.height; g.clearRect(0, 0, cw, ch); g.fillStyle = '#e9e4d8'; g.fillRect(0, 0, cw, ch);
-  if (!mm) return;
+  if (!mm) { g.fillStyle = '#8a8a8a'; g.font = (cw > 100 ? 14 : 8) + 'px system-ui'; g.textAlign = 'center'; g.fillText('map…', cw / 2, ch / 2 + 3); return; }
   const r = mm.rect, k = Math.min(cw / r.w, ch / r.h), ox = (cw - r.w * k) / 2, oy = (ch - r.h * k) / 2;
   const px = x => ox + (x - r.x + .5) * k, py = y => oy + (y - r.y + .5) * k;
   g.strokeStyle = '#4a4a4a'; g.lineWidth = Math.max(1, k * .5); g.beginPath();

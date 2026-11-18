@@ -1,6 +1,19 @@
-# Little Lanes — build status (Nov 18, version 45)
+# Little Lanes — build status (Nov 18, version 47)
 
 Single-file game: `index.html` (HTML + vanilla JS + Canvas 2D, no libraries). Plan and design decisions live in the "Little Lanes — Game Design & Build Plan" doc.
+
+## v49 (Nov 18)
+- Profile customization: icon (24), color (9), motto from a fixed list (no free text), nickname change once a day.
+- Transfer codes: 5 wrong tries then a lockout that doubles (1 min up to 1 day); showing your code limited to 3 times per 10 min and hides after 1 minute; stronger warning.
+- Database: new columns avatar/color/motto, and a rule so nobody can change their friend code. Run the new bottom part of supabase-setup.sql.
+
+## v48 (Nov 18)
+- Duels: menu button now asks "Leave the duel?" (leaving counts as a loss); no pause anywhere in duels.
+- Switching apps/windows gives a 60 s grace period; opponent sees "away · Ns" and "X is back".
+- Opponent mini map is bigger, and tapping it opens a large live view.
+- Strip shows connection dot, who is ahead, sprint week/10, red glow when opponent is near overflowing.
+- Big 3-2-1-Go countdown; duel record (wins/losses, last 5) under Live duel.
+- Empty score code shows "Type a code first".
 
 ## Two modes in one app (version 13)
 - Home screen with **Classic** (the essentials) and **Plus** (everything, "Free for now"; a one-time $1.99 or 1-month trial is a later idea, not built)
@@ -287,3 +300,12 @@ Plus only:
 - Cleaner online menus: matching rounded fields and dropdowns, same-size buttons, and a wide letter-spaced room code box
 - Copy buttons for your friend code and the room code (in a dashed code box)
 - Red error banner at the top, with a close button, for mistakes like a wrong or empty code, a taken nickname, or no connection. Good news (copied, friend request sent) still shows as the normal message
+
+## Version 46
+- Fixed: switching to another website and back could open a mode menu by itself, or pop the menu over a running game. The online code refreshes the sign-in in the background and then asked the menu to redraw. Now it only redraws a menu that is already open
+
+## Version 47
+- Green banner at the top for good news (Code copied, Friend request sent, Welcome back), next to the red error banner
+- Friend requests: checked every minute while signed in. A new request shows a green banner and a red dot on the menu button. The Online section shows Friend requests (count) with Accept and Decline, a Refresh button, and the requests you sent that are still waiting
+- Wrong or empty codes (unlock code, score code, map code) and an invalid map now use the red banner
+- QA pass with 3 testers (menus at phone, tablet and desktop sizes; in-game play; online while offline) plus random-play tests: no page errors

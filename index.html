@@ -114,7 +114,9 @@ p{margin:0;line-height:1.5;color:var(--muted)}
 .opt{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;padding:14px;border-radius:14px;border:1px solid var(--panel-line);background:var(--land);min-width:0}
 .opt:hover:not(:disabled){border-color:var(--accent)}
 .opt:disabled{cursor:default}
+@media (max-width:640px){ #oppStrip{top:calc(env(safe-area-inset-top,0px) + 118px)!important;max-width:calc(100% - 24px);flex-wrap:wrap;justify-content:center} }
 #errBar{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 12px);transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:12px;max-width:calc(100% - 32px);background:#d63c3c;color:#fff;border-radius:14px;padding:10px 10px 10px 16px;font-weight:600;font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.25);animation:errIn .25s ease-out}
+#errBar.good{background:#2f9e5b}
 #errBar button{border:0;background:rgba(255,255,255,.2);color:#fff;border-radius:9px;width:28px;height:28px;font-size:13px;cursor:pointer;flex:none}
 @keyframes errIn{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
 .drop input,.drop select{font:inherit!important;font-size:15px!important;min-height:44px;box-sizing:border-box;padding:9px 12px!important;border-radius:12px!important;border:1px solid var(--panel-line)!important;background:var(--panel)!important;color:var(--ink)!important;min-width:0}
@@ -239,7 +241,7 @@ p{margin:0;line-height:1.5;color:var(--muted)}
 <div id="planBar" hidden><span>Planning · city paused</span><button class="btn" id="planCancel">Cancel plan</button><button class="btn primary" id="planBuild">Build plan</button></div>
 <div id="hint" hidden></div>
 <div id="toast" role="status"></div>
-<div id="errBar" role="alert" hidden><span id="errMsg"></span><button id="errX" aria-label="Close">✕</button></div>
+<div id="errBar" role="alert" aria-live="assertive" hidden><span id="errMsg"></span><button id="errX" aria-label="Close">✕</button></div>
 <button id="emoteBtn" class="chip" hidden aria-label="Send an emote" style="position:fixed;left:12px;top:calc(env(safe-area-inset-top,0px) + 72px);font-size:20px;padding:6px 10px;cursor:pointer">😀</button>
 <div id="emoteRing" hidden role="menu" aria-label="Emotes"></div>
 <div id="emoteBubble" hidden></div>
@@ -582,7 +584,7 @@ window.LLHooks = (() => {
     storeFor(ed){ try { return JSON.parse(localStorage.getItem(SKEYS[ed])) || {}; } catch (e) { return {}; } },
     writeStoreFor(ed, obj){ try { localStorage.setItem(SKEYS[ed], JSON.stringify(obj)); if (ed === EDITION) loadStore(ed); } catch (e) {} },
     cities: () => CITIES.map(c => ({id: c.id, name: c.name, unlocked: unlocked(c)})),
-    toast: (m, ms) => toast(m, ms), tone: (...a) => tone(...a), menu: () => showMenu(),
+    toast: (m, ms) => toast(m, ms), tone: (...a) => tone(...a), menu: () => { if (menuOpen && !sheet.hidden) showMenu(menuOpen.paused); }, // only redraws a menu that is already open
     // live duels: both players call this at the same moment with the same values
     startLiveDuel({cityId, seed, rule, room}){ const city = CITIES.find(c => c.id === cityId); if (!city) return false;
       newGame({kind:'duel', city, mods:[], seed: seed|0, duel: {code: 'LIVE-' + room, city, seed: seed|0, rule: rule === 'W' ? 'W' : 'S', live: true}}); return true; },
@@ -598,7 +600,8 @@ window.LLHooks = (() => {
       sheetCard.querySelector('#toMenu').onclick = () => showMenu(); if (!was) tone(784, .4, .05, 'triangle'); },
     oppStrip: () => el('oppStrip'),
     // red banner at the top for mistakes (bad code, empty box, no connection)
-    error(msg, ms = 3800){ const b = el('errBar'); el('errMsg').textContent = msg; b.hidden = false; b.style.animation = 'none'; void b.offsetWidth; b.style.animation = ''; clearTimeout(H._errT); H._errT = setTimeout(() => { b.hidden = true; }, ms); tone(220, .12, .04, 'square'); },
+    ok(msg, ms = 2600){ const b = el('errBar'); el('errMsg').textContent = '✓ ' + msg; b.classList.add('good'); b.hidden = false; b.style.animation = 'none'; void b.offsetWidth; b.style.animation = ''; clearTimeout(H._errT); H._errT = setTimeout(() => { b.hidden = true; }, ms); tone(880, .08, .03, 'triangle'); },
+    error(msg, ms = 3800){ const b = el('errBar'); el('errMsg').textContent = msg; b.classList.remove('good'); b.hidden = false; b.style.animation = 'none'; void b.offsetWidth; b.style.animation = ''; clearTimeout(H._errT); H._errT = setTimeout(() => { b.hidden = true; }, ms); tone(220, .12, .04, 'square'); },
   };
   return H;
 })();
@@ -611,7 +614,7 @@ function wireDuel(){
   q('#duelMake').onclick = () => { made = makeDuel(q('#duelCity').value, q('#duelRule').value); q('#duelOut').textContent = made; for (const id of ['#duelOut','#duelCopy','#duelPlayMine']) q(id).hidden = false; };
   q('#duelCopy').onclick = () => navigator.clipboard?.writeText(made).then(() => toast('Duel code copied. Send it to a friend.'), () => toast('Select the code to copy it'));
   q('#duelPlayMine').onclick = () => { const d = readDuel(made); if (d) startDuel(d); };
-  q('#duelJoin').onsubmit = e => { e.preventDefault(); const d = readDuel(q('#duelIn').value); if (!d) { toast("That duel code doesn't look right"); return; } startDuel(d); };
+  q('#duelJoin').onsubmit = e => { e.preventDefault(); const d = readDuel(q('#duelIn').value); if (!d) { LLHooks.error("That duel code doesn't look right"); return; } startDuel(d); };
   q('#duelCmp').onsubmit = e => { e.preventDefault(); const d = readDuel(q('#cmpDuel').value); const out = q('#cmpOut');
     if (!d) { out.textContent = 'Check the duel code.'; return; }
     const me = readResult(d.code, q('#cmpMe').value), them = readResult(d.code, q('#cmpThem').value);
@@ -1593,7 +1596,7 @@ function weekChart(){
 }
 function showOver(d, extra){
   showSheet(`<div class="stack">
-    <div><div class="small">Game over · week ${G.week}</div><h2>${d.color < 0 ? 'The airport' : 'The '+COLOR_NAMES[d.color]+' workplace'} overflowed</h2></div>
+    <div><div class="small">Game over · week ${G.week}</div><h2>${G.forfeit ? 'You left the duel' : (d.color < 0 ? 'The airport' : 'The '+COLOR_NAMES[d.color]+' workplace') + ' overflowed'}</h2></div>
     <div><div class="big">${G.score}</div><p>trips completed</p></div>
     ${statsLine()}
     ${PLUS() ? weekChart() : ''}
@@ -1635,7 +1638,14 @@ for (const [id, k, msg] of [['trafBtn','traf','Traffic view'],['statsBtn','stats
 document.getElementById('planBtn').onclick = () => G && (G.plan ? endPlan(true) : startPlan());
 document.getElementById('planBuild').onclick = () => endPlan(true);
 document.getElementById('planCancel').onclick = () => endPlan(false);
-document.getElementById('menuBtn').onclick = () => { if (G && !G.over) { G.modal = true; showMenu(true); } else showMenu(); };
+document.getElementById('menuBtn').onclick = () => {
+  if (G && !G.over && G.cfg.kind === 'duel') { // duels: no menu, no pause; the only choice is to keep playing or give up
+    showSheet(`<div class="stack"><div><div class="small">Duel in progress</div><h2>Leave the duel?</h2></div><p>The city keeps running. Leaving counts as a loss.</p><div class="btnrow"><button class="btn primary" id="duelStay">Keep playing</button><button class="btn" id="duelQuit">Leave duel</button></div></div>`, true);
+    sheetCard.querySelector('#duelStay').onclick = () => { closeSheet(); if (G.cfg.duel && G.cfg.duel.live) el('oppStrip').hidden = false; };
+    sheetCard.querySelector('#duelQuit').onclick = () => { closeSheet(); G.forfeit = true; gameOver(G.dests.find(d => d.color >= 0) || G.dests[0]); };
+    return;
+  }
+  if (G && !G.over) { G.modal = true; showMenu(true); } else showMenu(); };
 
 function tileAt(px, py){ const c = cam(); const x = Math.floor((px - c.ox)/c.s), y = Math.floor((py - c.oy)/c.s); if (x<0||y<0||x>=W||y>=H) return -1; return y*W+x; }
 
@@ -2681,10 +2691,11 @@ function updateHud(){
   el('nRound').textContent = G.rounds; el('nLight').textContent = G.lightsN; el('nMway').textContent = G.mwN; el('nFerry').textContent = G.ferryN; el('nMetro').textContent = G.metroN; el('undoBtn').disabled = !G.undo.length;
 }
 let toastT;
-function toast(msg, ms=1800){ const t = el('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(()=>t.classList.remove('show'), ms); }
+function toast(msg, ms=1800){ if (/copied/i.test(msg)) { LLHooks.ok(msg); return; } const t = el('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(()=>t.classList.remove('show'), ms); }
 const sheet = el('sheet'), sheetCard = el('sheetCard');
-function showSheet(html, over){ sheetCard.innerHTML = html; sheet.classList.toggle('over', !!over); sheet.hidden = false; }
-function closeSheet(){ sheet.hidden = true; sheetCard.innerHTML = ''; }
+function showSheet(html, over){ menuOpen = showSheet.menu || null; showSheet.menu = null; sheetCard.innerHTML = html; sheet.classList.toggle('over', !!over); sheet.hidden = false; }
+let menuOpen = null; // which menu is on screen, so background updates never open one by themselves
+function closeSheet(){ sheet.hidden = true; sheetCard.innerHTML = ''; menuOpen = null; }
 function medalRow(best){ return `<div class="medals" aria-label="Medals">${MILESTONES.map(m=>`<span class="medal ${m.k}${best>=m.n?' got':''}" title="${m.name}: ${m.n} trips">${m.name[0]}</span>`).join('')}</div>`; }
 
 function achSection(){
@@ -2737,7 +2748,7 @@ function readMapCode(code){ try { const raw = String(code).trim().replace(/^LLMA
   el('edDone').onclick = closeEditor;
   el('edShare').onclick = () => { const code = shareCode(edMap()); navigator.clipboard?.writeText(code).then(() => toast('Map code copied. Send it to a friend.'), () => toast('Could not copy. Try again from the menu.')) ?? toast('Copy is not available here'); };
   el('edSave').onclick = () => {
-    if (!edValid()) { toast('Leave more land around the start point so the city has room to begin.', 3000); return; }
+    if (!edValid()) { LLHooks.error('Leave more land around the start point so the city has room to begin.'); return; }
     const m = edMap(); ED.id = m.id; saveMap(m); el('editor').hidden = true;
     newGame({kind:'classic', city: customCity(m), mods:[], seed:(Date.now() & 0x7fffffff)});
   };
@@ -2827,6 +2838,7 @@ function installApp(){
 }
 function THUMBS_CLEAR(){ for (const k in THUMBS) delete THUMBS[k]; }
 function showHome(){
+  menuOpen = null;
   if (G && !G.over) { saveGame(); }
   G = null; el('top').hidden = true; el('bottom').hidden = true; el('hint').hidden = true; el('planBar').hidden = true;
   const card = (ed, title, tag, desc, bullets) => `<button class="mode" data-mode="${ed}">
@@ -2839,7 +2851,7 @@ function showHome(){
       ${card('classic', 'Classic', '<span class="tag">Simple</span>', 'The pure road puzzle. Roads, bridges, tunnels, roundabouts, lights, and motorways.', ['18 real cities', 'Daily and weekly challenges', 'Replays and photo mode'])}
       ${card('plus', 'Plus', '<span class="tag">Free for now</span>', 'Everything in Classic, plus weather, events, ferries, metros, and smarter traffic.', ['Map maker and sandbox', 'World tour and achievements', 'Cars route around traffic'])}
     </div>
-    <p class="hint">Classic and Plus keep separate progress. Version 45.</p>
+    <p class="hint">Classic and Plus keep separate progress. Version 49.</p>
     ${settingsRow()}
   </div>`);
   sheetCard.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { setEdition(b.dataset.mode); SET.lastMode = b.dataset.mode; saveSet(); showMenu(); });
@@ -2895,6 +2907,7 @@ function monthPlan(){
     <p class="hint">Only today's puzzle and this week's challenge can be played. New ones unlock on their own as the days go by.</p>`;
 }
 function showMenu(paused){
+  showSheet.menu = {paused};
   showEmoteUI(false); el('oppStrip').hidden = true;
   const daily = challengeFor('daily'), weekly = challengeFor('weekly');
   const saved = paused ? null : loadSave();
@@ -2930,12 +2943,12 @@ function showMenu(paused){
     ${drop('Settings', settingsRow())}
     ${drop('How to play', `<p class="hint">${HELP}</p>`)}
   </div>`);
-  if (paused) sheetCard.querySelector('#resume').onclick = () => { closeSheet(); G.modal = false; };
+  if (paused) sheetCard.querySelector('#resume').onclick = () => { closeSheet(); G.modal = false; if (G.cfg.duel && G.cfg.duel.live) el('oppStrip').hidden = false; };
   if (paused) sheetCard.querySelector('#photo').onclick = () => { closeSheet(); photoMode(true); };
   const cont = sheetCard.querySelector('#cont'); if (cont) cont.onclick = () => { if (!restore(saved)) { clearSave(); showMenu(); } };
-  sheetCard.querySelector('#unlockForm').onsubmit = e => { e.preventDefault(); if (redeemCode(sheetCard.querySelector('#unlockIn').value)) { toast('Code accepted! Everything is unlocked.', 3000); tone(784,.3,.05,'triangle'); applyTheme(); showMenu(paused); } else toast("That code doesn't work"); };
+  sheetCard.querySelector('#unlockForm').onsubmit = e => { e.preventDefault(); if (redeemCode(sheetCard.querySelector('#unlockIn').value)) { toast('Code accepted! Everything is unlocked.', 3000); tone(784,.3,.05,'triangle'); applyTheme(); showMenu(paused); } else LLHooks.error(sheetCard.querySelector('#unlockIn').value.trim() ? "That code doesn't work" : 'Type a code first'); };
   sheetCard.querySelector('#codeForm').onsubmit = e => { e.preventDefault(); const r = readCode(sheetCard.querySelector('#codeIn').value); const mine = r && store.daily[r.key];
-    sheetCard.querySelector('#codeOut').textContent = !r ? "That code doesn't look right. Check for typos." : `${r.score} trips on the ${r.date} daily.` + (mine ? ` Your official score that day: ${mine.first}.` : ''); };
+    if (!r) LLHooks.error(sheetCard.querySelector('#codeIn') && !sheetCard.querySelector('#codeIn').value.trim() ? 'Type a code first' : "That score code doesn't look right"); sheetCard.querySelector('#codeOut').textContent = !r ? "That code doesn't look right. Check for typos." : `${r.score} trips on the ${r.date} daily.` + (mine ? ` Your official score that day: ${mine.first}.` : ''); };
   wireSettings(() => showMenu(paused)); for (const sec of LLHooks._sections) { try { sec.wire && sec.wire(sheetCard); } catch (e) { console.error(e); } } LLHooks.emit('menu', sheetCard);
   const hb = sheetCard.querySelector('#homeBtn'); if (hb) hb.onclick = showHome;
   sheetCard.querySelectorAll('[data-city]').forEach(b => b.onclick = () => showCity(ALL_CITIES().find(c=>c.id===b.dataset.city), paused));
@@ -2950,7 +2963,7 @@ function showMenu(paused){
   sheetCard.querySelectorAll('[data-mcopy]').forEach(b => b.onclick = () => { const code = shareCode(byId(b.dataset.mcopy)); navigator.clipboard?.writeText(code).then(() => toast('Map code copied'), () => toast('Could not copy the code')) ?? toast('Copy is not available here'); });
   sheetCard.querySelectorAll('[data-mdel]').forEach(b => b.onclick = () => { if (b.dataset.sure) { store.maps = (store.maps||[]).filter(m => m.id !== b.dataset.mdel); save(); showMenu(paused); } else { b.dataset.sure = '1'; b.textContent = 'Tap again to delete'; } });
   (sheetCard.querySelector('#newMap') || {}).onclick = () => openEditor(null);
-  (sheetCard.querySelector('#mapCodeForm') || {}).onsubmit = e => { e.preventDefault(); const m = readMapCode(sheetCard.querySelector('#mapCodeIn').value); if (!m) { toast("That map code doesn't look right"); return; } saveMap(m); toast(`Added ${m.name}`); showMenu(paused); };
+  (sheetCard.querySelector('#mapCodeForm') || {}).onsubmit = e => { e.preventDefault(); const m = readMapCode(sheetCard.querySelector('#mapCodeIn').value); if (!m) { LLHooks.error("That map code doesn't look right"); return; } saveMap(m); toast(`Added ${m.name}`); showMenu(paused); };
   sheetCard.querySelectorAll('[data-sandbox]').forEach(b => b.onclick = () => newGame({kind:'sandbox', city: CITIES.find(c=>c.id===b.dataset.sandbox), mods:[], seed:(Date.now() & 0x7fffffff)}));
   sheetCard.querySelectorAll('[data-chal]').forEach(b => b.onclick = () => { const [cid, xid] = b.dataset.chal.split(':'); const x = CHALLENGES[cid].find(q => q.id === xid);
     newGame({kind:'challenge', key:x.id, goal:x.goal, chName:x.name, city: CITIES.find(c=>c.id===cid), mods: MODS.filter(m => x.mods.includes(m.id)), seed: (Date.now() & 0x7fffffff)}); });

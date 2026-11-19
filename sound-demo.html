@@ -1,0 +1,175 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Little Lanes sound demo</title>
+<style>:root{--bg:#f3e9d8;--ink:#3b2d20;--btn:#fff8ea;--line:#d8c6a6;--acc:#c77d3a}@media(prefers-color-scheme:dark){:root{--bg:#2a2119;--ink:#f0e4d0;--btn:#3a2e23;--line:#54432f}}
+body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font:15px system-ui,sans-serif;max-width:760px;margin-inline:auto}h1{font-size:20px}h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin:20px 0 8px;opacity:.7}
+.row{display:flex;flex-wrap:wrap;gap:8px}button{background:var(--btn);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font:inherit;cursor:pointer}button:hover{border-color:var(--acc)}
+label{display:inline-flex;gap:8px;align-items:center;margin-right:16px}input{accent-color:var(--acc)}</style></head><body>
+<h1>Little Lanes: sound demo</h1><p>All sounds are synthesized live with Web Audio (same engine as the game). Click anything to start audio.</p>
+<div class="row"><label>Effects <input type="range" id="fxv" min="0" max="100" value="80"></label><label>Music <input type="range" id="mv" min="0" max="100" value="25"></label><button id="mute">Mute: off</button></div>
+<h2>Sequences</h2><div class="row"><button id="busy">Busy city (trip melody x16)</button><button id="burst">Burst of 40 deliveries (rate limit)</button><button id="cd">Duel countdown 3-2-1-Go</button><button id="pls">Timer pulses, slow to fast</button></div>
+<h2>Building</h2><div class="row"><button data-s="click">Road placed</button><button data-s="erase">Road erased</button><button data-s="undo">Undo</button><button data-s="tock">Turn driveway</button><button data-s="tock2">Roundabout / light</button><button data-s="bridge">Bridge</button><button data-s="tunnel">Tunnel</button><button data-s="metro">Metro</button><button data-s="ferry">Ferry</button><button data-s="motorway">Motorway</button></div><h2>City</h2><div class="row"><button data-s="trip">Trip scored (press for one note)</button><button data-s="house">New house</button><button data-s="workplace">New workplace</button><button data-s="levelup">Workplace grows</button><button data-s="amb">Ambulance sent</button><button data-s="chime2">Ambulance arrived</button><button data-s="chime">Apartment</button><button data-s="honk">Car honk</button><button data-s="train">Train</button><button data-s="lift">Drawbridge</button><button data-s="flood">Flood</button><button data-s="knock2">Road work</button><button data-s="soft">New area incoming</button></div><h2>Warnings & ends</h2><div class="row"><button data-s="warn">Timer warning start</button><button data-s="pulse">Timer pulse (calm)</button><button data-s="thud">Overflow</button><button data-s="gameover">Game over</button><button data-s="start">Game start</button><button data-s="arp">Week end / upgrade</button><button data-s="pick">Upgrade pick</button><button data-s="expand">City expands</button></div><h2>Rewards & UI</h2><div class="row"><button data-s="sparkle">Achievement</button><button data-s="win">Medal / challenge</button><button data-s="result">Duel result</button><button data-s="bubble">Emote / message</button><button data-s="ok">OK bar</button><button data-s="nope">Not allowed</button><button data-s="tick">Button tick</button></div>
+<script>
+let AC=null; const SET={mute:false,vfx:.8,vmus:.25};
+// ==== SND ENGINE BEGIN ==== (audio only: never touches game state or the seeded rng)
+const AUD = {master:null, fx:null, mus:null, vin:null, mdel:null, noise:null, voices:0, hist:{}, all:[], trip:0, tripT:-9, mOn:false, mTimer:0, mChordAt:0, mNoteAt:0, mChord:0};
+const clamp01 = v => Math.max(0, Math.min(1, +v || 0));
+const vcurve = v => Math.pow(clamp01(v), 1.5);
+function audInit(){
+  if (!AC) return false; if (AUD.master) return true;
+  try {
+    const m = AC.createGain(); m.gain.value = 0.7;                       // master, kept <= 0.8
+    const cmp = AC.createDynamicsCompressor(); cmp.threshold.value = -20; cmp.knee.value = 24; cmp.ratio.value = 4; cmp.attack.value = 0.01; cmp.release.value = 0.25;
+    m.connect(cmp); cmp.connect(AC.destination);
+    const fx = AC.createGain(), mus = AC.createGain(); fx.connect(m); mus.connect(m);
+    // tiny generated room reverb (shared send)
+    const len = Math.floor(AC.sampleRate * 1.3), ib = AC.createBuffer(2, len, AC.sampleRate);
+    for (let c = 0; c < 2; c++) { const d = ib.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.8); }
+    const conv = AC.createConvolver(); conv.buffer = ib;
+    const vin = AC.createGain(), vout = AC.createGain(); vout.gain.value = 0.32; vin.connect(conv); conv.connect(vout); vout.connect(m);
+    const fs = AC.createGain(); fs.gain.value = 0.22; fx.connect(fs); fs.connect(vin);
+    const ms = AC.createGain(); ms.gain.value = 0.45; mus.connect(ms); ms.connect(vin);
+    // soft echo for the kalimba notes
+    const mdel = AC.createGain(), dl = AC.createDelay(1), fb = AC.createGain(), dlp = AC.createBiquadFilter();
+    dl.delayTime.value = 0.43; fb.gain.value = 0.28; dlp.type = 'lowpass'; dlp.frequency.value = 1800;
+    mdel.connect(dl); dl.connect(dlp); dlp.connect(fb); fb.connect(dl); dlp.connect(mus);
+    const nb = AC.createBuffer(1, AC.sampleRate, AC.sampleRate), nd = nb.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    Object.assign(AUD, {master: m, fx, mus, vin, mdel, noise: nb});
+  } catch (e) { AUD.master = null; return false; }
+  audApply(); return true;
+}
+function audApply(){
+  if (!AUD.master || !AC) return; const t = AC.currentTime, mu = !!SET.mute;
+  try { AUD.fx.gain.setTargetAtTime(mu ? 0 : vcurve(SET.vfx), t, 0.03); AUD.mus.gain.setTargetAtTime(mu ? 0 : vcurve(SET.vmus), t, 0.2); } catch (e) {}
+  musicCheck();
+}
+function audGesture(){
+  if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {} }
+  if (!AC) return; audInit();
+  if (AC.state === 'suspended' && !document.hidden) { try { AC.resume().then(audApply, () => {}); } catch (e) {} }
+  else audApply();
+}
+// --- voices -------------------------------------------------------------
+function part(bus, f, t, type, v, a, d, to){
+  if (AUD.voices > 30) return;
+  const o = AC.createOscillator(), g = AC.createGain(); a = Math.max(0.006, a);
+  o.type = type; o.frequency.setValueAtTime(f, t); if (to) o.frequency.exponentialRampToValueAtTime(to, t + a + d);
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + d);
+  o.connect(g); g.connect(bus); AUD.voices++;
+  o.onended = () => { AUD.voices--; try { g.disconnect(); } catch (e) {} };
+  o.start(t); o.stop(t + a + d + 0.05);
+}
+function nz(bus, t, f, q, v, a, d, type){
+  if (AUD.voices > 30) return;
+  const s = AC.createBufferSource(), fl = AC.createBiquadFilter(), g = AC.createGain(); a = Math.max(0.005, a);
+  s.buffer = AUD.noise; fl.type = type || 'bandpass'; fl.frequency.value = f; fl.Q.value = q;
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + d);
+  s.connect(fl); fl.connect(g); g.connect(bus); AUD.voices++;
+  s.onended = () => { AUD.voices--; try { g.disconnect(); } catch (e) {} };
+  s.start(t, Math.random() * 0.5, a + d + 0.03);
+}
+const rnd = (a, b) => a + Math.random() * (b - a);
+function marimba(f, t, v, d){ const B = AUD.fx; d = d || 0.5; part(B, f, t, 'sine', v, 0.006, d); part(B, f * 4, t, 'sine', v * 0.2, 0.006, d * 0.22); nz(B, t, f * 2, 2, v * 0.1, 0.005, 0.025); }
+function kalimba(f, t, v, d, bus){ const B = bus || AUD.fx; d = d || 0.9; part(B, f, t, 'sine', v, 0.006, d); part(B, f * 5.4, t, 'sine', v * 0.07, 0.006, d * 0.15); nz(B, t, 3200, 3, v * 0.06, 0.005, 0.015); }
+function chime(f, t, v, d){ const B = AUD.fx; d = d || 1.1; part(B, f, t, 'sine', v, 0.008, d); part(B, f * 2.01, t, 'sine', v * 0.25, 0.008, d * 0.5); part(B, f * 3.02, t, 'sine', v * 0.08, 0.008, d * 0.25); }
+function wood(t, r, v){ const B = AUD.fx; v = v || 1; nz(B, t, 1800 * r, 4, 0.5 * v, 0.004, 0.022); part(B, 300 * r, t, 'sine', 0.34 * v, 0.005, 0.05, 190 * r); }
+const PENT = [0, 2, 4, 7, 9], hz = (base, n) => base * Math.pow(2, (Math.floor(n / 5) * 12 + PENT[n % 5]) / 12);
+const SFX = {
+  click: t => wood(t, rnd(0.9, 1.15), 0.8),
+  tock: t => wood(t, rnd(1.15, 1.3), 0.5),
+  tock2: t => { wood(t, 0.95, 0.6); marimba(440, t + 0.02, 0.05, 0.3); },
+  tick: t => nz(AUD.fx, t, 2600, 5, 0.07, 0.004, 0.014),
+  erase: t => part(AUD.fx, 460 * rnd(0.95, 1.05), t, 'sine', 0.15, 0.006, 0.09, 190),
+  undo: t => { part(AUD.fx, 540, t, 'sine', 0.12, 0.006, 0.12, 340); },
+  bridge: t => { marimba(392, t, 0.1, 0.45); marimba(587, t + 0.08, 0.1, 0.5); },
+  tunnel: t => { marimba(294, t, 0.1, 0.45); marimba(196, t + 0.09, 0.11, 0.55); },
+  metro: t => { marimba(659, t, 0.09); marimba(880, t + 0.1, 0.09); },
+  ferry: t => { kalimba(392, t, 0.1, 0.9); kalimba(523, t + 0.16, 0.09, 1); },
+  motorway: t => { marimba(587, t, 0.09); marimba(784, t + 0.07, 0.09); marimba(988, t + 0.14, 0.07); },
+  trip: t => {
+    const now = AC.currentTime; if (now - AUD.tripT > 3) AUD.trip = Math.max(0, AUD.trip - Math.floor((now - AUD.tripT) / 2)); AUD.tripT = now;
+    const c = AUD.trip++ % 18, pos = c < 10 ? c : 18 - c;                 // walks up two octaves, then back down
+    marimba(hz(261.63, pos), t, 0.1 * rnd(0.85, 1), 0.55);
+  },
+  house: t => { nz(AUD.fx, t, 650, 6, 0.4, 0.004, 0.03); part(AUD.fx, 200, t, 'sine', 0.22, 0.005, 0.07, 140); nz(AUD.fx, t + 0.1, 760, 6, 0.22, 0.004, 0.025); },
+  workplace: t => { chime(659, t, 0.09); chime(988, t + 0.14, 0.08); },
+  levelup: t => { chime(587, t, 0.08); chime(784, t + 0.12, 0.08); chime(988, t + 0.24, 0.08, 1.4); },
+  warn: t => { part(AUD.fx, 196, t, 'sine', 0.1, 0.03, 0.4); part(AUD.fx, 392, t, 'sine', 0.02, 0.03, 0.2); },
+  pulse: (t, p) => { const x = clamp01(p.x); part(AUD.fx, 150 + x * 70, t, 'sine', 0.09, 0.02, 0.14); part(AUD.fx, 300 + x * 140, t, 'sine', 0.015, 0.02, 0.08); },
+  thud: t => part(AUD.fx, 160, t, 'sine', 0.15, 0.01, 0.3, 90),
+  gameover: t => { [659, 523, 440, 392].forEach((f, i) => marimba(f, t + i * 0.3, 0.11, 1.0)); chime(196, t + 1.2, 0.06, 1.8); },
+  start: t => { chime(523, t, 0.08); chime(659, t + 0.12, 0.07); },
+  arp: t => { [523, 659, 784, 1046].forEach((f, i) => kalimba(f, t + i * 0.09, 0.09, 1.0)); },
+  pick: t => { [440, 587, 784].forEach((f, i) => kalimba(f, t + i * 0.07, 0.09, 0.8)); },
+  expand: t => { kalimba(523, t + 0.3, 0.08, 1.1); kalimba(784, t + 0.5, 0.08, 1.3); },
+  sparkle: t => { [1175, 1568, 1760, 2349].forEach((f, i) => chime(f, t + i * 0.06, 0.04, 0.9)); marimba(784, t, 0.07, 0.6); },
+  win: t => { [523, 659, 784, 1046].forEach((f, i) => marimba(f, t + i * 0.1, 0.1, 0.8)); chime(1568, t + 0.45, 0.05, 1.3); },
+  result: t => { chime(523, t, 0.08); chime(784, t + 0.15, 0.08, 1.4); },
+  chime: t => chime(698, t, 0.08, 0.9),
+  chime2: t => { chime(988, t, 0.07, 0.8); chime(1318, t + 0.1, 0.06, 0.9); },
+  bubble: (t, p) => { const r = rnd(0.95, 1.08) * (p && p.lo ? 0.8 : 1); part(AUD.fx, 520 * r, t, 'sine', 0.12, 0.008, 0.1, 880 * r); },
+  ok: t => part(AUD.fx, 560, t, 'sine', 0.1, 0.008, 0.09, 840),
+  nope: t => { part(AUD.fx, 190, t, 'sine', 0.12, 0.008, 0.13, 125); nz(AUD.fx, t, 500, 2, 0.12, 0.006, 0.04); },
+  train: t => { part(AUD.fx, 392, t, 'sine', 0.08, 0.04, 0.5); part(AUD.fx, 330, t + 0.24, 'sine', 0.08, 0.04, 0.6); },
+  amb: t => { kalimba(784, t, 0.08, 0.6); kalimba(659, t + 0.16, 0.08, 0.7); },
+  lift: t => part(AUD.fx, 330, t, 'sine', 0.09, 0.02, 0.3, 523),
+  flood: t => { part(AUD.fx, 260, t, 'sine', 0.08, 0.05, 0.5, 170); nz(AUD.fx, t, 420, 0.8, 0.07, 0.08, 0.5, 'lowpass'); },
+  knock2: t => { wood(t, 0.8, 0.8); wood(t + 0.11, 0.85, 0.7); wood(t + 0.22, 0.9, 0.6); },
+  soft: t => kalimba(330, t, 0.08, 0.7),
+  cd: (t, p) => wood(t, 0.9 + (3 - (p.n || 3)) * 0.18, 1.2),
+  go: t => { wood(t, 1.4, 1.2); chime(784, t, 0.09, 1.0); chime(1046, t + 0.1, 0.08, 1.4); }
+};
+const SFXLIM = {click: 3, tock: 2, tock2: 2, tick: 2, erase: 2, trip: 2, house: 1, workplace: 1, pulse: 2, warn: 1, thud: 1, nope: 1, bubble: 2, ok: 1, pick: 1, cd: 1, go: 1, sparkle: 1, win: 1};
+function sfx(name, p){
+  if (!AC || SET.mute) return; if (!AUD.master && !audInit()) return;
+  if (AC.state !== 'running' || SET.vfx <= 0.01) return;
+  const f = SFX[name]; if (!f) return;
+  const ms = performance.now(), h = (AUD.hist[name] = (AUD.hist[name] || []).filter(x => ms - x < 100));
+  AUD.all = AUD.all.filter(x => ms - x < 100);
+  if (h.length >= (SFXLIM[name] || 2) || AUD.all.length >= 6 || AUD.voices > 24) return;
+  h.push(ms); AUD.all.push(ms);
+  try { f(AC.currentTime + 0.005, p || {}); } catch (e) {}
+}
+// raw fallback (kept so any leftover/foreign callers still work)
+function tone(f, d=0.12, v=0.05, type='sine'){ if (!AC || SET.mute) return; try { audInit(); const t = AC.currentTime, o = AC.createOscillator(), g = AC.createGain(); o.type = type === 'square' ? 'triangle' : type; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.006 + d); o.connect(g).connect(AUD.fx || AC.destination); o.start(t); o.stop(t + d + 0.02); } catch(e){} }
+// --- generative music: soft pad + sparse kalimba, C major pentatonic ----------
+const CHORDS = [[130.81, 196, 329.63], [110, 164.81, 261.63], [98, 146.83, 220], [130.81, 196, 293.66], [110, 164.81, 329.63]];
+const KAL = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.7, 1318.5];
+function musicWanted(){ return !!(AC && AUD.master && !SET.mute && SET.vmus > 0.01 && !document.hidden && AC.state === 'running'); }
+function musicCheck(){
+  const want = musicWanted();
+  if (want && !AUD.mOn) { AUD.mOn = true; AUD.mChordAt = AC.currentTime + 0.3; AUD.mNoteAt = AC.currentTime + 3; AUD.mTimer = setInterval(musicTick, 500); musicTick(); }
+  else if (!want && AUD.mOn) { AUD.mOn = false; clearInterval(AUD.mTimer); }
+}
+function musicTick(){
+  if (!musicWanted()) { musicCheck(); return; }
+  const now = AC.currentTime;
+  while (AUD.mChordAt < now + 2) {
+    const t = AUD.mChordAt, len = rnd(8, 11); let k; do { k = Math.floor(Math.random() * CHORDS.length); } while (k === AUD.mChord); AUD.mChord = k;
+    const lp = AC.createBiquadFilter(), g = AC.createGain(); lp.type = 'lowpass'; lp.frequency.value = 650; lp.Q.value = 0.3;
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.16, t + 3); g.gain.setValueAtTime(0.16, t + len - 1); g.gain.linearRampToValueAtTime(0.0001, t + len + 3.5);
+    lp.connect(g); g.connect(AUD.mus);
+    const oscs = [];
+    for (const f of CHORDS[k]) for (const [ty, m] of [['sine', 1], ['triangle', 1.004]]) { const o = AC.createOscillator(); o.type = ty; o.frequency.value = f * m; o.connect(lp); o.start(t); o.stop(t + len + 3.6); oscs.push(o); }
+    oscs[0].onended = () => { try { g.disconnect(); lp.disconnect(); } catch (e) {} };
+    AUD.mChordAt = t + len - 2.5;
+  }
+  while (AUD.mNoteAt < now + 1.5) {
+    const t = Math.max(AUD.mNoteAt, now + 0.02), i = Math.floor(Math.random() * KAL.length);
+    kalimba(KAL[i], t, 0.2, 1.8, AUD.mdel); kalimba(KAL[i], t, 0.12, 1.8, AUD.mus);
+    if (Math.random() < 0.3) { const j = Math.max(0, Math.min(KAL.length - 1, i + (Math.random() < 0.5 ? -1 : 1) * (1 + Math.floor(Math.random() * 2)))); kalimba(KAL[j], t + 0.27, 0.16, 1.6, AUD.mdel); }
+    AUD.mNoteAt = t + rnd(2, 6);
+  }
+}
+// ==== SND ENGINE END ====
+
+const $=id=>document.getElementById(id);
+addEventListener('pointerdown',audGesture,true);
+document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{audGesture();const n=b.dataset.s;sfx(n,{x:.6,n:3});});
+$('fxv').oninput=e=>{SET.vfx=e.target.value/100;audGesture();audApply();}; $('fxv').onchange=()=>sfx('tock');
+$('mv').oninput=e=>{SET.vmus=e.target.value/100;audGesture();audApply();};
+$('mute').onclick=e=>{SET.mute=!SET.mute;e.target.textContent='Mute: '+(SET.mute?'on':'off');audGesture();audApply();};
+$('busy').onclick=()=>{audGesture();let i=0;const iv=setInterval(()=>{sfx('trip');if(++i>=16)clearInterval(iv);},230);};
+$('burst').onclick=()=>{audGesture();for(let i=0;i<40;i++)setTimeout(()=>sfx('trip'),i*5);};
+$('cd').onclick=()=>{audGesture();sfx('cd',{n:3});setTimeout(()=>sfx('cd',{n:2}),1000);setTimeout(()=>sfx('cd',{n:1}),2000);setTimeout(()=>sfx('go'),3000);};
+$('pls').onclick=()=>{audGesture();let x=.5,i=0;(function f(){sfx('pulse',{x});x=Math.min(1,x+.07);if(++i<12)setTimeout(f,(1.1-x*.6)*1000);})();};
+document.addEventListener('visibilitychange',()=>{if(!AC)return;if(document.hidden){musicCheck();try{AC.suspend()}catch(e){}}else{try{AC.resume().then(audApply)}catch(e){}}});
+</script></body></html>

@@ -2,6 +2,27 @@
 
 Single-file game: `index.html` (HTML + vanilla JS + Canvas 2D, no libraries). Plan and design decisions live in the "Little Lanes — Game Design & Build Plan" doc.
 
+## v58 (Nov 18)
+- Lighter, brighter look (new default "Sunny"): lighter grass/water/table, mid-grey roads, thin soft outlines, softer shadows.
+- Board themes picker in Settings (replaces the old map tints): Sunny, Pastel Candy, Snowy Winter, Autumn, Desert Sand, Ocean Blue, Neon Night (glowing roads), Classic Toy. Saved per device; menu thumbnails match.
+
+## v57 (Nov 18)
+- New sounds: soft wooden clicks for roads, marimba trip melody, gentle chimes, soft timer pulse, duel countdown wood blocks; optional quiet background music; Effects and Music sliders in Settings. sound-demo.html previews every sound.
+- Friend features: reactions on messages (6 emoji), challenge cards ("Beat my 412 in Tokyo" -> Play the same seed -> reply "I got 455!"), polls (which city, Classic or Plus, duel or co-op, survival or sprint, now or later) in 1:1 and group chats, status picker, "Playing Tokyo · wk 12" presence, Invite to duel/co-op buttons with Join, Friends' best leaderboard, Block/Unblock.
+- Database v57 run in Supabase: blocks, message_reactions, polls, poll_votes, profiles.status, challenge card columns; all with row-level security and spam limits.
+
+## v56 (Nov 18)
+- Toy Diorama art: city on a thick baseplate on a wooden table, chunky outlined toy-block houses (pitched roofs, apartments with flat roofs), workplaces with rooftop signs and stacked crates instead of pins, a dot-ring timer, dark asphalt roads with curbs and centre dashes, raised bridges, stone tunnel arches, toy cars, water with rims and highlights, rocky hill blocks, lollipop trees, new menu thumbnails. Rendering only; game rules unchanged.
+- Security hardening (database rules): friend requests always pending, group invites cannot be changed except to accept, messages cannot be rewritten, server picks friend codes, duel rows locked, spam caps on friend requests/groups/scores; fake broadcast messages ignored; single-use codes made atomic; device limit race fixed.
+- Server live: sign-in function deployed, database updated, login tokens now last 10 minutes.
+
+## v55 (Nov 18)
+- New sign-in system (account.js) replaces transfer codes: 8-character sign-in code + QR (scan with any camera; opens the game and signs in), login ID (friend code) + password, and a one-time recovery code.
+- 2-device limit enforced on the server: a 3rd device must pick one to sign out; signed-out devices lose their login on the server. Unused devices free their slot after 60 days. Sign out everywhere else; rename device; new-sign-in alerts; last 10 account events.
+- Parent email stored in a private server table, only shown masked (m•••@g•••.com); reset emails need an email sender (Resend) connected later.
+- Server pieces: supabase-accounts.sql and the "signin" Edge Function (supabase-function-signin.ts).
+- Sign out now signs out only this device.
+
 ## v54 (Nov 18)
 - Co-op parties (new coop.js): 2 to 4 players, same city seed, team score is the total. Host picks Team survival (team out when anyone overflows) or Team sprint (10 weeks). Team strip with every teammate's score, danger bar and connection dot; 📣 Ping menu (Help, Get bridges, Keep going...); emotes reach teammates; team best saved.
 - Group chats: pick a name from a list, invite friends (up to 8 people); invitees must tap Join. Same pre-written messages, history (last 40), live delivery, unread counts, invite more, leave.

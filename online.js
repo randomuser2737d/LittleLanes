@@ -22,6 +22,11 @@
   const inp = typeof INP === 'string' ? INP : (typeof globalThis.INP === 'string' ? globalThis.INP : 'font:inherit;padding:9px 12px;border-radius:12px;border:1px solid var(--panel-line);background:var(--land);color:var(--ink);min-width:0;flex:1 1 160px');
   const toast = (m, ms) => { try { if (/copied|sent to|welcome|moved here|accepted|saved|added/i.test(m)) (H.ok || H.toast)(m); else if (H.error) H.error(m); else H.toast(m, ms); } catch (e) {} };
   const rerender = () => { try { H.menu(); } catch (e) {} };
+  const CITY_RE = /^[a-z]{2,20}$/;
+  const cityName = id => { try { const c = (H.cities() || []).find(c => c.id === id); if (c && c.name) return String(c.name); } catch (e) {} return String(id).charAt(0).toUpperCase() + String(id).slice(1); };
+  const lsGet = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } };
+  const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+  const goodId = v => (typeof v === 'number' || typeof v === 'string') && /^[0-9]{1,18}$/.test(String(v)) ? String(v) : null; // database row ids
   const NICK_RE = /^[A-Za-z0-9_-]{3,16}$/;
   const BAD = ['fuck', 'shit', 'bitch', 'cunt', 'dick', 'cock', 'penis', 'vagina', 'pussy', 'whore', 'slut', 'nigg', 'fag', 'rape', 'nazi', 'hitler', 'porn', 'sex', 'anal', 'asshole', 'bastard', 'damn', 'crap', 'retard', 'suicide', 'kill', 'tits', 'boob', 'cum', 'wank', 'twat', 'dildo', 'milf', 'kkk', 'admin', 'moderator'];
   function badName(n) {
@@ -68,7 +73,20 @@
   // ---------- who's online (live presence) ----------
   S.on = {}; // user id -> {st}
   const ghost = () => { try { return localStorage.getItem('ll.ghost') === '1'; } catch (e) { return false; } };
-  const myStatus = () => { try { return H.inLiveDuel && H.inLiveDuel() ? 'duel' : (H.duelState && H.duelState()) ? 'playing' : 'menu'; } catch (e) { return 'menu'; } };
+  const myStatus = () => { try { if (H.inLiveDuel && H.inLiveDuel()) return 'duel'; if (H.duelState && H.duelState()) return 'playing'; const lr = H.lastRun && H.lastRun(); return lr && !lr.over ? 'playing' : 'menu'; } catch (e) { return 'menu'; } };
+  // what we tell friends: where we are, and (when playing) the city and week. Nothing is sent while "Appear offline" is on.
+  function myPresence() {
+    const g = ghost(), p = {st: myStatus(), ghost: g};
+    if (g || p.st === 'menu') return p;
+    try {
+      const ds = H.duelState && H.duelState(); let c = ds && ds.cityId, wk = ds && ds.week;
+      if (!ds) { const lr = H.lastRun && H.lastRun(); if (lr && !lr.over) { c = lr.cityId; wk = lr.week; } }
+      if (typeof c === 'string' && CITY_RE.test(c)) { p.city = c; const w = Math.floor(+wk); if (w >= 1 && w <= 999) p.wk = w; }
+    } catch (e) {}
+    return p;
+  }
+  const trackNow = () => { try { clearTimeout(S.trkT); S.trkT = setTimeout(() => { try { if (S.pres) S.pres.track(myPresence()); } catch (e) {} }, 800); } catch (e) {} };
+  try { for (const ev of ['newgame', 'gameover', 'menu']) H.on(ev, trackNow); } catch (e) {}
   function startPresence() {
     try {
       if (S.pres) { sb.removeChannel(S.pres); S.pres = null; }
@@ -76,17 +94,30 @@
       const ch = sb.channel('ll-online', {config: {presence: {key: S.user.id}}});
       ch.on('presence', {event: 'sync'}, () => {
         const st = ch.presenceState(), m = {};
-        for (const k in st) { const a = st[k] && st[k][0]; if (a && !a.ghost) m[k] = {st: a.st === 'duel' || a.st === 'playing' ? a.st : 'menu'}; }
+        for (const k in st) { const a = st[k] && st[k][0]; if (a && !a.ghost) { const o = {st: a.st === 'duel' || a.st === 'playing' ? a.st : 'menu'}; if (o.st !== 'menu' && typeof a.city === 'string' && CITY_RE.test(a.city)) { o.city = a.city; if (Number.isInteger(a.wk) && a.wk >= 1 && a.wk <= 999) o.wk = a.wk; } m[k] = o; } }
         S.on = m; try { if (document.querySelector('#llFr')) drawFriends(document); } catch (e) {}
       });
-      ch.subscribe(st => { if (st === 'SUBSCRIBED') ch.track({st: myStatus(), ghost: ghost()}); });
+      ch.subscribe(st => { if (st === 'SUBSCRIBED') ch.track(myPresence()); });
       S.pres = ch;
     } catch (e) {}
   }
-  try { if (typeof setInterval === 'function') setInterval(() => { try { if (S.pres) S.pres.track({st: myStatus(), ghost: ghost()}); } catch (e) {} }, 20000); } catch (e) {}
+  try { if (typeof setInterval === 'function') setInterval(() => { try { if (S.pres) S.pres.track(myPresence()); } catch (e) {} }, 20000); } catch (e) {}
   listeners.push(u => { if (!u && S.pres) { try { sb.removeChannel(S.pres); } catch (e) {} S.pres = null; S.on = {}; } else if (u && !S.pres) startPresence(); });
-  const statusDot = id => { const o = S.on[id]; const c = !o ? '#9aa0a6' : o.st === 'menu' ? '#2f9e5b' : '#e8a317'; const t = !o ? 'Offline' : o.st === 'duel' ? 'In a duel' : o.st === 'playing' ? 'Playing' : 'Online'; return {c, t, on: !!o}; };
+  const statusDot = id => { const o = S.on[id]; const c = !o ? '#9aa0a6' : o.st === 'menu' ? '#2f9e5b' : '#e8a317'; let t = !o ? 'Offline' : o.st === 'duel' ? 'In a duel' : o.st === 'playing' ? 'Playing' : 'Online'; if (o && o.city) t += ' ' + cityName(o.city) + (o.wk ? ' · wk ' + o.wk : ''); return {c, t, on: !!o}; };
   API.isOnline = id => !!S.on[id];
+  // everything private to an account is dropped when the account signs out or changes (including remote sign-out)
+  listeners.push(u => {
+    const id = u ? u.id : null;
+    if (S.acctId === id) return;
+    const had = S.acctId !== undefined; S.acctId = id;
+    if (!had && id) return;
+    try { for (const k of Object.keys(S.gch || {})) { try { sb.removeChannel(S.gch[k]); } catch (e) {} } } catch (e) {}
+    S.gch = {}; S.groups = []; S.ginv = []; S.gmem = {}; S.ghist = {}; S.gUnread = {}; S.openG = null; S.gLoaded = false;
+    S.hist = {}; S.histLoaded = {}; S.openF = null; S.friends = null; S.seenReq = null; S.inbox = []; S.sentAt = []; S.blocked = []; S.rx = {}; S.pollc = {}; S.rxOpen = null;
+    try { localStorage.removeItem('ll.inbox'); } catch (e) {}
+    try { if (S.inboxCh) { sb.removeChannel(S.inboxCh); S.inboxCh = null; } if (id) startInbox(); } catch (e) {}
+    markDot();
+  });
 
   // ---------- system notifications (installed app, while it is open in the background) ----------
   const installed = () => { try { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } };
@@ -102,71 +133,115 @@
   // ---------- quick messages (pre-written only, no free typing) ----------
   const MSGS = ['Are you free to play?', 'Want to duel? (Survival)', 'Want to duel? (Sprint, 10 weeks)', 'Join my duel room!', "Yes, I'm in!", 'Not right now', 'Give me 5 minutes', 'Try today\'s daily puzzle!', 'Beat my score!', 'GG!', 'Rematch?', 'Gotta go, bye!', 'Check out my new map!', 'Nice score!',
     'Hi! 👋', 'Good luck!', 'Thanks!', 'Want to play later?', 'Online now, come play!', 'Want to duel? (any rule)', 'I made a room, check your messages', 'Best of 3?', 'One more game?', 'That was close!', 'You\'re really good!', 'Wow, nice roads!', 'Try the weekly challenge!', 'I beat my best score!', 'Which city should we play?', 'Busy right now', 'Be right back', 'Okay 👍', 'No thanks', 'See you tomorrow!'];
-  const MSG_GROUPS = [['Ask', [0, 14, 17, 18, 19, 26, 27]], ['Duel', [1, 2, 19, 3, 21, 22, 10]], ['Answer', [4, 5, 6, 31, 33, 32, 16]], ['Cheer', [15, 9, 13, 23, 24, 25, 28]], ['Ideas', [7, 8, 12, 29, 30, 11, 34, 20]]];
+  MSGS.push('Challenge card', 'Challenge reply', 'Join my co-op party!'); // 34 = challenge card, 35 = reply card, 36 = co-op invite (sent from buttons, not the quick list)
+  const roomFor = k => { try { return k === 3 ? (W.LLDuelRoom && W.LLDuelRoom()) || '' : k === 36 ? (W.LLPartyRoom && W.LLPartyRoom()) || '' : ''; } catch (e) { return ''; } };
+  const ROOM_RE = /^[A-Z]{4}$/;
+  const okCard = (city, seed, score) => typeof city === 'string' && CITY_RE.test(city) && Number.isInteger(seed) && seed >= -2147483648 && seed <= 2147483647 && Number.isInteger(score) && score >= 0 && score <= 100000 ? {city, seed, score} : null;
+  const rowCard = r => r && r.card_city != null ? okCard(r.card_city, r.card_seed, r.card_score) : null;
+  const msgText = m => (m.k === 34 || m.k === 35) && m.card ? (m.k === 34 ? '🏁 Beat my ' : '🏆 I got ') + m.card.score + ' in ' + cityName(m.card.city) : (MSGS[m.k] || '');
+  const MSG_GROUPS = [['Ask', [0, 14, 17, 18, 19, 26, 27]], ['Duel', [1, 2, 19, 3, 21, 22, 10]], ['Answer', [4, 5, 6, 31, 33, 32, 16]], ['Cheer', [15, 9, 13, 23, 24, 25, 28]], ['Ideas', [7, 8, 12, 29, 30, 11, 20]]];
   const loadInbox = () => { try { const a = JSON.parse(localStorage.getItem('ll.inbox')); return Array.isArray(a) ? a.slice(0, 30) : []; } catch (e) { return []; } };
   const saveInbox = a => { try { localStorage.setItem('ll.inbox', JSON.stringify(a.slice(0, 30))); } catch (e) {} };
   S.inbox = loadInbox();
   const unread = () => S.inbox.filter(m => !m.read && !m.out).length;
-  const markDot = () => { try { const mb = document.getElementById('menuBtn'); if (mb) mb.classList.toggle('lldot', unread() > 0 || !!(S.friends && S.friends.incoming.length)); } catch (e) {} };
+  const markDot = () => { try { const mb = document.getElementById('menuBtn'); if (mb) mb.classList.toggle('lldot', unread() > 0 || !!(S.friends && S.friends.incoming.length) || !!(S.ginv && S.ginv.length) || Object.values(S.gUnread || {}).some(n => n > 0)); } catch (e) {} };
   function startInbox() {
     try {
       if (S.inboxCh) { sb.removeChannel(S.inboxCh); S.inboxCh = null; }
       if (!S.user || !sb.channel) return;
       const ch = sb.channel('inbox:' + S.user.id);
-      ch.on('broadcast', {event: 'm'}, ({payload: p}) => {
-        if (!p || typeof p.k !== 'number' || !MSGS[p.k]) return;
+      ch.on('broadcast', {event: 'm'}, async ({payload: p}) => {
+        try {
+        if (!p || !Number.isInteger(p.k) || !MSGS[p.k] || typeof p.from !== 'string' || !S.user) return;
         const fr = S.friends && S.friends.friends.find(f => f.id === p.from); if (!fr) return; // friends only
-        const room = typeof p.room === 'string' && /^[A-Z]{4}$/.test(p.room) ? p.room : '';
-        S.inbox.unshift({from: fr.id, nick: fr.nickname, k: p.k, room, at: Date.now()}); saveInbox(S.inbox); markDot(); if (S.hist[fr.id]) S.hist[fr.id].push({mine: false, k: p.k, room, at: Date.now()}); if (S.openF === fr.id) sb.from('messages').update({read: true}).eq('from_id', fr.id).eq('to_id', S.user.id).eq('read', false).then(() => {}, () => {});
-        notify(fr.nickname, MSGS[p.k] + (room ? ' Room ' + room : ''));
-        try { (H.ok || H.toast)(fr.nickname + ': ' + MSGS[p.k] + (room ? ' Room ' + room : ''), 5000); H.tone && H.tone(880, .12, .04, 'triangle'); } catch (e) {}
+        // a broadcast can be forged by anyone who knows the channel name, so only believe it if the database has the message
+        const mk = cols => sb.from('messages').select(cols).eq('from_id', fr.id).eq('to_id', S.user.id).eq('k', p.k).gte('created_at', new Date(Date.now() - 120000).toISOString()).order('created_at', {ascending: false}).limit(1);
+        let rr = await mk('id,room,created_at,card_city,card_seed,card_score'); if (rr.error) rr = await mk('room,created_at');
+        const rows = rr.data;
+        if (!rows || !rows.length) return;
+        const room = typeof rows[0].room === 'string' && ROOM_RE.test(rows[0].room) ? rows[0].room : '', card = rowCard(rows[0]), mid = goodId(rows[0].id);
+        if ((p.k === 34 || p.k === 35) && !card) return;
+        S.inbox.unshift({from: fr.id, nick: fr.nickname, k: p.k, room, card, at: Date.now()}); if (S.inbox.length > 30) S.inbox.length = 30; saveInbox(S.inbox); markDot(); if (S.hist[fr.id]) S.hist[fr.id].push({id: mid, mine: false, k: p.k, room, card, at: Date.now()}); if (S.openF === fr.id) sb.from('messages').update({read: true}).eq('from_id', fr.id).eq('to_id', S.user.id).eq('read', false).then(() => {}, () => {});
+        notify(fr.nickname, msgText({k: p.k, card}) + (room ? ' Room ' + room : ''));
+        try { (H.ok || H.toast)(fr.nickname + ': ' + msgText({k: p.k, card}) + (room ? ' Room ' + room : ''), 5000); H.tone && H.tone(880, .12, .04, 'triangle'); } catch (e) {}
         try { if (document.querySelector('#llFr')) drawFriends(document); } catch (e) {}
+        } catch (e) {}
       });
       ch.subscribe(); S.inboxCh = ch;
     } catch (e) {}
   }
   listeners.push(u => { if (!u && S.inboxCh) { try { sb.removeChannel(S.inboxCh); } catch (e) {} S.inboxCh = null; } else if (u && !S.inboxCh) startInbox(); });
-  async function sendMsg(to, k) {
+  async function sendMsg(to, k, card) {
     const now = Date.now(); S.sentAt = (S.sentAt || []).filter(t => now - t < 300000);
     if (S.sentAt.length && now - S.sentAt[S.sentAt.length - 1] < 3000) { toast('Slow down a little'); return; }
     if (S.sentAt.length >= 20) { toast('Message limit reached. Try again in a few minutes.'); return; }
-    const room = k === 3 ? (window.LLDuelRoom && window.LLDuelRoom()) : '';
-    if (k === 3 && !room) { toast('Make a room in Live duel first, then send this'); return; }
-    const ins = await sb.from('messages').insert({to_id: to, k, room: room || null});
-    if (ins.error && !S.on[to]) { toast(/relation|exist|schema/i.test(ins.error.message || '') ? 'Message history needs the new database update' : /limit/i.test(ins.error.message || '') ? 'Message limit reached. Try again in a few minutes.' : 'Could not send. Try again.'); return; }
-    if (!S.on[to]) { S.sentAt.push(now); afterSend(to, k, room, now); return; }
+    if (!Number.isInteger(k) || !MSGS[k] || !(S.friends && S.friends.ids.includes(to))) return;
+    const room = roomFor(k);
+    if ((k === 3 || k === 36) && !room) { toast('Create a room first'); return; }
+    const isCard = k === 34 || k === 35;
+    if (isCard && !(card = okCard(card && card.city, card && card.seed, card && card.score))) { toast('Finish a classic game first'); return; }
+    const row = {to_id: to, k, room: room || null};
+    if (isCard) { row.card_city = card.city; row.card_seed = card.seed; row.card_score = card.score; }
+    const ins = await sb.from('messages').insert(row).select('id').single();
+    if (ins.error) { toast(/relation|exist|schema|column/i.test(ins.error.message || '') ? 'Message history needs the new database update' : /limit/i.test(ins.error.message || '') ? 'Message limit reached. Try again in a few minutes.' : 'Could not send. Try again.'); return; }
+    const mid = goodId(ins.data && ins.data.id);
+    if (!S.on[to]) { S.sentAt.push(now); afterSend(to, k, room, now, card, mid); return; }
     const ch = sb.channel('inbox:' + to);
     await new Promise(res => { const t = setTimeout(res, 4000); ch.subscribe(st => { if (st === 'SUBSCRIBED') { clearTimeout(t); res(); } }); });
     const r = await ch.send({type: 'broadcast', event: 'm', payload: {from: S.user.id, k, room: room || ''}});
     setTimeout(() => { try { sb.removeChannel(ch); } catch (e) {} }, 1500);
     if (r !== 'ok') { toast('Could not send. Try again.'); return; }
-    S.sentAt.push(now); afterSend(to, k, room, now);
+    S.sentAt.push(now); afterSend(to, k, room, now, card, mid);
   }
   try { if (typeof setInterval === 'function') setInterval(() => { if (S.user && !(typeof document !== 'undefined' && document.hidden)) loadMissed(); }, 120000); } catch (e) {}
-  function afterSend(to, k, room, now) {
+  function afterSend(to, k, room, now, card, mid) {
     const fr = S.friends && S.friends.friends.find(f => f.id === to);
-    S.inbox.unshift({from: to, nick: fr ? fr.nickname : 'Friend', k, room: room || '', at: now, out: true, read: true}); saveInbox(S.inbox);
-    (S.hist[to] = S.hist[to] || []).push({mine: true, k, room: room || '', at: now});
+    S.inbox.unshift({from: to, nick: fr ? fr.nickname : 'Friend', k, room: room || '', card: card || null, at: now, out: true, read: true}); saveInbox(S.inbox);
+    S.lastOk = Date.now(); (S.hist[to] = S.hist[to] || []).push({id: mid || null, mine: true, k, room: room || '', card: card || null, at: now});
     toast('Message sent to ' + (fr ? fr.nickname : 'your friend') + (S.on[to] ? '' : ' (they will see it next time)'));
     try { if (document.querySelector('#llFr')) drawFriends(document); } catch (e) {}
   }
-  S.hist = {};
+  S.hist = {}; S.rx = {};
+  function markAllRead() { try { if (S.user) sb.from('messages').update({read: true}).eq('to_id', S.user.id).eq('read', false).then(() => {}, () => {}); } catch (e) {} }
   async function loadHist(id) {
     try { const me = S.user.id;
-      const {data, error} = await sb.from('messages').select('from_id,to_id,k,room,created_at,read').or(`and(from_id.eq.${me},to_id.eq.${id}),and(from_id.eq.${id},to_id.eq.${me})`).order('created_at', {ascending: false}).limit(40);
+      const mk = cols => sb.from('messages').select(cols).or(`and(from_id.eq.${me},to_id.eq.${id}),and(from_id.eq.${id},to_id.eq.${me})`).order('created_at', {ascending: false}).limit(40);
+      let res = await mk('id,from_id,to_id,k,room,created_at,read,card_city,card_seed,card_score'); if (res.error) res = await mk('from_id,to_id,k,room,created_at,read');
+      const {data, error} = res;
       if (error) return null;
-      S.hist[id] = (data || []).reverse().map(m => ({mine: m.from_id === me, k: m.k, room: m.room || '', at: Date.parse(m.created_at)}));
+      S.hist[id] = (data || []).reverse().filter(m => MSGS[m.k]).map(m => ({id: goodId(m.id), mine: m.from_id === me, k: m.k, room: m.room || '', card: rowCard(m), at: Date.parse(m.created_at)}));
       if ((data || []).some(m => m.to_id === me && !m.read)) sb.from('messages').update({read: true}).eq('from_id', id).eq('to_id', me).eq('read', false).then(() => {}, () => {});
+      await loadRx(S.hist[id]);
       return S.hist[id];
     } catch (e) { return null; }
   }
+  async function loadRx(list) {
+    try { const ids = list.map(m => m.id).filter(Boolean); if (!ids.length) return;
+      const {data, error} = await sb.from('message_reactions').select('message_id,user_id,r').in('message_id', ids);
+      if (error) return;
+      for (const id of ids) S.rx[id] = {};
+      for (const x of data || []) { const mid = goodId(x.message_id); if (mid && Number.isInteger(x.r) && x.r >= 0 && x.r < RX.length && S.rx[mid]) S.rx[mid][x.user_id] = x.r; }
+    } catch (e) {}
+  }
+  const RX = ['👍', '😂', '😮', '🔥', '❤️', '🎉'];
+  async function react(mid, r) {
+    if (!S.user || !goodId(mid) || !Number.isInteger(r) || r < 0 || r >= RX.length) return;
+    const me = S.user.id, m = (S.rx[mid] = S.rx[mid] || {}), prev = m[me];
+    let error;
+    if (prev === r) { delete m[me]; ({error} = await sb.from('message_reactions').delete().eq('message_id', mid).eq('user_id', me)); }
+    else { m[me] = r; ({error} = await sb.from('message_reactions').upsert({message_id: mid, user_id: me, r}, {onConflict: 'message_id,user_id'})); }
+    if (error) { if (prev === undefined) delete m[me]; else m[me] = prev; toast(/limit/i.test(error.message || '') ? 'Slow down a little' : 'Could not react'); }
+  }
   async function loadMissed() {
-    try { if (!S.user) return; const {data, error} = await sb.from('messages').select('from_id,k,room,created_at').eq('to_id', S.user.id).eq('read', false).order('created_at', {ascending: false}).limit(30);
+    try { if (!S.user) return; const mk = cols => sb.from('messages').select(cols).eq('to_id', S.user.id).eq('read', false).order('created_at', {ascending: false}).limit(30);
+      let res = await mk('id,from_id,k,room,created_at,card_city,card_seed,card_score'); if (res.error) res = await mk('from_id,k,room,created_at');
+      const {data, error} = res;
       if (error || !data || !data.length) return;
       if (!S.friends) await loadFriends();
       let n = 0;
       for (const m of data.reverse()) { const at = Date.parse(m.created_at), fr = S.friends && S.friends.friends.find(f => f.id === m.from_id); if (!fr || !MSGS[m.k]) continue;
-        if (S.inbox.some(x => x.from === fr.id && x.k === m.k && Math.abs(x.at - at) < 15000)) continue; S.inbox.unshift({from: fr.id, nick: fr.nickname, k: m.k, room: m.room || '', at}); n++; }
+        if (S.inbox.some(x => x.from === fr.id && x.k === m.k && Math.abs(x.at - at) < 15000)) continue; const card = rowCard(m); if ((m.k === 34 || m.k === 35) && !card) continue; const room = typeof m.room === 'string' && ROOM_RE.test(m.room) ? m.room : ''; S.inbox.unshift({from: fr.id, nick: fr.nickname, k: m.k, room, card, at}); if (S.hist[fr.id]) S.hist[fr.id].push({id: goodId(m.id), mine: false, k: m.k, room, card, at}); n++; }
+      if (S.inbox.length > 30) S.inbox.length = 30;
       if (n) { notify('Little Lanes', n === 1 ? 'You have a new message' : `You have ${n} new messages`); saveInbox(S.inbox); markDot(); (H.ok || H.toast)(n === 1 ? 'You have a new message. Open Online to read it.' : `You have ${n} new messages. Open Online to read them.`, 4500); rerender(); }
     } catch (e) {}
   }
@@ -270,25 +345,27 @@
   }
   async function saveProf(patch) {
     const {error} = await sb.from('profiles').update(patch).eq('id', S.user.id);
-    if (error) { toast(/column/i.test(error.message || '') ? 'Profile styles need the new database update (see supabase-setup.sql)' : (isTaken(error) ? 'That nickname is taken' : 'Could not save profile')); return false; }
+    if (error) { toast(/column/i.test(error.message || '') ? 'Profile styles need the new database update (see supabase-setup.sql)' : (isTaken(error) ? 'That nickname is taken' : /limit/i.test(error.message || '') ? 'You are changing your status too often. Try again later.' : 'Could not save profile')); return false; }
     Object.assign(S.profile, patch); changed(); toast('Profile saved'); rerender(); return true;
   }
   function onlineHtml() {
     if (!online()) return OFFMSG;
-    if (!S.user) return `<div class="stack"><p class="small">Play with friends and climb the leaderboards. No email needed, just a nickname.</p><div class="btnrow"><button class="btn primary" id="llGo">Go online</button></div>
-      <details><summary class="small">Have a transfer code?</summary><div class="btnrow" style="margin-top:8px"><input id="llTin" style="${inp}" placeholder="Paste transfer code" autocomplete="off"><button class="btn" id="llTuse">Use code</button></div></details></div>`;
+    if (!S.user) return `<div class="stack"><p class="small">Play with friends and climb the leaderboards. No email needed, just a nickname.</p><div class="btnrow"><button class="btn primary" id="llGo">Go online (new account)</button></div>
+      <p class="hint" style="margin:0">Already have an account on another device? Open <b>Sign-in and devices</b> below.</p></div>`;
     if (!S.profile) return `<div class="stack"><p class="small">Pick a nickname (3 to 16 letters, numbers, - or _).</p><div class="btnrow"><input id="llNick" style="${inp}" maxlength="16" placeholder="Nickname" autocomplete="off"><button class="btn primary" id="llNickSave">Save</button></div><div class="btnrow"><button class="btn" id="llOut">Sign out</button></div></div>`;
     const p = S.profile;
     const code = S.showCode && S.session ? `<div class="stack"><p class="hint">Only use this to move YOUR account to your own device. Never send it to anyone, it works like a password. It hides itself after 1 minute.</p><input readonly id="llCode" style="${inp}" value="${esc(S.session.refresh_token)}"><div class="btnrow"><button class="btn" id="llCopy">Copy</button><button class="btn" id="llHide">Hide</button></div></div>` : '';
     const nOn = S.friends ? S.friends.friends.filter(f => S.on[f.id]).length : 0, nReq = S.friends ? S.friends.incoming.length : 0;
     return `<div class="stack">
       <div class="btnrow" style="align-items:center"><span style="width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-size:24px;background:${prof(p).color}">${prof(p).avatar}</span><span class="stack" style="gap:0"><b style="color:${prof(p).color}">${esc(p.nickname)}</b>${prof(p).motto ? `<span class="hint">${esc(prof(p).motto)}</span>` : ''}</span><span class="codebox"><span class="small">Friend code</span><b>${esc(p.friend_code)}</b><button class="btn" id="llCopyFc" type="button">Copy</button></span></div>
+      <div class="btnrow" style="align-items:center"><span class="small">Status</span><select id="llStatus" style="${inp}"><option value="">(none)</option>${STATUSES.map((t, i) => `<option value="${i}"${p.status === i ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></div>
       <div class="btnrow"><span class="tag">🟢 ${nOn} friend${nOn === 1 ? '' : 's'} online</span>${nReq ? `<span class="tag" style="background:#d63c3c;color:#fff">${nReq} friend request${nReq === 1 ? '' : 's'}</span>` : ''}${unread() ? `<span class="tag" style="background:#2f9e5b;color:#fff">${unread()} new message${unread() === 1 ? '' : 's'}</span>` : ''}</div></div>`;
   }
   function friendsHtml() {
     if (!online() || !S.profile) return '<p class="hint">Go online and pick a nickname first (top of this page).</p>';
     return `<div class="stack"><form class="btnrow" id="llAddF"><input id="llFc" style="${inp}" maxlength="8" placeholder="Add a friend by their code" autocomplete="off"><button class="btn primary" id="llAdd" type="submit">Add</button></form>
-      <div id="llFr" class="stack"><p class="hint">Loading friends...</p></div></div>`;
+      <div id="llFr" class="stack"><p class="hint">Loading friends...</p></div>
+      <details id="llFbD"><summary class="small"><b>Friends' best</b></summary><div class="stack" style="margin-top:8px"><select id="llFbCity" style="${inp}">${((() => { try { return (H.cities() || []).filter(c => c.unlocked); } catch (e) { return []; } })()).map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select><div id="llFb" class="stack"><p class="hint">Open to see how you and your friends compare.</p></div></div></details></div>`;
   }
   function accountHtml() {
     if (!online()) return OFFMSG;
@@ -296,8 +373,7 @@
     const p = S.profile;
     const code = S.showCode && S.session ? `<div class="stack"><p class="hint">Only use this to move YOUR account to your own device. Never send it to anyone, it works like a password. It hides itself after 1 minute.</p><input readonly id="llCode" style="${inp}" value="${esc(S.session.refresh_token)}"><div class="btnrow"><button class="btn" id="llCopy">Copy</button><button class="btn" id="llHide">Hide</button></div></div>` : '';
     return `<div class="stack">${profileHtml(p)}
-      <div class="small">Move your account to another device</div><div class="btnrow"><button class="btn" id="llXfer">Show transfer code</button></div>${code}
-      <details><summary class="small">Have a transfer code?</summary><div class="btnrow" style="margin-top:8px"><input id="llTin" style="${inp}" placeholder="Paste transfer code" autocomplete="off"><button class="btn" id="llTuse">Use code</button></div></details>
+      <p class="hint" style="margin:0">To use this account on another device, open <b>Sign-in and devices</b>.</p>
       <div class="small">Notifications</div>${installed() ? (typeof Notification === 'undefined' ? '<p class="hint">This device does not support notifications.</p>' : `<div class="btnrow"><button class="btn" id="llNotif">${notifOn() ? 'Turn off notifications' : 'Turn on notifications'}</button></div><p class="hint">Shows a notification for messages, group chats and friend requests while the app is open in the background.</p>`) : '<p class="hint">Install Little Lanes to your home screen to get notifications for messages.</p>'}
       <div class="btnrow"><button class="btn" id="llOut">Sign out</button></div></div>`;
   }
@@ -330,7 +406,7 @@
       await setSession(data.session); rerender();
     });
     guard(q('#llTuse'), () => useTransfer(card));
-    guard(q('#llOut'), async () => { try { await sb.auth.signOut(); } catch (e) {} S.showCode = false; await setSession(null); rerender(); });
+    guard(q('#llOut'), async () => { if (W.LLLocalSignOut) await W.LLLocalSignOut(); else { try { await sb.auth.signOut({scope: 'local'}); } catch (e) {} } S.showCode = false; S.inbox = []; await setSession(null); rerender(); });
     guard(q('#llNickSave'), async () => {
       const n = (q('#llNick').value || '').trim();
       if (!NICK_RE.test(n)) { toast('Nickname: 3 to 16 letters, numbers, - or _'); return; }
@@ -350,6 +426,7 @@
     });
     card.querySelectorAll('[data-av]').forEach(b => guard(b, () => saveProf({avatar: b.dataset.av})));
     card.querySelectorAll('[data-col]').forEach(b => guard(b, () => saveProf({color: b.dataset.col})));
+    const stSel = q('#llStatus'); if (stSel) stSel.onchange = () => { const v = stSel.value; if (v === '') { saveProf({status: null}); return; } const n = +v; if (Number.isInteger(n) && STATUSES[n]) saveProf({status: n}); };
     const mo = q('#llMotto'); if (mo) mo.onchange = () => { if (MOTTOS.includes(mo.value)) saveProf({motto: mo.value}); };
     guard(q('#llNickChg'), async () => {
       const n = (q('#llNick2').value || '').trim();
@@ -376,6 +453,17 @@
       const t = S.session && S.session.refresh_token; if (!t) return;
       try { await navigator.clipboard.writeText(t); toast('Transfer code copied'); } catch (e) { const i = q('#llCode'); if (i) { i.select(); } toast('Select the code and copy it'); }
     });
+    const fbS = q('#llFbCity'), fbB = q('#llFb'), fbD = q('#llFbD');
+    if (fbS && fbB) {
+      let seq = 0;
+      const drawFb = async () => {
+        const my = ++seq, city = fbS.value; if (!CITY_RE.test(city)) { fbB.innerHTML = '<p class="hint">No cities yet.</p>'; return; }
+        try { const r = await fetchBoard(city, 'friends'); if (my !== seq) return;
+          const rows = r.top.slice(0, 10).map((x, i) => `<div class="btnrow"><span class="small">${i + 1}.</span><span class="tag"${S.user && x.user_id === S.user.id ? ' style="font-weight:700"' : ''}>${esc(x.nickname)}</span><b>${esc(x.score)}</b></div>`).join('');
+          fbB.innerHTML = rows || '<p class="hint">No scores in this city yet.</p>'; } catch (e) { if (my === seq) fbB.innerHTML = '<p class="hint">Could not load.</p>'; }
+      };
+      fbS.onchange = drawFb; if (fbD && fbD.addEventListener) fbD.addEventListener('toggle', () => { if (fbD.open) drawFb(); });
+    }
     const form = q('#llAddF');
     if (form) {
       const btn = q('#llAdd');
@@ -393,6 +481,8 @@
     const {data, error} = await sb.from('profiles').select('id,nickname').eq('friend_code', code).maybeSingle();
     if (error || !data) { toast('No player has that code'); return; }
     if (data.id === S.user.id) { toast("That's your own code"); return; }
+    if (S.blocked && S.blocked.some(b => b.id === data.id)) { toast('You blocked that player. Unblock them first.'); return; }
+    if (S.friends && S.friends.incoming.some(p => p.id === data.id)) { const {error: e3} = await sb.from('friends').update({status: 'accepted'}).eq('a', data.id).eq('b', S.user.id); if (!e3) { toast('Friend request accepted: ' + data.nickname + ' and you are friends'); S.cache = {}; await loadFriends(); drawFriends(card); return; } }
     const {error: e2} = await sb.from('friends').insert({a: S.user.id, b: data.id, status: 'pending'});
     if (e2) { toast(isTaken(e2) ? 'Request already sent' : 'Could not send request'); return; }
     toast('Friend request sent to ' + data.nickname);
@@ -406,7 +496,7 @@
     const rows = [...((r1 && r1.data) || []).map(x => ({other: x.b, status: x.status, mine: true, since: x.created_at})), ...((r2 && r2.data) || []).map(x => ({other: x.a, status: x.status, mine: false, since: x.created_at}))];
     const ids = [...new Set(rows.map(r => r.other))];
     const names = {};
-    if (ids.length) { let res = await sb.from('profiles').select('id,nickname,avatar,color,motto,created_at').in('id', ids); if (res.error) res = await sb.from('profiles').select('id,nickname').in('id', ids); for (const p of res.data || []) { names[p.id] = p.nickname; S.pf = S.pf || {}; S.pf[p.id] = p; } }
+    if (ids.length) { let res = await sb.from('profiles').select('id,nickname,avatar,color,motto,created_at,status').in('id', ids); if (res.error) res = await sb.from('profiles').select('id,nickname,avatar,color,motto,created_at').in('id', ids); if (res.error) res = await sb.from('profiles').select('id,nickname').in('id', ids); for (const p of res.data || []) { names[p.id] = p.nickname; S.pf = S.pf || {}; S.pf[p.id] = p; } }
     for (const r of rows) {
       const nm = names[r.other] || 'Player';
       if (r.status === 'accepted') { out.friends.push({id: r.other, nickname: nm, since: r.since}); out.ids.push(r.other); }
@@ -414,8 +504,9 @@
       else out.sent.push({id: r.other, nickname: nm});
     }
     S.friends = out;
+    try { const br = await sb.from('blocks').select('blocked').eq('blocker', me); if (!br.error) { const bids = (br.data || []).map(x => x.blocked).filter(x => typeof x === 'string'); const bn = {}; if (bids.length) { const pr = await sb.from('profiles').select('id,nickname').in('id', bids); for (const x of (pr && pr.data) || []) bn[x.id] = x.nickname; } S.blocked = bids.map(id => ({id, nickname: bn[id] || 'Player'})); } } catch (e) {}
     // tell the player about requests they haven't seen yet, and mark the menu button
-    S.seenReq = S.seenReq || new Set(JSON.parse(localStorage.getItem('ll.seenReq') || '[]'));
+    if (!S.seenReq) { let a = []; try { a = JSON.parse(localStorage.getItem('ll.seenReq') || '[]'); if (!Array.isArray(a)) a = []; } catch (e) { a = []; } S.seenReq = new Set(a); }
     const fresh = out.incoming.filter(p => !S.seenReq.has(p.id));
     if (fresh.length) { notify('Little Lanes', fresh.length === 1 ? `Friend request from ${fresh[0].nickname}` : `${fresh.length} new friend requests`); (H.ok || H.toast)(fresh.length === 1 ? `Friend request from ${fresh[0].nickname}. Open Online to accept.` : `${fresh.length} new friend requests. Open Online to accept.`, 4500);
       for (const p of fresh) S.seenReq.add(p.id); try { localStorage.setItem('ll.seenReq', JSON.stringify([...S.seenReq].slice(-200))); } catch (e) {} }
@@ -450,11 +541,16 @@
   const nickOf = id => id === (S.user && S.user.id) ? 'You' : (S.pf && S.pf[id] && S.pf[id].nickname) || 'Player';
   function subGroup(id) {
     try { const ch = sb.channel('group:' + id, {config: {broadcast: {self: false}}});
-      ch.on('broadcast', {event: 'm'}, ({payload: p}) => {
-        if (!p || !MSGS[p.k] || !(S.gmem && (S.gmem[id] || []).some(m => m.user_id === p.from && m.status === 'accepted'))) return;
-        (S.ghist[id] = S.ghist[id] || []).push({from: p.from, k: p.k, at: Date.now()});
-        if (S.openG !== String(id) || document.hidden) { S.gUnread = S.gUnread || {}; S.gUnread[id] = (S.gUnread[id] || 0) + 1; notify(gname(id), nickOf(p.from) + ': ' + MSGS[p.k]); (H.ok || H.toast)(gname(id) + ' · ' + nickOf(p.from) + ': ' + MSGS[p.k], 4000); }
+      ch.on('broadcast', {event: 'm'}, async ({payload: p}) => {
+        try {
+        if (!p || !Number.isInteger(p.k) || !MSGS[p.k] || typeof p.from !== 'string' || p.from === (S.user && S.user.id) || !(S.gmem && (S.gmem[id] || []).some(m => m.user_id === p.from && m.status === 'accepted'))) return;
+        // broadcasts can be forged: only show it if the database has this message from this member
+        const {data: rows} = await sb.from('group_messages').select('id').eq('group_id', id).eq('from_id', p.from).eq('k', p.k).gte('created_at', new Date(Date.now() - 120000).toISOString()).limit(1);
+        if (!rows || !rows.length) return;
+        const h = (S.ghist[id] = S.ghist[id] || []); h.push({from: p.from, k: p.k, at: Date.now()}); if (h.length > 60) h.splice(0, h.length - 60);
+        if (S.openG !== String(id) || document.hidden) { S.gUnread = S.gUnread || {}; S.gUnread[id] = (S.gUnread[id] || 0) + 1; markDot(); notify(gname(id), nickOf(p.from) + ': ' + MSGS[p.k]); (H.ok || H.toast)(gname(id) + ' · ' + nickOf(p.from) + ': ' + MSGS[p.k], 4000); }
         drawGroups();
+        } catch (e) {}
       });
       ch.subscribe(); S.gch[id] = ch; } catch (e) {}
   }
@@ -465,11 +561,13 @@
   async function sendGroup(id, k) {
     const now = Date.now(); S.sentAt = (S.sentAt || []).filter(t => now - t < 300000);
     if (S.sentAt.length && now - S.sentAt[S.sentAt.length - 1] < 3000) { toast('Slow down a little'); return; }
+    if (S.sentAt.length >= 20) { toast('Message limit reached. Try again in a few minutes.'); return; }
+    if (!S.groups.some(g => String(g.id) === String(id)) || !MSGS[k] || k === 3 || k >= 34) return;
     const {error} = await sb.from('group_messages').insert({group_id: id, k});
     if (error) { toast(/limit/i.test(error.message || '') ? 'Message limit reached. Try again in a few minutes.' : 'Could not send. Try again.'); return; }
     S.sentAt.push(now);
     try { const ch = S.gch[id]; if (ch) ch.send({type: 'broadcast', event: 'm', payload: {from: S.user.id, k}}); } catch (e) {}
-    (S.ghist[id] = S.ghist[id] || []).push({from: S.user.id, k, at: now}); drawGroups();
+    const gh = (S.ghist[id] = S.ghist[id] || []); gh.push({from: S.user.id, k, at: now}); if (gh.length > 60) gh.splice(0, gh.length - 60); drawGroups();
   }
   function groupsHtml() {
     if (!online() || !S.profile) return '<p class="hint">Go online and pick a nickname first.</p>';
@@ -487,6 +585,7 @@
       h += `<div class="btnrow" style="align-items:center"><button class="btn" type="button" id="llGBack">← Groups</button><b>${esc(og.name)}</b></div>
         <p class="hint" style="margin:0">${mem.map(m => esc(nickOf(m.user_id)) + (m.status === 'pending' ? ' (invited)' : '')).join(', ')}</p>
         <div class="stack" id="llGH" style="gap:4px;max-height:240px;overflow:auto;padding:6px;border-radius:12px;background:var(--land)">${hist.length ? hist.map(m => { const me = m.from === S.user.id; return `<div style="align-self:${me ? 'flex-end' : 'flex-start'};max-width:85%;padding:6px 10px;border-radius:14px;background:${me ? 'var(--accent,#e5622b)' : 'var(--panel)'};color:${me ? '#fff' : 'inherit'};font-size:14px">${me ? '' : `<b style="font-size:12px">${esc(nickOf(m.from))}</b><br>`}${esc(MSGS[m.k] || '')}<span style="opacity:.6;font-size:11px;margin-left:6px">${ago(m.at)}</span></div>`; }).join('') : '<p class="hint" style="margin:0">No messages yet.</p>'}</div>
+        ${pollBoxHtml()}
         <div class="btnrow" style="gap:4px">${MSG_GROUPS.map(([g], i) => `<button class="btn${(S.mg || 0) === i ? ' primary' : ''}" type="button" data-gmg="${i}" style="padding:4px 10px;font-size:13px">${g}</button>`).join('')}</div>
         <div class="btnrow" style="gap:4px">${MSG_GROUPS[S.mg || 0][1].filter(i => i !== 3).map(i => `<button class="btn" type="button" data-gmsg="${i}" style="padding:6px 10px;font-size:13px">${esc(MSGS[i])}</button>`).join('')}</div>
         ${mem.length < 8 && fr.some(f => !inGroup.has(f.id)) ? `<div class="btnrow"><select id="llGInv" style="${inp}">${fr.filter(f => !inGroup.has(f.id)).map(f => `<option value="${esc(f.id)}">${esc(f.nickname)}</option>`).join('')}</select><button class="btn" type="button" id="llGInvB">Invite</button></div>` : ''}
@@ -505,6 +604,7 @@
     box.querySelectorAll('[data-gmg]').forEach(b => b.onclick = () => { S.mg = +b.dataset.gmg; drawGroups(); });
     box.querySelectorAll('[data-gmsg]').forEach(b => guard(b, () => sendGroup(S.openG, +b.dataset.gmsg)));
     const hh = q('#llGH'); if (hh) hh.scrollTop = hh.scrollHeight;
+    if (og) wirePollBox(box, {group: og.id});
     guard(q('#llGInvB'), async () => { const uid = q('#llGInv').value; const {error} = await sb.from('group_members').insert({group_id: S.openG, user_id: uid, status: 'pending', invited_by: S.user.id}); if (error) { toast('Could not invite'); return; } (H.ok || H.toast)('Invite sent to ' + nickOf(uid)); await loadGroups(); drawGroups(); });
     guard(q('#llGLeave'), async () => { const b = q('#llGLeave'); if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Tap again to leave'; return; } await sb.from('group_members').delete().eq('group_id', S.openG).eq('user_id', S.user.id); S.openG = null; await loadGroups(); drawGroups(); });
     guard(q('#llGMake'), async () => {
@@ -525,7 +625,9 @@
     const f = S.friends || {incoming: [], friends: []};
     let h = '';
     const ib = S.inbox.slice(0, 6);
-    if (ib.length) { h += `<div class="small">Messages${unread() ? ' (' + unread() + ' new)' : ''}</div><div class="stack" style="gap:4px">` + ib.map(m => `<div class="btnrow" style="align-items:center;gap:6px;${m.read ? 'opacity:.75' : ''}"><span class="small">${m.out ? 'You → ' + esc(m.nick) : '<b>' + esc(m.nick) + '</b>'}:</span><span>${esc(MSGS[m.k] || '')}</span>${m.room ? `<span class="tag">Room <b>${esc(m.room)}</b></span><button class="btn" type="button" data-room="${esc(m.room)}">Copy</button>` : ''}<span class="hint" style="margin:0">${ago(m.at)}</span>${!m.out ? `<button class="btn" type="button" data-reply="${esc(m.from)}">Reply</button>` : ''}</div>`).join('') + `</div><button class="btn" type="button" id="llClrIn" style="align-self:flex-start">Clear messages</button>`; }
+    if (ib.length) { h += `<div class="small">Messages${unread() ? ' (' + unread() + ' new)' : ''}</div><div class="stack" style="gap:4px">` + ib.map(m => `<div class="btnrow" style="align-items:center;gap:6px;${m.read ? 'opacity:.75' : ''}"><span class="small">${m.out ? 'You → ' + esc(m.nick) : '<b>' + esc(m.nick) + '</b>'}:</span><span>${esc(msgText(m))}</span>${m.room ? `<span class="tag">Room <b>${esc(m.room)}</b></span>${m.out ? '' : `<button class="btn" type="button" data-room="${esc(m.room)}" data-k="${esc(m.k)}">Join</button>`}` : ''}<span class="hint" style="margin:0">${ago(m.at)}</span>${!m.out ? `<button class="btn" type="button" data-reply="${esc(m.from)}">Reply</button>` : ''}</div>`).join('') + `</div><button class="btn" type="button" id="llClrIn" style="align-self:flex-start">Clear messages</button>`; }
+    const offers = loadOffers().map((o, i) => ({o, i, fr: f.friends.find(x => x.id === o.from)})).filter(x => x.fr);
+    if (offers.length) h += '<div class="small">Challenge finished</div>' + offers.map(({o, i, fr}) => `<div class="btnrow" style="align-items:center"><span>🏆 You got ${esc(o.score)} in ${esc(cityName(o.city))}</span><button class="btn primary" type="button" data-offer="${i}">Tell ${esc(fr.nickname)} "I got ${esc(o.score)}!"</button><button class="btn" type="button" data-offerx="${i}">Dismiss</button></div>`).join('');
     h += `<div class="btnrow" style="align-items:center;justify-content:space-between"><div class="small">Friend requests${f.incoming.length ? ' (' + f.incoming.length + ')' : ''}</div><button class="btn" id="llRefFr" type="button">Refresh</button></div>`;
     h += f.incoming.length ? f.incoming.map(p => `<div class="btnrow" style="align-items:center"><span class="tag">${esc(p.nickname)}</span><button class="btn primary" data-acc="${esc(p.id)}">Accept</button><button class="btn" data-dec="${esc(p.id)}">Decline</button></div>`).join('') : '<p class="hint">No new requests.</p>';
     if (f.sent && f.sent.length) h += `<div class="small">Sent requests (waiting)</div>` + f.sent.map(p => `<div class="btnrow" style="align-items:center"><span class="tag">${esc(p.nickname)}</span><button class="btn" type="button" data-cancel="${esc(p.id)}">Cancel</button></div>`).join('');
@@ -534,18 +636,22 @@
     const fl = f.friends.filter(p => !qf || p.nickname.toLowerCase().includes(qf)).slice().sort((a, b) => (S.on[b.id] ? 1 : 0) - (S.on[a.id] ? 1 : 0) || a.nickname.localeCompare(b.nickname));
     const nOn = fl.filter(p => S.on[p.id]).length;
     h += fl.length ? `<div class="small">Your friends (${f.friends.length}) · ${nOn} online</div><div class="stack" style="gap:6px">` + fl.map(p => { const x = prof(S.pf && S.pf[p.id]), d = statusDot(p.id);
-      return `<button class="btn" type="button" data-fp="${esc(p.id)}" style="display:flex;align-items:center;gap:10px;justify-content:flex-start;text-align:left;width:100%"><span style="position:relative;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:18px;background:${x.color};flex:none">${x.avatar}<i style="position:absolute;right:-2px;bottom:-2px;width:11px;height:11px;border-radius:50%;background:${d.c};border:2px solid var(--panel)"></i></span><span style="display:flex;flex-direction:column"><b>${esc(p.nickname)}</b><span class="hint" style="margin:0">${d.t}</span></span></button>` + (S.openF === p.id ? '<div class="llFp" style="padding:10px 12px;border:1px solid var(--panel-line);border-radius:14px"><p class="hint">Loading profile...</p></div>' : ''); }).join('') + '</div>' : '<p class="hint">No friends yet. Share your friend code.</p>';
+      return `<button class="btn" type="button" data-fp="${esc(p.id)}" style="display:flex;align-items:center;gap:10px;justify-content:flex-start;text-align:left;width:100%"><span style="position:relative;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:18px;background:${x.color};flex:none">${x.avatar}<i style="position:absolute;right:-2px;bottom:-2px;width:11px;height:11px;border-radius:50%;background:${d.c};border:2px solid var(--panel)"></i></span><span style="display:flex;flex-direction:column"><b>${esc(p.nickname)}</b><span class="hint" style="margin:0">${esc(d.t)}${statusOf(S.pf && S.pf[p.id]) ? ' · ' + esc(statusOf(S.pf[p.id])) : ''}</span></span></button>` + (S.openF === p.id ? '<div class="llFp" style="padding:10px 12px;border:1px solid var(--panel-line);border-radius:14px"><p class="hint">Loading profile...</p></div>' : ''); }).join('') + '</div>' : '<p class="hint">No friends yet. Share your friend code.</p>';
+    if (S.blocked && S.blocked.length) h += '<div class="small">Blocked players</div>' + S.blocked.map(p => `<div class="btnrow" style="align-items:center"><span class="tag">${esc(p.nickname)}</span><button class="btn" type="button" data-unblock="${esc(p.id)}">Unblock</button></div>`).join('');
     h += `<label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="llGhost"${ghost() ? ' checked' : ''}> Appear offline to others</label>`;
     box.innerHTML = h;
     const fq = box.querySelector('#llFq'); if (fq) { fq.oninput = () => { S.fq = fq.value; const pos = fq.selectionStart; drawFriends(card); const n = box.querySelector('#llFq'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (e) {} } }; }
     box.querySelectorAll('[data-cancel]').forEach(b => guard(b, async () => { const {error} = await sb.from('friends').delete().eq('a', S.user.id).eq('b', b.dataset.cancel); if (error) { toast('Could not cancel'); return; } await loadFriends(); drawFriends(card); }));
-    const gh = box.querySelector('#llGhost'); if (gh) gh.onchange = () => { try { localStorage.setItem('ll.ghost', gh.checked ? '1' : '0'); } catch (e) {} try { if (S.pres) S.pres.track({st: myStatus(), ghost: gh.checked}); } catch (e) {} };
-    box.querySelectorAll('[data-fp]').forEach(b => b.onclick = () => { S.openF = S.openF === b.dataset.fp ? null : b.dataset.fp; drawFriends(card); });
+    const gh = box.querySelector('#llGhost'); if (gh) gh.onchange = () => { try { localStorage.setItem('ll.ghost', gh.checked ? '1' : '0'); } catch (e) {} try { if (S.pres) S.pres.track(myPresence()); } catch (e) {} };
+    box.querySelectorAll('[data-fp]').forEach(b => b.onclick = () => { S.openF = S.openF === b.dataset.fp ? null : b.dataset.fp; if (S.openF) { S.histLoaded = S.histLoaded || {}; S.histLoaded[S.openF] = false; S.rxOpen = null; } drawFriends(card); });
     if (S.openF) showFriend(box.querySelector('.llFp'), S.openF, card);
-    box.querySelectorAll('[data-room]').forEach(b => b.onclick = () => { const t = b.dataset.room; try { navigator.clipboard.writeText(t).then(() => (H.ok || H.toast)('Room code copied: ' + t + '. Paste it in Live duel → Join.'), () => H.toast('Room code: ' + t, 4000)); } catch (e) { H.toast('Room code: ' + t, 4000); } });
+    box.querySelectorAll('[data-room]').forEach(b => b.onclick = () => copyRoom(b.dataset.room, b.dataset.k));
+    box.querySelectorAll('[data-offer]').forEach(b => guard(b, async () => { const o = loadOffers()[+b.dataset.offer]; if (!o) return; S.lastOk = 0; await sendMsg(o.from, 35, {city: o.city, seed: o.seed, score: o.score}); if (S.lastOk) saveOffers(loadOffers().filter(x => !(x.from === o.from && x.city === o.city && x.seed === o.seed))); drawFriends(card); }));
+    box.querySelectorAll('[data-offerx]').forEach(b => b.onclick = () => { const o = loadOffers()[+b.dataset.offerx]; if (o) saveOffers(loadOffers().filter(x => !(x.from === o.from && x.city === o.city && x.seed === o.seed))); drawFriends(card); });
+    box.querySelectorAll('[data-unblock]').forEach(b => guard(b, async () => { const {error} = await sb.from('blocks').delete().eq('blocker', S.user.id).eq('blocked', b.dataset.unblock); if (error) { toast('Could not unblock'); return; } (H.ok || H.toast)('Unblocked'); await loadFriends(); drawFriends(card); }));
     box.querySelectorAll('[data-reply]').forEach(b => b.onclick = () => { S.openF = b.dataset.reply; drawFriends(card); });
-    const ci = box.querySelector('#llClrIn'); if (ci) ci.onclick = () => { S.inbox = []; saveInbox(S.inbox); markDot(); drawFriends(card); };
-    if (unread()) { setTimeout(() => { for (const m of S.inbox) m.read = true; saveInbox(S.inbox); markDot(); }, 1500); }
+    const ci = box.querySelector('#llClrIn'); if (ci) ci.onclick = () => { S.inbox = []; saveInbox(S.inbox); markDot(); markAllRead(); drawFriends(card); };
+    if (unread()) { setTimeout(() => { for (const m of S.inbox) m.read = true; saveInbox(S.inbox); markDot(); markAllRead(); }, 1500); }
     const rf = box.querySelector('#llRefFr'); if (rf) guard(rf, async () => { await loadFriends(); drawFriends(card); });
     box.querySelectorAll('[data-dec]').forEach(b => guard(b, async () => {
       const {error} = await sb.from('friends').delete().eq('a', b.dataset.dec).eq('b', S.user.id);
@@ -559,10 +665,156 @@
       S.cache = {}; await loadFriends(); drawFriends(card);
     }));
   }
+  // ---------- challenge cards ----------
+  const loadOffers = () => { const a = lsGet('ll.chOffer', []); return Array.isArray(a) ? a.filter(o => o && typeof o.from === 'string' && okCard(o.city, o.seed, o.score)).slice(0, 5) : []; };
+  const saveOffers = a => lsSet('ll.chOffer', a.slice(0, 5));
+  H.on('gameover', d => {
+    try {
+      if (!d || d.practice || d.custom || d.live || d.kind !== 'normal') return;
+      const lr = H.lastRun && H.lastRun(); if (!lr || lr.over !== true || lr.kind !== 'classic' || lr.cityId !== d.city) return;
+      const c = okCard(lr.cityId, lr.seed | 0, Math.min(100000, Math.max(0, lr.score | 0))); if (!c) return;
+      const map = lsGet('ll.cbest', {}), old = map[c.city], now = Date.now();
+      if (!old || now - old.at > 7 * 86400000 || c.score >= old.score) map[c.city] = {seed: c.seed, score: c.score, week: lr.week | 0, at: now};
+      const keys = Object.keys(map).sort((a, b) => map[b].at - map[a].at); for (const k of keys.slice(12)) delete map[k];
+      lsSet('ll.cbest', map);
+      const pend = lsGet('ll.chPend', []), hit = Array.isArray(pend) && pend.find(x => x && x.city === c.city && x.seed === c.seed);
+      if (hit && typeof hit.from === 'string') {
+        saveOffers([{from: hit.from, city: c.city, seed: c.seed, score: c.score, at: now}, ...loadOffers().filter(o => !(o.from === hit.from && o.city === c.city && o.seed === c.seed))]);
+        lsSet('ll.chPend', pend.filter(x => x !== hit && !(x && x.city === c.city && x.seed === c.seed)));
+        (H.ok || H.toast)('You finished the challenge with ' + c.score + '! Open Online → Friends to reply.', 5000);
+      }
+    } catch (e) {}
+  });
+  function challengeOpts() {
+    const opts = [], lr = (() => { try { return H.lastRun && H.lastRun(); } catch (e) { return null; } })();
+    if (lr && lr.over === true && lr.kind === 'classic') { const c = okCard(lr.cityId, lr.seed | 0, Math.min(100000, Math.max(0, lr.score | 0))); if (c) opts.push(Object.assign({last: true}, c)); }
+    const map = lsGet('ll.cbest', {});
+    for (const city of Object.keys(map)) { const e = map[city]; if (!e || Date.now() - e.at > 7 * 86400000) continue; const c = okCard(city, e.seed | 0, e.score | 0); if (c && !opts.some(o => o.city === c.city && o.seed === c.seed)) opts.push(c); }
+    return opts.slice(0, 8);
+  }
+  function challengeHtml() {
+    const o = challengeOpts();
+    return `<div class="small">Challenge</div><div class="btnrow" style="gap:4px">${o.length ? `<select id="llChSel" style="${inp}">${o.map((x, i) => `<option value="${i}">${x.last ? 'Last run: ' : ''}${esc(cityName(x.city))} ${esc(x.score)}</option>`).join('')}</select>` : ''}<button class="btn" type="button" id="llChBtn">Challenge</button></div>${o.length ? '' : '<p class="hint" style="margin:0">Finish a classic game in a city, then send it as a challenge.</p>'}`;
+  }
+
+  // ---------- polls (templates only) ----------
+  const POLLQ = ['Which city should we play?', 'Classic or Plus?', 'Duel or co-op?', 'Survival or Sprint?', 'Play now or later?'];
+  const POLLO = [null, ['classic', 'plus'], ['duel', 'coop'], ['survival', 'sprint'], ['now', 'later']];
+  const OPTLAB = {classic: 'Classic', plus: 'Plus', duel: 'Duel', coop: 'Co-op', survival: 'Survival', sprint: 'Sprint', now: 'Play now', later: 'Play later'};
+  const optLabel = (t, o) => t === 0 ? cityName(o) : (OPTLAB[o] || '?');
+  const validPollOpts = (t, a) => Number.isInteger(t) && Array.isArray(a) && (t === 0 ? a.length >= 2 && a.length <= 4 && a.every(x => typeof x === 'string' && CITY_RE.test(x)) && new Set(a).size === a.length : t >= 1 && t <= 4 && a.length === POLLO[t].length && a.every((x, i) => x === POLLO[t][i]));
+  S.pollc = {};
+  const pollKey = sc => sc.group != null ? 'g' + sc.group : 'f' + sc.friend;
+  async function loadPolls(sc) {
+    const me = S.user.id;
+    let q = sb.from('polls').select('id,from_id,template,options,created_at');
+    q = sc.group != null ? q.eq('group_id', sc.group) : q.or(`and(from_id.eq.${me},to_id.eq.${sc.friend}),and(from_id.eq.${sc.friend},to_id.eq.${me})`);
+    const r = await q.order('created_at', {ascending: false}).limit(3);
+    if (r.error) return null;
+    const polls = (r.data || []).filter(p => goodId(p.id) && validPollOpts(p.template, p.options)).map(p => ({id: goodId(p.id), from: p.from_id, template: p.template, options: p.options, at: Date.parse(p.created_at), counts: p.options.map(() => 0), mine: null}));
+    if (polls.length) {
+      const v = await sb.from('poll_votes').select('poll_id,user_id,choice').in('poll_id', polls.map(p => p.id));
+      for (const x of (v && v.data) || []) { const p = polls.find(p => p.id === goodId(x.poll_id)); if (p && Number.isInteger(x.choice) && x.choice >= 0 && x.choice < p.options.length) { p.counts[x.choice]++; if (x.user_id === me) p.mine = x.choice; } }
+    }
+    return polls;
+  }
+  function pollsHtml(polls) {
+    if (!polls || !polls.length) return '<p class="hint" style="margin:0">No polls yet.</p>';
+    return polls.map(p => `<div class="stack" style="gap:4px;padding:6px 8px;border-radius:12px;background:var(--land)"><div class="small"><b>${esc(POLLQ[p.template])}</b> <span class="hint" style="margin:0">${esc(p.from === S.user.id ? 'You' : nickOf(p.from))} · ${ago(p.at)}</span></div><div class="btnrow" style="gap:4px">${p.options.map((o, i) => `<button class="btn" type="button" data-pv="${esc(p.id)}" data-pch="${i}" style="padding:4px 10px;font-size:13px${p.mine === i ? ';outline:2px solid var(--ink)' : ''}">${esc(optLabel(p.template, o))} · ${esc(p.counts[i])}</button>`).join('')}</div></div>`).join('');
+  }
+  function pollBoxHtml() {
+    const cs = (() => { try { return (H.cities() || []).filter(c => c.unlocked && CITY_RE.test(c.id)); } catch (e) { return []; } })();
+    return `<details class="llPoll"><summary class="small"><b>Polls</b></summary><div class="stack" style="margin-top:6px;gap:6px"><div class="llPollList stack" style="gap:4px"><p class="hint" style="margin:0">Loading polls...</p></div>
+      <select class="llPT" style="${inp}">${POLLQ.map((q, i) => `<option value="${i}">${esc(q)}</option>`).join('')}</select>
+      <div class="llPC stack" style="gap:2px"><div class="hint" style="margin:0">Pick 2 to 4 cities</div>${cs.map(c => `<label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-pcity="${esc(c.id)}"> ${esc(c.name)}</label>`).join('')}</div>
+      <button class="btn" type="button" data-psend="1">Send poll</button></div></details>`;
+  }
+  function wirePollBox(root, sc) {
+    const box = root.querySelector('.llPoll'); if (!box) return;
+    const list = box.querySelector('.llPollList'), key = pollKey(sc);
+    const draw = polls => {
+      if (!polls) { list.innerHTML = '<p class="hint" style="margin:0">Polls need the new database update.</p>'; const ps = box.querySelector('[data-psend]'); if (ps) ps.disabled = true; return; }
+      list.innerHTML = pollsHtml(polls);
+      list.querySelectorAll('[data-pv]').forEach(b => guard(b, async () => {
+        const {error} = await sb.from('poll_votes').upsert({poll_id: goodId(b.dataset.pv), user_id: S.user.id, choice: +b.dataset.pch}, {onConflict: 'poll_id,user_id'});
+        if (error) { toast(/limit/i.test(error.message || '') ? 'Slow down a little' : 'Could not vote'); return; }
+        await refresh(true);
+      }));
+    };
+    const refresh = async force => {
+      const c = S.pollc[key]; if (c) draw(c.polls);
+      if (!force && c && Date.now() - c.t < 15000) return;
+      const polls = await loadPolls(sc).catch(() => null); S.pollc[key] = {t: Date.now(), polls}; if (list.isConnected !== false) draw(polls);
+    };
+    const pt = box.querySelector('.llPT'), pc = box.querySelector('.llPC');
+    const showC = () => { if (pc && pc.style) pc.style.display = +pt.value === 0 ? '' : 'none'; }; if (pt) { pt.onchange = showC; showC(); }
+    const sendB = box.querySelector('[data-psend]');
+    if (sendB) guard(sendB, async () => {
+      const t = +pt.value; if (!Number.isInteger(t) || !POLLQ[t]) return;
+      let opts;
+      if (t === 0) { opts = [...box.querySelectorAll('[data-pcity]')].filter(x => x.checked).map(x => x.dataset.pcity).filter(x => CITY_RE.test(x)); if (opts.length < 2 || opts.length > 4) { toast('Pick 2 to 4 cities'); return; } }
+      else opts = POLLO[t].slice();
+      const row = {template: t, options: opts}; if (sc.group != null) row.group_id = sc.group; else row.to_id = sc.friend;
+      const {error} = await sb.from('polls').insert(row);
+      if (error) { toast(/limit/i.test(error.message || '') ? 'Poll limit reached. Try again later.' : /relation|exist|schema/i.test(error.message || '') ? 'Polls need the new database update' : 'Could not send the poll'); return; }
+      (H.ok || H.toast)('Poll sent'); await refresh(true);
+    });
+    box.addEventListener && box.addEventListener('toggle', () => { if (box.open) refresh(true); });
+    refresh(false);
+  }
+
+  // ---------- status picker ----------
+  const STATUSES = ['Building!', 'Taking a break', 'Want a duel?', 'Want co-op?', 'Doing the daily', 'Busy'];
+  const statusOf = p => p && Number.isInteger(p.status) && STATUSES[p.status] ? STATUSES[p.status] : '';
+
+  // ---------- block ----------
+  async function doBlock(btn, id, card) {
+    if (btn.dataset.sure !== '1') { btn.dataset.sure = '1'; btn.textContent = 'Tap again to block'; return; }
+    if (!S.user || btn.dataset.busy) return; btn.dataset.busy = '1';
+    const me = S.user.id, nm = (S.friends && S.friends.friends.find(f => f.id === id) || {}).nickname || 'player';
+    const ins = await sb.from('blocks').insert({blocked: id});
+    if (ins.error && !isTaken(ins.error)) { btn.dataset.busy = ''; toast(/relation|exist|schema/i.test(ins.error.message || '') ? 'Blocking needs the new database update' : 'Could not block'); return; }
+    await sb.from('friends').delete().eq('a', me).eq('b', id); await sb.from('friends').delete().eq('a', id).eq('b', me);
+    try { await sb.from('messages').delete().eq('from_id', me).eq('to_id', id); await sb.from('messages').delete().eq('from_id', id).eq('to_id', me); } catch (e) {}
+    delete S.hist[id]; S.inbox = S.inbox.filter(m => m.from !== id); saveInbox(S.inbox); S.openF = null; S.cache = {};
+    await loadFriends(); markDot(); drawFriends(card); (H.ok || H.toast)('Blocked ' + nm + '. You can unblock in the Friends list.');
+  }
+
+  const roomWhere = k => k === 36 ? 'Online → Co-op party → Join' : 'Online → Live duel → Join';
   function histHtml(id) {
-    const h = S.hist[id] || S.inbox.filter(m => m.from === id).slice().reverse().map(m => ({mine: !!m.out, k: m.k, room: m.room, at: m.at}));
+    const h = S.hist[id] || S.inbox.filter(m => m.from === id).slice().reverse().map(m => ({mine: !!m.out, k: m.k, room: m.room, card: m.card, at: m.at}));
     if (!h.length) return '<p class="hint" style="margin:0">No messages yet. Say hi!</p>';
-    return h.map(m => `<div style="align-self:${m.mine ? 'flex-end' : 'flex-start'};max-width:85%;padding:6px 10px;border-radius:14px;background:${m.mine ? 'var(--accent,#e5622b)' : 'var(--panel)'};color:${m.mine ? '#fff' : 'inherit'};font-size:14px">${esc(MSGS[m.k] || '')}${m.room ? ' <b>' + esc(m.room) + '</b>' : ''}<span style="opacity:.6;font-size:11px;margin-left:6px">${ago(m.at)}</span></div>`).join('');
+    const me = S.user ? S.user.id : '';
+    return h.map(m => {
+      const mid = goodId(m.id), rx = mid && S.rx[mid] ? S.rx[mid] : null;
+      const cnt = RX.map(() => 0); let mine = -1;
+      if (rx) for (const u of Object.keys(rx)) { cnt[rx[u]]++; if (u === me) mine = rx[u]; }
+      const line = cnt.some(n => n) ? `<div class="btnrow" style="gap:3px">${cnt.map((n, i) => n ? `<span class="tag" style="padding:1px 6px;font-size:12px;${i === mine ? 'outline:2px solid var(--ink)' : ''}">${RX[i]} ${n}</span>` : '').join('')}</div>` : '';
+      const pick = mid && S.rxOpen === mid ? `<div class="btnrow" style="gap:3px">${RX.map((e, i) => `<button class="btn" type="button" data-rxm="${esc(mid)}" data-rxr="${i}" style="padding:2px 8px;font-size:16px${i === mine ? ';outline:2px solid var(--ink)' : ''}">${e}</button>`).join('')}</div>` : '';
+      const play = m.card && m.k === 34 && !m.mine ? `<button class="btn primary" type="button" data-play="${esc(m.card.city)}" data-seed="${esc(m.card.seed)}" data-score="${esc(m.card.score)}" style="padding:4px 10px;font-size:13px">Play</button>` : '';
+      const join = m.room && !m.mine ? `<button class="btn" type="button" data-room="${esc(m.room)}" data-k="${esc(m.k)}" style="padding:4px 10px;font-size:13px">Join</button>` : '';
+      return `<div style="align-self:${m.mine ? 'flex-end' : 'flex-start'};max-width:85%;display:flex;flex-direction:column;align-items:${m.mine ? 'flex-end' : 'flex-start'};gap:3px"><div${mid ? ` data-mid="${esc(mid)}" role="button" tabindex="0"` : ''} style="padding:6px 10px;border-radius:14px;background:${m.mine ? 'var(--accent,#e5622b)' : 'var(--panel)'};color:${m.mine ? '#fff' : 'inherit'};font-size:14px;${mid ? 'cursor:pointer' : ''}">${esc(msgText(m))}${m.room ? ' <b>' + esc(m.room) + '</b>' : ''}<span style="opacity:.6;font-size:11px;margin-left:6px">${ago(m.at)}</span></div>${line}${pick}${play || join ? `<div class="btnrow" style="gap:4px">${play}${join}</div>` : ''}</div>`;
+    }).join('');
+  }
+  function copyRoom(code, k) {
+    if (!ROOM_RE.test(code)) return; const where = roomWhere(+k);
+    try { navigator.clipboard.writeText(code).then(() => (H.ok || H.toast)('Room code copied: ' + code + '. Paste it in ' + where + '.'), () => H.toast('Room code: ' + code + '. Paste it in ' + where + '.', 4000)); } catch (e) { H.toast('Room code: ' + code, 4000); }
+  }
+  function playCard(b) {
+    const city = b.dataset.play, seed = +b.dataset.seed, score = +b.dataset.score;
+    if (!okCard(city, seed, score)) return;
+    let ok = false; try { ok = H.startChallenge ? H.startChallenge({cityId: city, seed}) : false; } catch (e) {}
+    if (!ok) { toast('Unlock that city first'); return; }
+    const from = b.dataset.from || S.openF; const pend = lsGet('ll.chPend', []).filter(x => !(x.city === city && x.seed === seed));
+    pend.unshift({from, city, seed, score, at: Date.now()}); lsSet('ll.chPend', pend.slice(0, 8));
+  }
+  function paintHist(el, id) {
+    const h2 = el.querySelector('.llHist'); if (!h2) return;
+    h2.innerHTML = histHtml(id); h2.scrollTop = h2.scrollHeight;
+    h2.querySelectorAll('[data-mid]').forEach(b => b.onclick = () => { const m = goodId(b.dataset.mid); S.rxOpen = S.rxOpen === m ? null : m; paintHist(el, id); });
+    h2.querySelectorAll('[data-rxm]').forEach(b => guard(b, async () => { S.rxOpen = null; await react(goodId(b.dataset.rxm), +b.dataset.rxr); paintHist(el, id); }));
+    h2.querySelectorAll('[data-play]').forEach(b => { b.dataset.from = id; b.onclick = () => playCard(b); });
+    h2.querySelectorAll('[data-room]').forEach(b => b.onclick = () => copyRoom(b.dataset.room, b.dataset.k));
   }
   async function showFriend(el, id, card) {
     if (!el) return;
@@ -572,17 +824,26 @@
     if (!el.isConnected) return;
     const day = t => { try { return new Date(t).toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'}); } catch (e) { return ''; } };
     const city = c => String(c).charAt(0).toUpperCase() + String(c).slice(1);
-    el.innerHTML = `<div class="stack" style="gap:6px"><div class="btnrow" style="align-items:center"><span style="width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-size:28px;background:${x.color}">${x.avatar}</span><span style="display:flex;flex-direction:column"><b style="color:${x.color};font-size:17px">${esc(f.nickname || pf.nickname || 'Player')}</b>${x.motto ? `<span class="hint" style="margin:0">“${esc(x.motto)}”</span>` : ''}<span class="small" style="color:${d.c}">● ${d.t}</span></span></div>
+    el.innerHTML = `<div class="stack" style="gap:6px"><div class="btnrow" style="align-items:center"><span style="width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-size:28px;background:${x.color}">${x.avatar}</span><span style="display:flex;flex-direction:column"><b style="color:${x.color};font-size:17px">${esc(f.nickname || pf.nickname || 'Player')}</b>${x.motto ? `<span class="hint" style="margin:0">“${esc(x.motto)}”</span>` : ''}<span class="small" style="color:${d.c}">● ${esc(d.t)}</span>${statusOf(pf) ? `<span class="small">${esc(statusOf(pf))}</span>` : ''}</span></div>
       ${best.length ? '<div class="small">Best scores</div><div class="btnrow">' + best.map(r => `<span class="tag">${esc(city(r.city))} <b>${esc(r.score)}</b></span>`).join('') + '</div>' : '<p class="hint">No online scores yet.</p>'}
       <p class="hint" style="margin:0">${f.since ? 'Friends since ' + esc(day(f.since)) : ''}${pf.created_at ? ' · playing since ' + esc(day(pf.created_at)) : ''}</p>
       <div class="small">Messages</div><div class="llHist stack" style="gap:4px;max-height:220px;overflow:auto;padding:6px;border-radius:12px;background:var(--land)">${histHtml(id)}</div>
       <div class="small">Send${d.on ? '' : ' (offline: they will see it next time they open the game)'}</div>
       <div class="btnrow" style="gap:4px">${MSG_GROUPS.map(([g], i) => `<button class="btn${(S.mg || 0) === i ? ' primary' : ''}" type="button" data-mg="${i}" style="padding:4px 10px;font-size:13px">${g}</button>`).join('')}</div>
       <div class="btnrow" style="gap:4px">${MSG_GROUPS[S.mg || 0][1].map(i => `<button class="btn" type="button" data-msg="${i}" style="padding:6px 10px;font-size:13px">${esc(MSGS[i])}</button>`).join('')}</div>
-      <div class="btnrow"><button class="btn" type="button" id="llRm">Remove friend</button></div></div>`;
+      <div class="small">Play together</div>
+      <div class="btnrow" style="gap:4px"><button class="btn" type="button" data-inv="3">Invite to duel</button><button class="btn" type="button" data-inv="36">Invite to co-op</button></div>
+      ${challengeHtml()}
+      ${pollBoxHtml()}
+      <div class="btnrow"><button class="btn" type="button" id="llRm">Remove friend</button><button class="btn" type="button" id="llBlk">Block</button></div></div>`;
     el.querySelectorAll('[data-msg]').forEach(b => guard(b, () => sendMsg(id, +b.dataset.msg)));
     el.querySelectorAll('[data-mg]').forEach(b => b.onclick = () => { S.mg = +b.dataset.mg; showFriend(el, id, card); });
-    const hb = el.querySelector('.llHist'); if (hb) { hb.scrollTop = hb.scrollHeight; S.histLoaded = S.histLoaded || {}; if (!S.histLoaded[id]) { S.histLoaded[id] = true; loadHist(id).then(r => { if (r && el.isConnected) { const h2 = el.querySelector('.llHist'); if (h2) { h2.innerHTML = histHtml(id); h2.scrollTop = h2.scrollHeight; } } }); } }
+    el.querySelectorAll('[data-inv]').forEach(b => guard(b, () => sendMsg(id, +b.dataset.inv)));
+    const cb = el.querySelector('#llChBtn'); if (cb) guard(cb, async () => { const o = challengeOpts(), sel = el.querySelector('#llChSel'); const c = o[sel ? +sel.value : 0]; if (!c) { toast('Finish a classic game first'); return; } await sendMsg(id, 34, c); });
+    wirePollBox(el, {friend: id});
+    S.histLoaded = S.histLoaded || {}; paintHist(el, id);
+    if (!S.histLoaded[id]) { S.histLoaded[id] = true; loadHist(id).then(r => { if (r && el.isConnected) paintHist(el, id); }); }
+    const bk = el.querySelector('#llBlk'); if (bk) bk.onclick = () => doBlock(bk, id, card);
     const rm = el.querySelector('#llRm'); if (rm) rm.onclick = async () => {
       if (rm.dataset.sure !== '1') { rm.dataset.sure = '1'; rm.textContent = 'Tap again to remove'; return; }
       const r1 = await sb.from('friends').delete().eq('a', S.user.id).eq('b', id); const r2 = await sb.from('friends').delete().eq('a', id).eq('b', S.user.id);
@@ -669,5 +930,5 @@
     H.addMenuSection('Profile and account', () => { try { return accountHtml(); } catch (e) { return OFFMSG; } }, () => {});
     H.addMenuSection('Leaderboards', () => { try { return lbHtml(); } catch (e) { return OFFMSG; } }, c => { try { wireLb(c); } catch (e) { console.error(e); } });
   } catch (e) {}
-  API._test = {mergeProgress, badName};
+  API._test = {mergeProgress, badName, S, esc, sendMsg, react, loadHist, histHtml, msgText, challengeOpts, challengeHtml, playCard, loadPolls, pollsHtml, pollBoxHtml, myPresence, statusDot, statusOf, loadFriends, drawFriends, doBlock, loadOffers, validPollOpts, fetchBoard, onlineHtml, friendsHtml, setSessionForTest: setSession};
 })();

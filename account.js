@@ -16,7 +16,13 @@ const sb = () => { const o = O(); return o && o.sb; };
 const user = () => { try { return O() && O().user && O().user(); } catch (e) { return null; } };
 const $ = id => document.getElementById(id);
 const ago = t => { const m = Math.round((Date.now() - Date.parse(t)) / 60000); return m < 2 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' days ago'; };
-const A = {status: null, code: null, codeUntil: 0, recovery: null, tab: 'code', busy: false, registered: false};
+const A = {status: null, code: null, codeUntil: 0, recovery: null, tab: 'code', busy: false, registered: false, myCode: null, recoveredAt: 0};
+// errors the server raises on purpose, in words a kid can follow
+const RPC_ERR = [[/register[ _]device/i, 'This device is not set up yet. Close and reopen Little Lanes, then try again.'], [/rate[ _]limit/i, 'Too many tries. Wait a while and try again.'], [/message[ _]limit/i, 'Message limit reached. Try again in a few minutes.'],
+  [/not[ _]allowed/i, 'That is not allowed.'], [/bad[ _]nickname/i, 'That nickname is not allowed. Please pick a different one.'], [/nickname[ _]taken/i, 'That nickname is taken.'], [/rename[ _]limit/i, 'You changed your nickname recently. Try again later.']];
+const rpcErr = e => { const m = typeof e === 'string' ? e : e && (e.message || e.error); if (typeof m !== 'string') return ''; for (const [re, t] of RPC_ERR) if (re.test(m)) return t; return ''; };
+const RECOVERY_WINDOW = 15 * 60000; // after a recovery-code sign-in the server lets you set a new password without the old one for 15 minutes
+const recentRecovery = () => { let t = A.recoveredAt || 0; try { t = Math.max(t, +localStorage.getItem('ll.recAt') || 0); } catch (e) {} return t && Date.now() - t < RECOVERY_WINDOW; };
 const ERR = {too_many: 'Too many tries. Wait a while and try again.', bad_code: "That code didn't work. Codes last 10 minutes and work once.", wrong: "That didn't match. Check the login ID and try again.",
   weak: 'Password needs 8+ characters and must not contain your nickname or login ID.', wrong_current: 'Your current password is wrong.', signed_out: 'Sign in again first.', failed: 'Something went wrong. Try again.'};
 
@@ -35,12 +41,13 @@ async function call(body) {
   if (!r.ok && !j.error) j.error = r.status === 404 ? 'not_set_up' : 'failed';
   return j;
 }
-const errText = e => e === 'offline' ? 'No connection. Try again.' : e === 'not_set_up' ? 'Sign-in is not set up on the server yet.' : ERR[e] || ERR.failed;
+const errText = e => e === 'offline' ? 'No connection. Try again.' : e === 'not_set_up' ? 'Sign-in is not set up on the server yet.' : ERR[e] || rpcErr(e) || ERR.failed;
 
 // ---------- this device: register, heartbeat, signed out remotely ----------
 async function localSignOut(msg) {
   try { await sb().auth.signOut({scope: 'local'}); } catch (e) {}
-  for (const k of ['ll.inbox', 'll.seenReq', 'll.xferShown', 'll.nickChg']) { try { localStorage.removeItem(k); } catch (e) {} }
+  A.myCode = null; A.recoveredAt = 0;
+  for (const k of ['ll.inbox', 'll.seenReq', 'll.xferShown', 'll.nickChg', 'll.recAt']) { try { localStorage.removeItem(k); } catch (e) {} }
   A.registered = false; A.status = null; closeOverlay();
   if (msg) bad(msg);
   try { H.menu(); } catch (e) {}
@@ -50,7 +57,7 @@ async function register() {
   const s = sb(); if (!s || !user() || A.busy) return; A.busy = true;
   try {
     const {data, error} = await s.rpc('register_device', {p_label: label()});
-    if (error) { if (/does not exist|function/i.test(error.message || '')) A.notReady = true; return; }
+    if (error) { if (/does not exist|function/i.test(error.message || '')) A.notReady = true; else if (rpcErr(error) && !A.errShown) { A.errShown = true; bad(rpcErr(error)); } return; }
     A.notReady = false;
     if (data && data.ok) {
       if (!A.registered) { A.registered = true; try { H.menu(); } catch (e) {} }
@@ -88,8 +95,12 @@ function showFull(list) {
 // ---------- signing in here ----------
 async function finishWithHash(token_hash) {
   const {error} = await sb().auth.verifyOtp({token_hash, type: 'magiclink'});
-  if (error) { bad(ERR.failed); return false; }
-  ok('Signed in!'); return true;
+  if (error) { bad(rpcErr(error) || ERR.failed); return false; }
+  ok('Signed in!'); welcome(); return true;
+}
+// say whose account this device now uses (the profile loads a moment after the session)
+async function welcome() {
+  try { for (let i = 0; i < 20; i++) { const p = O() && O().profile && O().profile(); if (p && p.nickname) { ok('You are signed in as ' + p.nickname + '.'); return; } await new Promise(r => setTimeout(r, 150)); } } catch (e) {}
 }
 async function pairSignIn(code) {
   code = String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -100,12 +111,16 @@ async function pairSignIn(code) {
   if (r.error) { bad(errText(r.error)); return; }
   await finishWithHash(r.token_hash);
 }
+// a #pair= link never signs in by itself (anyone can send you a link): it asks first
 function pairFromLink() {
   const m = /[#&]pair=([A-Za-z0-9-]{8,9})(?![A-Za-z0-9-])/.exec(location.hash || ''); if (!m) return;
   try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
-  if (user()) { ok('This device is already signed in. To use that code, sign out here first.'); return; }
-  A.prefill = m[1].replace(/-/g, ''); A.tab = 'code';
-  pairSignIn(A.prefill);
+  const code = m[1].replace(/-/g, ''); A.tab = 'code';
+  const ov = overlay(`<div><div class="small">Sign-in link</div><h2 style="margin:4px 0">Sign in to this account?</h2></div>
+    <p>This replaces this device's account${user() ? '. You are signed in on this device right now' : ''}. Only continue if you started this on your own other device.</p>
+    <div class="btnrow"><button class="btn" id="llPairCancel" type="button">Cancel</button><button class="btn primary" id="llPairGo" type="button">Sign in</button></div>`);
+  ov.querySelector('#llPairCancel').onclick = closeOverlay;
+  ov.querySelector('#llPairGo').onclick = async () => { const b = ov.querySelector('#llPairGo'); if (b.disabled) return; b.disabled = true; closeOverlay(); try { await pairSignIn(code); } catch (e) { bad(ERR.failed); } };
 }
 
 // ---------- QR: show and scan ----------
@@ -171,8 +186,8 @@ function signedInHtml() {
     ${A.code && codeLeft > 0 ? `<div class="stack" style="align-items:center;padding:12px;border-radius:14px;background:var(--land)"><canvas id="llQR" width="200" height="200" style="border-radius:8px"></canvas><b style="font-size:26px;letter-spacing:4px">${esc(A.code.slice(0, 4))}-${esc(A.code.slice(4))}</b><span class="hint" style="margin:0" id="llCodeT">Works once · ${Math.floor(codeLeft / 60)}:${String(codeLeft % 60).padStart(2, '0')} left</span><p class="hint" style="margin:0;text-align:center">⚠️ Never give this to anyone. It's like your house key. Only use it on your own device.</p><button class="btn" id="llCodeX">Cancel code</button></div>`
       : `<div class="btnrow"><button class="btn primary" id="llMkCode">Show sign-in code + QR</button></div>${devs.length >= 2 ? '<p class="hint" style="margin:0">You are on 2 devices already: the new one will ask which device to sign out.</p>' : ''}`}
     <details><summary class="small"><b>Password</b> ${st.has_password ? '· set' : '· not set'}</summary><form class="stack" id="llSetPw" style="margin-top:8px">
-      <p class="hint" style="margin:0">Your login ID is your friend code: <b>${esc((O().profile() || {}).friend_code || '')}</b>.</p>
-      ${st.has_password ? `<input id="llPwCur" type="password" maxlength="72" placeholder="Current password" autocomplete="current-password" style="${inp}">` : ''}
+      <p class="hint" style="margin:0">Your login ID is your friend code: <b>${esc(A.myCode || '')}</b>.</p>
+      ${st.has_password && recentRecovery() ? '<p class="hint" style="margin:0">You just signed in with a recovery code, so you do not need your current password to set a new one. This works for 15 minutes.</p>' : st.has_password ? `<input id="llPwCur" type="password" maxlength="72" placeholder="Current password" autocomplete="current-password" style="${inp}">` : ''}
       <input id="llPwNew" type="password" maxlength="72" placeholder="New password (8+ characters)" autocomplete="new-password" style="${inp}">
       <input id="llPwNew2" type="password" maxlength="72" placeholder="Type it again" autocomplete="new-password" style="${inp}">
       <button class="btn primary" type="submit">${st.has_password ? 'Change password' : 'Set password'}</button></form></details>
@@ -189,7 +204,13 @@ function html() {
   if (!sb()) return '<p class="hint">Online play needs an internet connection.</p>';
   return `<div id="llAcctBox">${user() ? signedInHtml() : signedOutHtml()}</div>`;
 }
-async function loadStatus() { const {data, error} = await sb().rpc('account_status'); if (error) { if (/does not exist|function/i.test(error.message || '')) A.notReady = true; return; } A.status = data; }
+async function loadStatus() {
+  const {data, error} = await sb().rpc('account_status'); if (error) { if (/does not exist|function/i.test(error.message || '')) A.notReady = true; return; } A.status = data;
+  // our own login ID (= friend code): the server hides codes in profiles, so ask for it; older servers still have it on the profile
+  A.myCode = null;
+  try { const r = await sb().rpc('my_friend_code'); if (r && !r.error && typeof r.data === 'string' && /^[A-Za-z0-9]{4,8}$/.test(r.data)) A.myCode = r.data.toUpperCase(); } catch (e) {}
+  if (!A.myCode) { try { const o = O(); if (o && o.myCode) A.myCode = String(o.myCode() || '') || null; if (!A.myCode) { const pf = o.profile && o.profile(); if (pf && typeof pf.friend_code === 'string') A.myCode = pf.friend_code; } } catch (e) {} }
+}
 function redraw() { const b = $('llAcctBox'); if (b) { b.innerHTML = user() ? signedInHtml() : signedOutHtml(); wire(); } }
 let codeT = null;
 function wire() {
@@ -204,27 +225,27 @@ function wire() {
     const {error} = await sb().auth.setSession({access_token: r.access_token, refresh_token: r.refresh_token}); if (error) bad(ERR.failed); else ok('Signed in!'); });
   form(q('#llRecF'), async () => { const login = q('#llLogin2').value.trim(), code = q('#llRec').value.trim(); if (!login || !code) { bad('Type your login ID and recovery code'); return; }
     const r = await call({action: 'recover', login, code}); if (r.error) { bad(errText(r.error)); return; }
-    if (await finishWithHash(r.token_hash)) ok('Signed in! Your recovery code is used up, so make a new one.'); });
+    if (await finishWithHash(r.token_hash)) { A.recoveredAt = Date.now(); try { localStorage.setItem('ll.recAt', String(A.recoveredAt)); } catch (e) {} ok('Signed in! Your recovery code is used up, so make a new one. You can set a new password without the old one for 15 minutes.'); } });
   if (!user()) return;
   if (!A.status && !A.notReady) { loadStatus().then(redraw); return; }
-  const ren = q('#llRen'); if (ren) ren.onchange = async () => { if (!ren.value) return; const {data} = await sb().rpc('rename_device', {p_name: ren.value}); if (data) { ok('Device renamed'); await loadStatus(); redraw(); } };
+  const ren = q('#llRen'); if (ren) ren.onchange = async () => { if (!ren.value) return; const {data, error} = await sb().rpc('rename_device', {p_name: ren.value}); if (data) { ok('Device renamed'); await loadStatus(); redraw(); } else if (error) bad(rpcErr(error) || ERR.failed); };
   document.querySelectorAll('#llAcctBox [data-kick2]').forEach(b => busy(b, async () => { if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Tap again'; return; } const {data} = await sb().rpc('kick_device', {p_session: b.dataset.kick2}); if (data) ok('That device is signed out'); else bad('Could not sign it out'); await loadStatus(); redraw(); }));
   busy(q('#llKickAll'), async () => { const b = q('#llKickAll'); if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Tap again to sign out all other devices'; return; } await sb().rpc('kick_others'); ok('All other devices are signed out'); await loadStatus(); redraw(); });
-  busy(q('#llMkCode'), async () => { const {data, error} = await sb().rpc('make_pair_code'); if (error || !data) { bad(/rate/i.test((error && error.message) || '') ? 'Too many codes. Try again later.' : ERR.failed); return; }
+  busy(q('#llMkCode'), async () => { const {data, error} = await sb().rpc('make_pair_code'); if (error || !data) { bad(/rate/i.test((error && error.message) || '') ? 'Too many codes. Try again later.' : rpcErr(error) || ERR.failed); return; }
     A.code = data; A.codeUntil = Date.now() + 600000; redraw();
     clearInterval(codeT); codeT = setInterval(() => { const t = $('llCodeT'); const left = Math.max(0, Math.ceil((A.codeUntil - Date.now()) / 1000)); if (!left) { clearInterval(codeT); A.code = null; redraw(); return; } if (t) t.textContent = 'Works once · ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') + ' left'; }, 1000); });
   const qr = q('#llQR'); if (qr && A.code) drawQR(qr, PAIR_URL + A.code);
   busy(q('#llCodeX'), async () => { await sb().rpc('cancel_pair_code'); A.code = null; clearInterval(codeT); redraw(); });
   form(q('#llSetPw'), async () => { const cur = q('#llPwCur') ? q('#llPwCur').value : '', a = q('#llPwNew').value, b = q('#llPwNew2').value;
     if (a !== b) { bad("The two passwords don't match"); return; } if (a.length < 8) { bad(ERR.weak); return; }
-    const r = await call({action: 'set_password', password: a, current: cur}); if (r.error) { bad(errText(r.error)); return; }
+    const r = await call({action: 'set_password', password: a, current: q('#llPwCur') ? cur : ''}); if (r.error) { bad(errText(r.error)); return; }
     ok('Password saved. Sign in elsewhere with login ID ' + (r.login || '') + ' and this password.'); await loadStatus(); redraw(); });
   busy(q('#llMkRec'), async () => { if (A.status.has_recovery) { const b = q('#llMkRec'); if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Tap again: the old code stops working'; return; } }
-    const {data, error} = await sb().rpc('make_recovery_code'); if (error || !data) { bad(ERR.failed); return; } A.recovery = data; await loadStatus(); redraw(); });
+    const {data, error} = await sb().rpc('make_recovery_code'); if (error || !data) { bad(rpcErr(error) || ERR.failed); return; } A.recovery = data; await loadStatus(); redraw(); });
   busy(q('#llRecCopy'), async () => { try { await navigator.clipboard.writeText(A.recovery); ok('Recovery code copied. Paste it somewhere safe, not in a chat.'); } catch (e) { bad('Select the code and copy it'); } });
   busy(q('#llRecDone'), async () => { A.recovery = null; redraw(); });
   form(q('#llParF'), async () => { const e = q('#llParIn').value.trim(); if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(e)) { bad('That email does not look right'); return; }
-    const {error} = await sb().rpc('set_parent_email', {p_email: e}); if (error) { bad(/rate/i.test(error.message || '') ? 'Email can be changed 3 times a day.' : 'Could not save the email'); return; } ok('Parent email saved'); await loadStatus(); redraw(); });
+    const {error} = await sb().rpc('set_parent_email', {p_email: e}); if (error) { bad(/rate/i.test(error.message || '') ? 'Email can be changed 3 times a day.' : rpcErr(error) || 'Could not save the email'); return; } ok('Parent email saved'); await loadStatus(); redraw(); });
   busy(q('#llParRm'), async () => { const {error} = await sb().rpc('set_parent_email', {p_email: ''}); if (!error) ok('Parent email removed'); await loadStatus(); redraw(); });
 }
 H.addMenuSection('Sign-in and devices', html, () => { A.status = null; wire(); });

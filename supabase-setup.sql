@@ -476,3 +476,69 @@ begin
 end $$;
 drop trigger if exists poll_votes_guard on public.poll_votes;
 create trigger poll_votes_guard before insert or update on public.poll_votes for each row execute function public.poll_votes_guard();
+
+-- v58: tile chat. Kind 37 = a tile message made from the fixed phrase list (chatdata.js): phrase numbers, optional slot ids (city/mode/time/thing) and emoji numbers.
+-- No free text exists anywhere. The server checks shape and limits; the game checks that each phrase number is a real phrase (and drops messages that are not).
+alter table public.messages add column if not exists tiles int[];
+alter table public.messages add column if not exists slots text[];
+alter table public.messages add column if not exists emo int[];
+alter table public.group_messages add column if not exists tiles int[];
+alter table public.group_messages add column if not exists slots text[];
+alter table public.group_messages add column if not exists emo int[];
+create or replace function public.chat_tiles_ok(t int[], s text[], e int[]) returns boolean language plpgsql immutable as $$
+declare x int; y text; i int;
+begin
+  if t is not null then
+    if cardinality(t) < 1 or cardinality(t) > 3 then return false; end if;
+    foreach x in array t loop if x is null or x < 1 or x > 999 then return false; end if; end loop;
+    if s is null or cardinality(s) <> cardinality(t) then return false; end if;
+    for i in 1 .. cardinality(s) loop y := s[i]; if y is not null and y !~ '^[a-z]{2,20}$' then return false; end if; end loop;
+  else
+    if s is not null then return false; end if;
+    if e is null or cardinality(e) < 1 then return false; end if;
+  end if;
+  if e is not null then
+    if cardinality(e) > 3 then return false; end if;
+    foreach x in array e loop if x is null or x < 0 or x > 39 then return false; end if; end loop;
+  end if;
+  return true;
+end $$;
+alter table public.messages drop constraint if exists messages_tiles_ok;
+alter table public.messages add constraint messages_tiles_ok check (
+  (k = 37 and public.chat_tiles_ok(tiles, slots, emo))
+  or (k <> 37 and tiles is null and slots is null and emo is null));
+alter table public.group_messages drop constraint if exists group_messages_tiles_ok;
+alter table public.group_messages add constraint group_messages_tiles_ok check (
+  (k = 37 and public.chat_tiles_ok(tiles, slots, emo))
+  or (k <> 37 and tiles is null and slots is null and emo is null));
+-- the receiver may only flip "read": the tile columns can never be rewritten (messages_guard replaced, group_messages_guard new)
+create or replace function public.messages_guard() returns trigger language plpgsql as $$
+begin new.id := old.id; new.from_id := old.from_id; new.to_id := old.to_id; new.k := old.k; new.room := old.room; new.created_at := old.created_at;
+  new.card_city := old.card_city; new.card_seed := old.card_seed; new.card_score := old.card_score;
+  new.tiles := old.tiles; new.slots := old.slots; new.emo := old.emo; return new; end $$;
+drop trigger if exists messages_guard on public.messages;
+create trigger messages_guard before update on public.messages for each row execute function public.messages_guard();
+create or replace function public.group_messages_guard() returns trigger language plpgsql as $$
+begin new.id := old.id; new.group_id := old.group_id; new.from_id := old.from_id; new.k := old.k; new.created_at := old.created_at;
+  new.tiles := old.tiles; new.slots := old.slots; new.emo := old.emo; return new; end $$;
+drop trigger if exists group_messages_guard on public.group_messages;
+create trigger group_messages_guard before update on public.group_messages for each row execute function public.group_messages_guard();
+-- the same tile message cannot go to the same chat twice within 10 seconds (the existing 30 per 5 minutes limits stay)
+create or replace function public.messages_dup_check() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.k = 37 and exists (select 1 from public.messages m where m.from_id = new.from_id and m.to_id = new.to_id and m.k = 37
+      and m.tiles is not distinct from new.tiles and m.slots is not distinct from new.slots and m.emo is not distinct from new.emo
+      and m.created_at > now() - interval '10 seconds') then raise exception 'message limit'; end if;
+  return new;
+end $$;
+drop trigger if exists messages_dup_check on public.messages;
+create trigger messages_dup_check before insert on public.messages for each row execute function public.messages_dup_check();
+create or replace function public.group_messages_dup_check() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.k = 37 and exists (select 1 from public.group_messages m where m.from_id = new.from_id and m.group_id = new.group_id and m.k = 37
+      and m.tiles is not distinct from new.tiles and m.slots is not distinct from new.slots and m.emo is not distinct from new.emo
+      and m.created_at > now() - interval '10 seconds') then raise exception 'message limit'; end if;
+  return new;
+end $$;
+drop trigger if exists group_messages_dup_check on public.group_messages;
+create trigger group_messages_dup_check before insert on public.group_messages for each row execute function public.group_messages_dup_check();

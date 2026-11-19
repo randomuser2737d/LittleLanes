@@ -2,6 +2,20 @@
 
 Single-file game: `index.html` (HTML + vanilla JS + Canvas 2D, no libraries). Plan and design decisions live in the "Little Lanes — Game Design & Build Plan" doc.
 
+## Version 3.21 (Nov 19) — new numbering: 3.0 online play, 3.1 friend messaging, 3.2 Chats app; +0.01 small, next 0.1 medium, next whole number big
+- Security round from two red-team passes. Server (supabase-v59.sql): real timestamps forced, rate limits on an append-only log (deleting no longer resets), city/poll/room/slot values checked against fixed lists, nicknames checked on the server (bad words, personal info, look-alikes, 1 rename/day), friend codes hidden (my_friend_code / find_by_code), atomic sign-in limits with backoff and failure-only counting, recovery-code sign-in can reset the password, new devices wait 10 min for recovery code/parent email, writes need a registered device, realistic score caps, owner can remove group members, private realtime channels.
+- Duels/co-op: only the real opponent/teammates are listened to, host-only start, third players ignored, max 4 in co-op, names from the server, throttled messages, duels run on wall-clock time.
+- Chat/accounts: unknown cities and rooms hidden, strict message checks, stronger nickname filter, presence only from friends and "Appear offline" sends nothing, broadcast flood control, blocks apply in groups, mean combos blocked, QR sign-in asks to confirm.
+
+## v60 (Nov 19)
+- New 💬 Chats app (chat.js), Discord/Google Chat style: chat list (direct messages + group chats, unread badges, previews, online dots, pinned chats, search chats) and conversation view (grouped bubbles, Today/Yesterday, new-messages line, reactions, challenge cards, invites, polls). Phone: list -> conversation with back arrow.
+- Message builder: up to 3 phrase tiles + up to 3 emoji, from 413 approved phrases in 17 categories (chatdata.js) with fill-ins ([city], [game], [when], [thing]); 40 fixed emoji; search box finds phrases (typos, synonyms, kid shorthand) and never sends what you type; Recent tab.
+- Safety: whole phrases only (no single-word tiles), no numbers, positive/neutral only; server checks message shape; 1 message / 2 s, 10 / min, no repeats; invalid messages dropped.
+- Database v58 run in Supabase (tiles, slots, emo columns + guards).
+
+## v59 (Nov 19)
+- Installed app now finds updates by itself: checks on launch, every 15 minutes and when brought to the front; the page and game scripts are always fetched fresh (no stale 10-minute cache); the Update bar sits above every menu. "Check for updates" button on the home screen.
+
 ## v58 (Nov 18)
 - Lighter, brighter look (new default "Sunny"): lighter grass/water/table, mid-grey roads, thin soft outlines, softer shadows.
 - Board themes picker in Settings (replaces the old map tints): Sunny, Pastel Candy, Snowy Winter, Autumn, Desert Sand, Ocean Blue, Neon Night (glowing roads), Classic Toy. Saved per device; menu thumbnails match.

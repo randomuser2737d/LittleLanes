@@ -276,6 +276,7 @@ p{margin:0;line-height:1.5;color:var(--muted)}
 </div>
 
 <script>
+var APP_VERSION = 'v3.21';
 (() => {
 'use strict';
 const cv = document.getElementById('cv');
@@ -599,7 +600,7 @@ window.LLHooks = (() => {
     lastRun: () => (G ? {cityId: G.city.id, seed: G.cfg.seed|0, score: G.score|0, week: G.week|0, kind: G.cfg.kind, over: !!G.over} : null),
     inLiveDuel: () => !!(G && G.cfg && G.cfg.kind === 'duel' && G.cfg.duel && G.cfg.duel.live && !G.over),
     duelState(){ if (!G || G.cfg.kind !== 'duel') return null; let danger = 0; for (const d of G.dests) danger = Math.max(danger, d.timer || 0);
-      return {score: G.score, week: G.week, weekT: G.weekT, danger, over: !!G.over, lost: !!G.lostDuel, cityId: G.city.id}; },
+      return {t: G.time, score: G.score, week: G.week, weekT: G.weekT, danger, over: !!G.over, lost: !!G.lostDuel, cityId: G.city.id}; },
     miniMap(){ if (!G) return null; const roads = []; for (const [a, set] of G.adj) for (const b of set) if (a < b && G.occ[a] === 1 && G.occ[b] === 1) roads.push(a, b);
       return {W, H, rect: {...G.rect}, roads, houses: G.houses.map(h => [h.i, h.color]), dests: G.dests.map(d => [d.x, d.y, d.color])}; },
     showEmote(text){ const b = el('emoteBubble'); b.textContent = text; b.hidden = false; b.style.animation = 'none'; void b.offsetWidth; b.style.animation = ''; clearTimeout(H._et); H._et = setTimeout(() => { b.hidden = true; }, 2500); sfx('bubble', {lo: 1}); },
@@ -2097,6 +2098,7 @@ document.addEventListener('visibilitychange', () => {
     if (document.hidden) G.hiddenAt = performance.now();
     else if (G.hiddenAt) { let miss = Math.min(180, (performance.now() - G.hiddenAt) / 1000) * (G.speed || 1); G.hiddenAt = 0;
       while (miss >= 0.025 && !G.over && !G.pending) { update(0.025); miss -= 0.025; }
+      G.wallT = performance.now() / 1000; // the frame loop's wall-clock debt starts from now (this catch-up already paid it)
       if (!G.over) toast('Your city kept going while you were away'); }
     return;
   }
@@ -3260,11 +3262,12 @@ function showHome(){
       ${card('plus', 'Plus', '<span class="tag">Free for now</span>', 'Everything in Classic, plus weather, events, ferries, metros, and smarter traffic.', ['Map maker and sandbox', 'World tour and achievements', 'Cars route around traffic'])}
     </div>
     ${PLUS_ACCESS() ? `<button class="mode" data-online="1" style="grid-template-columns:auto 1fr"><span style="width:64px;height:64px;border-radius:18px;display:grid;place-items:center;font-size:34px;background:var(--accent,#e5622b)">🌐</span><span class="mode-body"><span class="mode-row"><span class="mode-title">Online</span><span class="tag">Plus</span></span><span class="mode-desc">Friends, quick messages, live duels, and leaderboards.</span></span></button>` : ''}
-    <p class="hint">Classic and Plus keep separate progress. Version 58.</p>
+    <p class="hint">Classic and Plus keep separate progress. Version ${APP_VERSION.slice(1)}. <button class="btn" id="chkUpd" type="button" style="padding:4px 10px;font-size:13px">Check for updates</button></p>
     ${settingsRow()}
   </div>`);
   sheetCard.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { setEdition(b.dataset.mode); SET.lastMode = b.dataset.mode; saveSet(); showMenu(); });
   const ob = sheetCard.querySelector('[data-online]'); if (ob) ob.onclick = () => showOnline();
+  const cu = sheetCard.querySelector('#chkUpd'); if (cu) cu.onclick = () => { if (window.LLCheckUpdate) { cu.textContent = 'Checking…'; LLCheckUpdate().finally(() => { cu.textContent = 'Check for updates'; }); } else LLHooks.error('Updates work in the installed app or website once it has loaded fully.'); };
   wireSettings(showHome);
 }
 const INP = 'font:inherit;padding:9px 12px;border-radius:12px;border:1px solid var(--panel-line);background:var(--land);color:var(--ink);min-width:0;flex:1 1 160px';
@@ -3386,7 +3389,14 @@ function frame(ts){
   now = ts/1000; const rdt = Math.min(0.05, now - last); last = now; if (G) G.fdt = rdt;
   requestAnimationFrame(frame);
   try {
-    if (G && !G.over && (!G.modal || (isDuel() && !G.pending)) && G.speed > 0) { G.acc = Math.min(1, (G.acc || 0) + rdt*G.speed); while (G.acc >= 0.025 && !G.over && !G.pending && (!G.modal || isDuel())) { update(0.025); G.acc -= 0.025; } }
+    if (G && !G.over && isDuel() && G.cfg.duel && G.cfg.duel.live) {
+      // live duels run on the wall clock: real elapsed time becomes simulation debt, paid in fixed 0.025 s steps (a few per frame),
+      // so a slow or throttled device keeps up with the clock instead of getting extra thinking time
+      if (G.wallT == null) G.wallT = now;
+      const real = Math.max(0, Math.min(180, now - G.wallT)); G.wallT = now;
+      if (G.speed > 0) G.debt = Math.min(180, (G.debt || 0) + real * G.speed);
+      for (let n = 0; n < 12 && G.debt >= 0.025 && !G.over && !G.pending; n++) { update(0.025); G.debt -= 0.025; }
+    } else if (G && !G.over && (!G.modal || (isDuel() && !G.pending)) && G.speed > 0) { G.acc = Math.min(1, (G.acc || 0) + rdt*G.speed); while (G.acc >= 0.025 && !G.over && !G.pending && (!G.modal || isDuel())) { update(0.025); G.acc -= 0.025; } }
     if (G && !G.over && !G.modal && G.speed > 0 && now - lastSave > 8) saveGame();
     render(); updateHud();
   } catch (err) { if (!frame.warned) { frame.warned = true; console.error(err); } }
@@ -3409,14 +3419,17 @@ requestAnimationFrame(frame);
 <script src="duel.js"></script>
 <script src="coop.js"></script>
 <script src="account.js"></script>
+<script src="chatdata.js"></script>
+<script src="chat.js"></script>
 <script>
 // installed app: look for a new version on every launch and whenever the app comes back to the front
 if ('serviceWorker' in navigator) addEventListener('load', () => {
-  navigator.serviceWorker.register('sw.js').then(reg => {
+  navigator.serviceWorker.register('sw.js', {updateViaCache: 'none'}).then(reg => {
+    window.LLCheckUpdate = () => reg.update().then(() => { if (!reg.waiting && !reg.installing) (window.LLHooks && LLHooks.ok ? LLHooks.ok : alert)('You have the latest version (' + APP_VERSION + ').'); }).catch(() => LLHooks.error && LLHooks.error('Could not check for updates. Are you online?'));
     const offer = w => {
-      if (!w || !navigator.serviceWorker.controller) return;
-      const bar = document.createElement('div');
-      bar.style.cssText = 'position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 12px);transform:translateX(-50%);z-index:50;background:var(--ink);color:var(--bg);border-radius:14px;padding:10px 12px 10px 16px;display:flex;gap:12px;align-items:center;font:600 14px system-ui,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.25)';
+      if (!w || !navigator.serviceWorker.controller || document.getElementById('llUpd')) return;
+      const bar = document.createElement('div'); bar.id = 'llUpd';
+      bar.style.cssText = 'position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 12px);transform:translateX(-50%);z-index:9999;background:var(--ink);color:var(--bg);border-radius:14px;padding:10px 12px 10px 16px;display:flex;gap:12px;align-items:center;font:600 14px system-ui,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.25)';
       bar.innerHTML = 'A new version of Little Lanes is ready <button style="border:0;border-radius:10px;padding:8px 12px;font:inherit;background:var(--accent);color:#fff;cursor:pointer">Update</button>';
       bar.querySelector('button').onclick = () => { try { window.saveGame && saveGame(); } catch (e) {} w.postMessage('skipWaiting'); };
       document.body.appendChild(bar);
@@ -3424,6 +3437,7 @@ if ('serviceWorker' in navigator) addEventListener('load', () => {
     if (reg.waiting) offer(reg.waiting);
     reg.addEventListener('updatefound', () => { const w = reg.installing; w && w.addEventListener('statechange', () => { if (w.state === 'installed') offer(w); }); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+    reg.update().catch(() => {}); setInterval(() => reg.update().catch(() => {}), 15 * 60 * 1000);
   }).catch(() => {});
   // reload only when an update replaces a running version, never on the very first install
   let reloaded = false; const hadCtl = !!navigator.serviceWorker.controller;

@@ -10,6 +10,8 @@ const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 const COLORS = ['#e5484d', '#3e7bfa', '#eea300', '#2fa36b', '#8e5cd9', '#12a5b8'];
 const RULES = {S: 'Survival', W: 'Sprint'};
 const WAIT_DONE_MS = 60000, LEFT_MS = 60000, ABSENT_MS = 60000; // a player who switches apps gets 60 s to come back
+const MAX_MSG = 2048, MAX_MAP = 100000, LAG_WARN_S = 15, LAG_LEFT_S = 45;
+const MIN_GAP = {state: 400, map: 1500, away: 300, back: 300, lost: 100, done: 300, emote: 0, start: 0}; // per-sender throttle (ms)
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const num = (v, lo, hi, d) => { v = +v; return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : (d || 0); };
@@ -20,12 +22,28 @@ const toast = (m, ms) => { try { if (/copied|sent to|welcome|moved here|accepted
 const online = () => { const O = window.LLOnline; try { return O && O.sb && O.user && O.user() && O.profile && O.profile() ? O : null; } catch (_) { return null; } };
 const myNick = () => { const p = online() && window.LLOnline.profile(); return String((p && p.nickname) || 'Player').slice(0, 20); };
 const myId = () => { const u = online() && window.LLOnline.user(); return String((u && (u.id || u.user_id)) || ''); };
+// nicknames always come from the profiles table by user id, never from a message or presence payload
+const NICKS = {};
+function nickOf(id) { return NICKS[id] || 'Player'; }
+function fetchNicks(ids) {
+  const need = ids.filter(i => i && !(i in NICKS)); if (!need.length) return;
+  need.forEach(i => { NICKS[i] = null; });
+  const mine = S;
+  try {
+    const sb = window.LLOnline.sb;
+    Promise.resolve(sb.from('profiles').select('id,nickname').in('id', need)).then(res => {
+      for (const r of (res && res.data) || []) if (r && need.includes(r.id)) NICKS[r.id] = String(r.nickname || 'Player').replace(/[\u0000-\u001f]/g, '').slice(0, 20) || 'Player';
+      for (const i of need) if (NICKS[i] === null) delete NICKS[i];
+      if (S === mine && S.oppId && NICKS[S.oppId]) { S.oppNick = NICKS[S.oppId]; refresh(); renderStrip(); }
+    }, () => { for (const i of need) if (NICKS[i] === null) delete NICKS[i]; });
+  } catch (_) { for (const i of need) if (NICKS[i] === null) delete NICKS[i]; }
+}
 const cityName = id => { try { const c = HK.cities().find(c => c.id === id); return c ? c.name : id; } catch (_) { return id; } };
 
 function fresh() {
   return {ch: null, room: null, host: false, city: null, rule: 'S', phase: 'idle', ready: false, seed: 0,
-    tickT: null, cdT: null, goT: null, waitT: null, joinT: null, ticks: 0, oppState: null, oppStateAt: 0, oppId: null, oppNick: 'Opponent',
-    oppLost: false, oppDone: null, myDone: null, myLost: false, lastEmote: 0, absentSince: 0, big: false, mm: null, dbCode: null, recorded: false,
+    tickT: null, cdT: null, goT: null, waitT: null, joinT: null, ticks: 0, oppState: null, oppStateAt: 0, oppId: null, oppNick: 'Player',
+    oppLost: false, oppDone: null, myDone: null, myLost: false, lastEmote: 0, hostId: null, strangerWarned: false, thr: {}, startWall: 0, oppGT: 0, lag: 0, priv: true, absentSince: 0, big: false, mm: null, dbCode: null, recorded: false,
     msg: '', countText: '', ui: null};
 }
 let S = fresh();
@@ -85,36 +103,60 @@ if (window.LLOnline && window.LLOnline.onChange) { try { window.LLOnline.onChang
 // ---------- channel ----------
 function meta() { const m = {nick: myNick(), ready: !!S.ready, host: !!S.host}; if (S.host) { m.city = S.city; m.rule = S.rule; } return m; }
 function track() { try { S.ch && S.ch.track(meta()); } catch (_) {} }
-function send(event, payload) { try { S.ch && S.ch.send({type: 'broadcast', event, payload}); } catch (_) {} }
-function peers() {
+function send(event, payload) { try { S.ch && S.ch.send({type: 'broadcast', event, payload: Object.assign({}, payload, {id: myId()})}); } catch (_) {} }
+// raw presence in server order (first = joined the room first); nothing in here is trusted except the key
+function rawPeers() {
   const out = []; if (!S.ch) return out;
   let st = {}; try { st = S.ch.presenceState() || {}; } catch (_) {}
   const id = myId();
   for (const k of Object.keys(st)) {
     const arr = st[k]; const m = (Array.isArray(arr) ? arr[arr.length - 1] : arr) || {};
-    out.push({id: k, me: k === id, nick: String(m.nick || 'Player').slice(0, 20), ready: !!m.ready, host: !!m.host, city: m.city, rule: m.rule});
+    out.push({id: k, me: k === id, ready: m.ready === true, host: m.host === true, city: m.city, rule: m.rule});
   }
   return out;
+}
+// the people the UI cares about: me and my one opponent (names come from profiles, not presence)
+function peers() { return rawPeers().filter(p => p.me || p.id === S.oppId).map(p => Object.assign(p, {nick: p.me ? myNick() : S.oppNick})); }
+// accept a broadcast only from the known opponent who is in presence; size and rate limited
+function gate(ev, p, cap) {
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return false;
+  let n = 0; try { n = JSON.stringify(p).length; } catch (_) { return false; }
+  if (n > (cap || MAX_MSG)) return false;
+  const id = typeof p.id === 'string' ? p.id : ''; if (!id || id === myId() || id !== S.oppId) return false;
+  if (!rawPeers().some(x => x.id === id)) return false;
+  const gap = MIN_GAP[ev] || 0, now = Date.now(); if (gap && now - (S.thr[ev] || 0) < gap) return false; S.thr[ev] = now;
+  return true;
 }
 
 function join(room, host, city, rule) {
   const O = online(); if (!O) { toast('Go online first'); refresh(); return; }
   leave(true);
   S = fresh(); S.room = room; S.host = host; S.city = city; S.rule = rule; S.phase = 'lobby'; S.msg = host ? '' : 'Looking for the room…';
-  const me = myId();
-  const ch = O.sb.channel('duel:' + room, {config: {broadcast: {self: false}, presence: {key: me}}});
-  S.ch = ch; const mine = S;
-  const on = (ev, f) => ch.on('broadcast', {event: ev}, safe(m => { if (S === mine) f((m && m.payload) || {}); }));
-  on('away', () => { if (S === mine) { S.oppAway = Date.now(); renderStrip(); } }); on('back', () => { if (S === mine) { S.oppAway = 0; S.oppStateAt = Date.now(); renderStrip(); HK.toast(S.oppNick + ' is back', 1800); } });
-  on('start', onStart); on('state', onState); on('map', onMap); on('emote', onEmote); on('lost', onLost); on('done', onDone);
-  ch.on('presence', {event: 'sync'}, safe(() => { if (S === mine) onSync(); }));
-  ch.on('presence', {event: 'leave'}, safe(() => { if (S === mine) onSync(); }));
-  ch.subscribe(safe(status => {
+  if (host) S.hostId = myId();
+  const mine = S;
+  const open = priv => {
     if (S !== mine) return;
-    if (status === 'SUBSCRIBED') { track(); }
-    else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { toast('Could not connect to the room'); if (S.phase === 'lobby') leave(); }
-  }));
-  if (!host) S.joinT = setTimeout(safe(() => { if (S !== mine || S.phase !== 'lobby') return; if (!peers().some(p => p.host && !p.me)) { toast('No room with that code'); leave(); } }), 3500);
+    if (S.ch) { try { S.ch.untrack && S.ch.untrack(); } catch (_) {} try { O.sb.removeChannel(S.ch); } catch (_) {} }
+    S.priv = priv;
+    const ch = O.sb.channel('duel:' + room, {config: {private: priv, broadcast: {self: false}, presence: {key: myId()}}});
+    S.ch = ch;
+    const on = (ev, f, cap) => ch.on('broadcast', {event: ev}, safe(m => { if (S === mine && S.ch === ch) { const p = (m && m.payload) || {}; if (gate(ev, p, cap)) f(p); } }));
+    on('away', () => { S.oppAway = Date.now(); renderStrip(); }); on('back', () => { S.oppAway = 0; S.oppStateAt = Date.now(); renderStrip(); HK.toast(S.oppNick + ' is back', 1800); });
+    on('start', p => { if (!S.host && p.id === S.hostId) onStart(p); }); on('state', onState); on('map', onMap, MAX_MAP); on('emote', onEmote); on('lost', onLost); on('done', onDone);
+    ch.on('presence', {event: 'sync'}, safe(() => { if (S === mine && S.ch === ch) onSync(); }));
+    ch.on('presence', {event: 'leave'}, safe(() => { if (S === mine && S.ch === ch) onSync(); }));
+    ch.subscribe(safe((status, err) => {
+      if (S !== mine || S.ch !== ch) return;
+      if (status === 'SUBSCRIBED') { track(); }
+      else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        const msg = String((err && (err.message || err)) || '');
+        if (priv && /unauthor|permission|authoriz|private|policy|forbidden|rls/i.test(msg)) { open(false); return; } // server not on private channels yet
+        toast('Could not connect to the room'); if (S.phase === 'lobby') leave();
+      }
+    }));
+  };
+  open(true);
+  if (!host) S.joinT = setTimeout(safe(() => { if (S !== mine || S.phase !== 'lobby') return; if (!S.hostId) { toast('No room with that code'); leave(); } }), 3500);
   refresh();
 }
 
@@ -126,12 +168,18 @@ function leave(quiet) {
 function clearTimers(o) { for (const k of ['tickT', 'cdT']) if (o[k]) clearInterval(o[k]); for (const k of ['goT', 'waitT', 'joinT']) if (o[k]) clearTimeout(o[k]); o.tickT = o.cdT = o.goT = o.waitT = o.joinT = null; }
 
 function onSync() {
-  const ps = peers(), opp = ps.find(p => !p.me), others = ps.filter(p => !p.me);
-  if (opp) { S.oppId = opp.id; S.oppNick = opp.nick; }
+  const raw = rawPeers(), others = raw.filter(p => !p.me);
+  if (S.phase === 'lobby' && S.host && S.oppId && !others.some(p => p.id === S.oppId)) S.oppId = null; // host: friend left the lobby, free the seat
+  if (!S.oppId && (S.phase === 'lobby')) {
+    // first one in (server order) wins: the host picks the first non-host joiner, a joiner locks onto the first host claim
+    const cand = S.host ? others.find(p => !p.host) : others.find(p => p.host);
+    if (cand) { S.oppId = cand.id; if (!S.host) S.hostId = cand.id; fetchNicks([cand.id]); if (NICKS[cand.id]) S.oppNick = NICKS[cand.id]; }
+  }
+  if (S.oppId && NICKS[S.oppId]) S.oppNick = NICKS[S.oppId];
+  if (others.some(p => p.id !== S.oppId) && !S.strangerWarned) { S.strangerWarned = true; HK.toast('Someone else tried to join', 2500); }
+  const opp = raw.find(p => p.id === S.oppId && !p.me);
   if (S.phase === 'lobby') {
-    if (!S.host) { const h = ps.find(p => p.host && !p.me); if (h) { S.msg = ''; S.city = h.city; S.rule = h.rule === 'W' ? 'W' : 'S'; if (S.joinT) { clearTimeout(S.joinT); S.joinT = null; } } }
-    if (others.length > 1) { toast(S.host ? 'That room code is already taken' : 'That room is full'); leave(); return; }
-    if (S.host && others.some(p => p.host)) { toast('That room code is taken, try again'); leave(); return; }
+    if (!S.host && opp && opp.host) { S.msg = ''; S.city = opp.city; S.rule = opp.rule === 'W' ? 'W' : 'S'; if (S.joinT) { clearTimeout(S.joinT); S.joinT = null; } }
     if (!opp && S.ready) { S.ready = false; track(); }
     refresh(); checkStart();
   } else if (S.phase === 'playing') {
@@ -179,7 +227,7 @@ function go() {
   S.phase = 'playing'; S.countText = '';
   let ok = false; try { ok = HK.startLiveDuel({cityId: S.city, seed: S.seed, rule: S.rule, room: S.room}); } catch (_) {}
   if (!ok) { toast('Could not start the duel'); S.phase = 'lobby'; refresh(); return; }
-  S.oppStateAt = Date.now(); S.absentSince = 0; S.ticks = 0; S.tallied = false; S.warned = false; S.oppAway = 0; S.oppState = null; S.mm = null; S.oppLost = false; S.oppDone = null; S.myDone = null; S.myLost = false; S.ui = null;
+  S.oppStateAt = Date.now(); S.startWall = Date.now(); S.oppGT = 0; S.gtSeen = false; S.lag = 0; S.thr = {}; S.absentSince = 0; S.ticks = 0; S.tallied = false; S.warned = false; S.oppAway = 0; S.oppState = null; S.mm = null; S.oppLost = false; S.oppDone = null; S.myDone = null; S.myLost = false; S.ui = null;
   buildStrip(); const mine = S;
   S.tickT = setInterval(safe(() => { if (S === mine) tick(); }), 1000);
   tick();
@@ -189,16 +237,20 @@ function tick() {
   if (S.phase !== 'playing') return;
   try { const strip = HK.oppStrip(); if (strip && HK.inLiveDuel()) { if (strip.hidden && !(typeof document !== 'undefined' && document.querySelector('#sheet:not([hidden])'))) strip.hidden = false; if (!strip.querySelector('.ldC')) buildStrip(); } } catch (_) {}
   try { const u = S.ui; if (u && u.dot) { const age = Date.now() - S.oppStateAt; u.dot.style.background = S.oppAway ? '#f2b311' : age < 3500 ? '#2f9e5b' : age < 12000 ? '#f2b311' : '#d63c3c'; u.dot.title = age < 3500 && !S.oppAway ? 'Connected' : 'Away or reconnecting'; }
-    if (u && u.lead && (S.oppAway || Date.now() - S.oppStateAt > 4000)) { const since = S.oppAway || S.oppStateAt, left = Math.max(0, Math.ceil((LEFT_MS - (Date.now() - since)) / 1000)); u.lead.textContent = 'away · ' + left + 's'; u.lead.style.color = '#b7791f'; } } catch (_) {}
+    if (u && u.lead && !S.oppAway && S.lag > LAG_WARN_S && Date.now() - S.oppStateAt <= 4000) { u.lead.textContent = 'catching up…'; u.lead.style.color = '#b7791f'; }
+    else if (u && u.lead && (S.oppAway || Date.now() - S.oppStateAt > 4000)) { const since = S.oppAway || S.oppStateAt, left = Math.max(0, Math.ceil((LEFT_MS - (Date.now() - since)) / 1000)); u.lead.textContent = 'away · ' + left + 's'; u.lead.style.color = '#b7791f'; } } catch (_) {}
   S.ticks++;
   let st = null; try { st = HK.duelState(); } catch (_) {}
-  if (st) send('state', {score: st.score | 0, week: st.week | 0, danger: Math.round(num(st.danger, 0, 1, 0) * 100) / 100, over: !!st.over, lost: !!st.lost});
+  if (st) send('state', {gt: Number.isFinite(+st.t) && st.t != null ? Math.round(num(st.t, 0, 1e6, 0) * 10) / 10 : undefined, score: st.score | 0, week: st.week | 0, danger: Math.round(num(st.danger, 0, 1, 0) * 100) / 100, over: !!st.over, lost: !!st.lost});
   if ((S.ticks - 1) % 3 === 0) {
     let mm = null; try { mm = HK.miniMap(); } catch (_) {}
     if (mm) send('map', {W: mm.W | 0, H: mm.H | 0, rect: mm.rect, roads: mm.roads, houses: mm.houses, dests: mm.dests});
   }
   if (S.myDone) send('done', {score: S.myDone.score});
   const now = Date.now();
+  // the game runs on the wall clock: an opponent whose simulation falls far behind it is stalling (slow, throttled or frozen)
+  S.lag = S.oppAway || !S.gtSeen ? 0 : (now - S.startWall) / 1000 - S.oppGT;
+  if (S.lag > LAG_LEFT_S) { oppLeft(); return; }
   if (S.absentSince && now - S.absentSince > ABSENT_MS) { oppLeft(); return; }
   if (now - S.oppStateAt > LEFT_MS) oppLeft();
 }
@@ -206,7 +258,7 @@ function tick() {
 // ---------- incoming ----------
 function onState(p) {
   if (S.phase !== 'playing') return;
-  S.oppStateAt = Date.now(); S.absentSince = 0;
+  S.oppStateAt = Date.now(); S.absentSince = 0; if (typeof p.gt === 'number' && Number.isFinite(p.gt)) { S.gtSeen = true; S.oppGT = Math.max(S.oppGT, num(p.gt, 0, 1e6, 0)); }
   S.oppState = {score: Math.floor(num(p.score, 0, 1e6, 0)), week: Math.floor(num(p.week, 0, 999, 0)), danger: num(p.danger, 0, 1, 0), over: !!p.over, lost: !!p.lost};
   renderStrip();
   if (S.rule === 'S' && S.oppState.lost) oppLost(S.oppState.score);

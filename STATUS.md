@@ -2,6 +2,15 @@
 
 Single-file game: `index.html` (HTML + vanilla JS + Canvas 2D, no libraries). Plan and design decisions live in the "Little Lanes — Game Design & Build Plan" doc.
 
+## Version 3.23 (Nov 19)
+- More pressure: extra workplaces when a colour has >6 houses per workplace (from week 3), gentler weeks 1-2, new colours ramp up (~1 workplace per 4-5 houses).
+- Jam highlights on the main map: pulsing ring + queue badge on jammed tiles, "…" bubble over cars stuck > 6 s.
+- Gap-based driving: cars cross when crossing traffic is > 1.5 s away, creep to give-way lines, roundabout entry by gap (cap 4), exit speed by angle, longer gaps for trucks, queue starts react to the car ahead. Still deterministic; throughput within 1%.
+- Week-end upgrade tray (solo): slides in, game runs at 0.25x, auto-picks after 15 s, "New!" ribbon, bonus shown on each card; duels unchanged.
+- Phone: week label no longer truncated, dock arrows, 12px tool labels, labelled road count, tutorial card collapses to "?".
+- Monthly themed puzzles: 12 themes, hand-made December 2026 set, month finale on the last day; calendar shows only the current month, only today/this week playable, past = Ended, future = locked; unlocks by date.
+- New board theme "Original (flat)" (old flat look, crates instead of pins).
+
 ## Version 3.22 (Nov 19)
 - Realistic driving: smooth acceleration/braking, slowing for corners by sharpness, road speed limits (motorway faster, bridge slower), safe following gaps, queues start one by one, roundabouts follow a real circle (anticlockwise; clockwise in left-hand cities) and give way to circulating cars, stop at amber unless too close, brake lights and turn signals, smoothed drawing. Deterministic (duel-safe); throughput within ~3%.
 - In-game UI: cleaner top bar (speed buttons up top, score +1 pop, day progress bar), floating tool dock with badges, tooltips, upgrade cards with 1/2/3 keys, clearer game-over, toasts no longer cover the HUD.

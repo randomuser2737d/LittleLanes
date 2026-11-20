@@ -140,6 +140,10 @@ p{margin:0;line-height:1.5;color:var(--muted)}
 .cal.wide{flex-direction:row;flex-wrap:wrap;gap:8px;align-items:center}
 .cal.today{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .cal.past{opacity:.6}
+.cal.today{opacity:1}
+.cal.locked{justify-content:center;align-items:center;min-height:44px;color:var(--muted);background:var(--land);border-style:dashed}
+.cal.locked.wide{justify-content:flex-start;min-height:0}
+.cal .chname{font-weight:600;color:var(--ink)}
 .cal .tag{align-self:flex-start}
 .lb{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:4px}
 .lb li span{margin-left:8px}
@@ -303,6 +307,77 @@ p{margin:0;line-height:1.5;color:var(--muted)}
 .sheet.over .btnrow .btn.primary{flex:1 1 100%;font-size:16px;font-weight:600;box-shadow:0 3px 0 color-mix(in srgb,var(--accent) 55%,#000)}
 .sheet.over .btnrow .btn:active{transform:translateY(2px);box-shadow:none}
 @media (prefers-reduced-motion: reduce){ .score.pop,.splus.go{animation:none} .tools .tool,.upg,#toast{transition:none} }
+/* ===== UI2: dock labels + arrows, week label, tutorial chip, upgrade tray ===== */
+.dockwrap{position:relative;min-width:0;max-width:100%;display:flex}
+.dockwrap .tools{max-width:100%}
+.dock-arrow{position:absolute;top:50%;transform:translateY(-50%);z-index:3;width:30px;height:44px;border:0;border-radius:12px;background:var(--ink);color:var(--bg);font-size:24px;line-height:1;display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.25);padding:0 0 3px}
+.dock-arrow.l{left:4px}.dock-arrow.r{right:4px}.dock-arrow[hidden]{display:none}
+.tools .tool > span.lbl{display:block!important;font-size:12px;line-height:1.1;letter-spacing:0;position:static;min-width:0;height:auto;padding:0;background:none;color:var(--muted);border:0;white-space:nowrap}
+.tools .tool.on > span.lbl{color:var(--accent-ink)}
+.tools .tool{height:58px;min-height:58px!important;width:54px;min-width:54px!important;padding:0!important;gap:2px}
+.tools .tool svg,.tools .tool:has(.cnt) svg{width:22px;height:22px}
+.tools .tool:has(.cnt){padding-top:0!important}
+.tools .tool .cnt{top:2px;right:1px;font-size:12px;height:18px;min-width:20px}
+@media (max-width:480px){
+  .tools .tool{width:52px;min-width:52px!important;height:58px;min-height:58px!important}
+  .tools .tool > span.lbl{display:block!important}
+  .dockwrap{width:100%}
+}
+.wk-sub{font-size:12px;line-height:1.2;color:var(--accent);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.wk-sub[hidden]{display:none}
+#weekLbl{white-space:nowrap}
+/* tutorial card */
+.tut-min{flex:none;align-self:flex-start;width:28px;height:28px;border:0;border-radius:50%;background:var(--land);color:var(--muted);font-size:18px;line-height:1;display:grid;place-items:center;padding:0}
+#hint{font-size:12.5px;line-height:1.35;z-index:8;box-sizing:border-box}
+#hint.min{width:40px;height:40px;padding:0;border-radius:50%;gap:0;justify-content:center;cursor:pointer;background:var(--accent);color:var(--accent-ink);border-color:transparent}
+#hint.min > *{display:none}
+#hint.min::after{content:"?";font-weight:800;font-size:20px;font-family:var(--display)}
+@media (max-width:1239px){
+  #hint{top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 90px);left:12px;transform:none;width:min(420px,calc(100% - 24px));padding:8px 8px 8px 10px;gap:8px;border-radius:14px;animation:hintInL .35s ease-out}
+  #hint .tut-num{width:28px;height:28px;font-size:11px}
+  #hint .tut-body b{font-size:13px}
+  #hint .tut-ok{padding:6px 10px;font-size:12.5px}
+  #hint.min{width:40px;padding:0}
+}
+@media (min-width:1240px){
+  #hint{top:auto;left:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);transform:none;width:clamp(180px,calc(50vw - 437px),290px);box-sizing:border-box;padding:9px 9px 9px 11px;gap:9px;animation:hintInL .35s ease-out}
+  #hint:not(.min){flex-direction:column;align-items:stretch;gap:6px;padding-right:38px}
+  #hint:not(.min) .tut-num{display:none}
+  #hint:not(.min) .tut-min{position:absolute;top:6px;right:6px}
+  #hint:not(.min) .tut-ok{align-self:flex-start}
+  #hint.min{width:40px;padding:0}
+}
+/* upgrade tray: the city keeps running, slowly, while you choose */
+#tray{position:fixed;z-index:12;left:0;right:0;margin:0 auto;width:min(700px,calc(100% - 20px));bottom:calc(env(safe-area-inset-bottom,0px) + 92px);box-sizing:border-box;background:var(--panel);border:2px solid var(--accent);border-radius:20px;padding:8px 10px 10px;box-shadow:0 10px 34px rgba(0,0,0,.28)}
+#tray[hidden]{display:none}
+#tray.in{animation:trayIn .4s cubic-bezier(.2,.9,.25,1.05)}
+@keyframes trayIn{from{opacity:0;transform:translateY(60px)}to{opacity:1;transform:none}}
+.tr-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+.tr-head b{font-family:var(--display);font-size:17px;line-height:1.1}
+.tr-timer{position:relative;width:34px;height:34px;flex:none;display:grid;place-items:center;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.tr-timer svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.tr-timer circle{fill:none;stroke-width:3.5}
+.tr-timer .bg{stroke:var(--panel-line)}
+.tr-timer .fg{stroke:var(--accent);stroke-linecap:round}
+.tr-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.tcard{position:relative;display:flex;align-items:center;gap:10px;text-align:left;padding:10px 10px 10px 10px;border-radius:14px;border:2px solid var(--panel-line);background:var(--land);min-width:0;color:var(--ink)}
+.tcard:hover,.tcard:focus-visible{border-color:var(--accent)}
+.tcard:active{transform:scale(.98)}
+.tcard.chosen{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--land))}
+.t-ico{flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--accent);color:var(--accent-ink)}
+.t-ico svg{width:24px;height:24px}
+.t-txt{display:flex;flex-direction:column;gap:1px;min-width:0}
+.t-main{font-family:var(--display);font-weight:800;font-size:17px;line-height:1.1}
+.t-sub{font-size:13px;font-weight:600;color:var(--accent)}
+.t-name{font-size:12px;color:var(--muted)}
+.t-desc{display:none;font-size:12px;color:var(--muted);line-height:1.3}
+.t-key{position:absolute;top:5px;right:8px;font-size:12px;font-weight:600;color:var(--muted);opacity:.7}
+.t-new{position:absolute;top:-9px;left:10px;background:var(--accent);color:var(--accent-ink);font-size:12px;font-weight:700;padding:1px 8px;border-radius:9px;letter-spacing:.02em;box-shadow:0 2px 0 color-mix(in srgb,var(--accent) 55%,#000)}
+.t-foot{font-size:12px;color:var(--muted);margin-top:6px}
+@media (hover:none){.t-key{display:none}}
+@media (min-width:900px){ .t-desc{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden} .tcard{align-items:flex-start} }
+@media (max-width:420px){ .tr-cards{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))} .t-main{font-size:16px} }
+@media (prefers-reduced-motion: reduce){ #tray.in{animation:none} }
 </style>
 </head>
 <body>
@@ -317,31 +392,34 @@ p{margin:0;line-height:1.5;color:var(--muted)}
     <button class="tool on" data-speed="1" aria-label="Normal speed"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l11 7-11 7z"/></svg><span>1×</span></button>
     <button class="tool" data-speed="2" aria-label="Double speed"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5l9 7-9 7zM12 5l9 7-9 7z"/></svg><span>2×</span></button>
   </div>
-  <div class="chip hud-score"><div class="scorebox"><div class="score" id="score">0</div><span class="splus" id="scorePlus" aria-hidden="true"></span></div><div class="week"><div class="wk-row"><span class="city" id="dayLbl">Mon</span><span class="small" id="weekLbl">Week 1</span></div><div class="daybar" aria-hidden="true"><i id="dayFill"></i></div></div></div>
+  <div class="chip hud-score"><div class="scorebox"><div class="score" id="score">0</div><span class="splus" id="scorePlus" aria-hidden="true"></span></div><div class="week"><div class="wk-row"><span class="city" id="dayLbl">Mon</span><span class="small" id="weekLbl">Week 1</span></div><div class="daybar" aria-hidden="true"><i id="dayFill"></i></div><div class="wk-sub" id="wkSub" hidden></div></div></div>
 </div>
 
 <div id="bottom" class="strip" hidden>
+  <div class="dockwrap"><button class="dock-arrow l" id="dockL" type="button" aria-label="Scroll tools left" hidden>&#8249;</button><button class="dock-arrow r" id="dockR" type="button" aria-label="Scroll tools right" hidden>&#8250;</button>
   <div class="tools" role="toolbar" aria-label="Building tools">
-    <button class="tool on" data-tool="draw" aria-label="Draw roads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 20 L12 12 L20 12"/></svg><span class="cnt" id="nRoads">30</span></button>
-    <button class="tool" data-tool="erase" aria-label="Erase roads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M8 20h12M5 15l8-8 6 6-6 6H9z"/></svg><span>erase</span></button>
-    <button class="tool" data-tool="round" aria-label="Place roundabout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg><span class="cnt" id="nRound">0</span></button>
-    <button class="tool" data-tool="light" aria-label="Place traffic light"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="2" width="8" height="16" rx="3"/><circle cx="12" cy="7" r="1.6" fill="currentColor"/><circle cx="12" cy="13" r="1.6"/><path d="M12 18v4"/></svg><span class="cnt" id="nLight">0</span></button>
-    <button class="tool" data-tool="ferry" aria-label="Build ferry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h16l-2.5 5h-11z"/><path d="M8 14V9h7l2 5"/><path d="M2 21c2 0 2-1 4-1s2 1 4 1 2-1 4-1 2 1 4 1 2-1 4-1"/></svg><span class="cnt" id="nFerry">0</span></button>
-    <button class="tool" data-tool="metro" aria-label="Build metro line"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="3" width="12" height="14" rx="4"/><path d="M6 11h12"/><circle cx="9.5" cy="14" r="1" fill="currentColor"/><circle cx="14.5" cy="14" r="1" fill="currentColor"/><path d="M8 21l2-4M16 21l-2-4"/></svg><span class="cnt" id="nMetro">0</span></button>
-    <button class="tool" data-tool="mway" aria-label="Build motorway"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 19 L21 5"/><path d="M5 21 L23 7" opacity=".4"/><circle cx="3" cy="19" r="2" fill="currentColor"/><circle cx="21" cy="5" r="2" fill="currentColor"/></svg><span class="cnt" id="nMway">0</span></button>
-    <button class="tool" id="planBtn" aria-label="Planning mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3" /><path d="M3 22h18" stroke-dasharray="2 3"/></svg><span>plan</span></button>
-    <button class="tool" id="trafBtn" aria-label="Traffic view" title="Traffic view: busy roads glow yellow to red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 18c4-8 6-8 9-4s5 4 9-6"/><circle cx="7" cy="12" r="1.5" fill="currentColor"/><circle cx="17" cy="11" r="1.5" fill="currentColor"/></svg><span>traffic</span></button>
-    <button class="tool" id="statsBtn" aria-label="Live stats" title="Live stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>stats</span></button>
-    <button class="tool" id="nightBtn" aria-label="Day and night" title="Day and night cycle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><span>night</span></button>
-    <button class="tool" id="undoBtn" aria-label="Undo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg><span>undo</span></button>
+    <button class="tool on" data-tool="draw" aria-label="Draw roads (road tiles left)" title="Draw roads - the badge is how many road tiles you have left"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 20 L12 12 L20 12"/></svg><span class="lbl">roads</span><span class="cnt" id="nRoads">30</span></button>
+    <button class="tool" data-tool="erase" aria-label="Erase roads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M8 20h12M5 15l8-8 6 6-6 6H9z"/></svg><span class="lbl">erase</span></button>
+    <button class="tool" data-tool="round" aria-label="Place roundabout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg><span class="lbl">round</span><span class="cnt" id="nRound">0</span></button>
+    <button class="tool" data-tool="light" aria-label="Place traffic light"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="2" width="8" height="16" rx="3"/><circle cx="12" cy="7" r="1.6" fill="currentColor"/><circle cx="12" cy="13" r="1.6"/><path d="M12 18v4"/></svg><span class="lbl">light</span><span class="cnt" id="nLight">0</span></button>
+    <button class="tool" data-tool="ferry" aria-label="Build ferry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h16l-2.5 5h-11z"/><path d="M8 14V9h7l2 5"/><path d="M2 21c2 0 2-1 4-1s2 1 4 1 2-1 4-1 2 1 4 1 2-1 4-1"/></svg><span class="lbl">ferry</span><span class="cnt" id="nFerry">0</span></button>
+    <button class="tool" data-tool="metro" aria-label="Build metro line"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="3" width="12" height="14" rx="4"/><path d="M6 11h12"/><circle cx="9.5" cy="14" r="1" fill="currentColor"/><circle cx="14.5" cy="14" r="1" fill="currentColor"/><path d="M8 21l2-4M16 21l-2-4"/></svg><span class="lbl">metro</span><span class="cnt" id="nMetro">0</span></button>
+    <button class="tool" data-tool="mway" aria-label="Build motorway"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 19 L21 5"/><path d="M5 21 L23 7" opacity=".4"/><circle cx="3" cy="19" r="2" fill="currentColor"/><circle cx="21" cy="5" r="2" fill="currentColor"/></svg><span class="lbl">motor</span><span class="cnt" id="nMway">0</span></button>
+    <button class="tool" id="planBtn" aria-label="Planning mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3" /><path d="M3 22h18" stroke-dasharray="2 3"/></svg><span class="lbl">plan</span></button>
+    <button class="tool" id="trafBtn" aria-label="Traffic view" title="Traffic view: busy roads glow yellow to red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 18c4-8 6-8 9-4s5 4 9-6"/><circle cx="7" cy="12" r="1.5" fill="currentColor"/><circle cx="17" cy="11" r="1.5" fill="currentColor"/></svg><span class="lbl">traffic</span></button>
+    <button class="tool" id="statsBtn" aria-label="Live stats" title="Live stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span class="lbl">stats</span></button>
+    <button class="tool" id="nightBtn" aria-label="Day and night" title="Day and night cycle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><span class="lbl">night</span></button>
+    <button class="tool" id="undoBtn" aria-label="Undo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg><span class="lbl">undo</span></button>
     <div class="sep"></div>
-    <div class="tool" aria-label="Bridges left" title="Bridges: drag a road across water"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 10h18M5 10v8M19 10v8M5 14c3-4 11-4 14 0"/></svg><span class="cnt" id="nBridge">0</span></div>
-    <div class="tool" aria-label="Tunnels left" title="Tunnels: drag a road through hills"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20 L9 7 L13 13 L16 9 L22 20Z"/><path d="M9 20v-3a3 3 0 0 1 6 0v3"/></svg><span class="cnt" id="nTunnel">0</span></div>
+    <div class="tool" aria-label="Bridges left" title="Bridges left: drag a road across water"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 10h18M5 10v8M19 10v8M5 14c3-4 11-4 14 0"/></svg><span class="lbl">bridge</span><span class="cnt" id="nBridge">0</span></div>
+    <div class="tool" aria-label="Tunnels left" title="Tunnels: drag a road through hills"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20 L9 7 L13 13 L16 9 L22 20Z"/><path d="M9 20v-3a3 3 0 0 1 6 0v3"/></svg><span class="lbl">tunnel</span><span class="cnt" id="nTunnel">0</span></div>
+  </div>
   </div>
 </div>
 
 <div id="planBar" hidden><span>Planning · city paused</span><button class="btn" id="planCancel">Cancel plan</button><button class="btn primary" id="planBuild">Build plan</button></div>
 <div id="hint" hidden></div>
+<div id="tray" hidden role="group" aria-label="Weekly upgrade"></div>
 <div id="toast" role="status"></div>
 <div id="errBar" role="alert" aria-live="assertive" hidden><span id="errMsg"></span><button id="errX" aria-label="Close">✕</button></div>
 <button id="emoteBtn" class="chip" hidden aria-label="Send an emote" style="position:fixed;left:12px;top:calc(env(safe-area-inset-top,0px) + 72px);font-size:20px;padding:6px 10px;cursor:pointer">😀</button>
@@ -371,7 +449,7 @@ p{margin:0;line-height:1.5;color:var(--muted)}
 </div>
 
 <script>
-var APP_VERSION = 'v3.22';
+var APP_VERSION = 'v3.23';
 (() => {
 'use strict';
 const cv = document.getElementById('cv');
@@ -750,14 +828,96 @@ function finishSprint(){
     <div class="btnrow"><button class="btn primary" id="toMenu">Back to menu</button></div></div>`, true);
   el('bottom').hidden = true; sheetCard.querySelector('#toMenu').onclick = () => showMenu(); wireDuelEnd(false);
 }
-function challengeFor(kind, at){
-  const key = at || (kind==='daily' ? todayKey() : weekKey());
+// ==== DEC2026 BEGIN ==== (hand-made December 2026 puzzles: same on every device, picked by the device date)
+const DEC2026 = {
+  daily: {
+    20261201: {name:'First frost', city:'toronto', mods:['rush','tight']},
+    20261202: {name:'Snow day', city:'seoul', mods:['busy','diag']},
+    20261203: {name:'Cold start', city:'london', mods:['nobridge','rush']},
+    20261204: {name:'Frosted windows', city:'amsterdam', mods:['tight','rainbow']},
+    20261205: {name:'Scarf weather', city:'paris', mods:['busy','rush']},
+    20261206: {name:'Slush hour', city:'newyork', mods:['rush','diag']},
+    20261207: {name:'Salt the roads', city:'seattle', mods:['tight','busy']},
+    20261208: {name:'Ice bridge', city:'istanbul', mods:['nobridge','diag']},
+    20261209: {name:'Winter market', city:'tokyo', mods:['busy','rainbow']},
+    20261210: {name:'Early dark', city:'hongkong', mods:['rush','tight']},
+    20261211: {name:'Hot cocoa run', city:'sanfrancisco', mods:['diag','tight']},
+    20261212: {name:'Summer break', city:'sydney', mods:['busy','nobridge']},
+    20261213: {name:'Cape breeze', city:'capetown', mods:['rush','rainbow']},
+    20261214: {name:'Winter lights', city:'paris', mods:['rainbow','busy']},
+    20261215: {name:'Cool season', city:'bangkok', mods:['rush','diag']},
+    20261216: {name:'Frozen harbour', city:'toronto', mods:['nobridge','tight']},
+    20261217: {name:'Holiday traffic', city:'newyork', mods:['busy','rush']},
+    20261218: {name:'Plough shift', city:'seoul', mods:['tight','diag']},
+    20261219: {name:'Lantern night', city:'hongkong', mods:['rainbow','nobridge']},
+    20261220: {name:'Travel day', city:'tokyo', mods:['rush','busy']},
+    20261221: {name:'Longest night', city:'amsterdam', mods:['tight','nobridge']},
+    20261222: {name:'Holiday detour', city:'london', mods:['busy','tight']},
+    20261223: {name:'Black ice', city:'seattle', mods:['nobridge','rush']},
+    20261224: {name:'Festive eve', city:'rio', mods:['rush','busy']},
+    20261225: {name:'Quiet morning', city:'singapore', mods:['rainbow','diag']},
+    20261226: {name:'Return trips', city:'cairo', mods:['rush','tight']},
+    20261227: {name:'Snowed in', city:'toronto', mods:['busy','nobridge']},
+    20261228: {name:'Year-end rush', city:'newyork', mods:['rush','tight']},
+    20261229: {name:'Lights on the canals', city:'amsterdam', mods:['diag','busy']},
+    20261230: {name:'Final stretch', city:'istanbul', mods:['rush','rainbow']},
+    20261231: {name:"New Year's Eve countdown", city:'sydney', mods:['rush','busy']}
+  },
+  weekly: {
+    202649: {name:'First frost week', city:'toronto', mods:['tight','diag']},
+    202650: {name:'Holiday traffic', city:'newyork', mods:['rush','busy']},
+    202651: {name:'Winter lights', city:'paris', mods:['rainbow','tight']},
+    202652: {name:'Ice bridge', city:'istanbul', mods:['nobridge','rush']},
+    202653: {name:'Year-end rush', city:'tokyo', mods:['busy','tight']}
+  }
+};
+function dateOfKey(k){ return new Date(Math.floor(k/10000), Math.floor(k/100)%100 - 1, k%100); }
+// the Monday on which an ISO week key (yyyyww) starts, as a yyyymmdd key
+function weekStartKey(wk){ const y = Math.floor(wk/100), w = wk%100, j4 = new Date(y, 0, 4), mon = new Date(y, 0, 4 - ((j4.getDay()||7) - 1) + (w-1)*7); return mon.getFullYear()*10000 + (mon.getMonth()+1)*100 + mon.getDate(); }
+// a puzzle later than today stays hidden (the device date unlocks it, no update needed)
+const challengeEnded = (kind, key) => kind === 'daily' ? key < todayKey() : dateOfKey(weekStartKey(key)).getTime() + 7*864e5 <= dateOfKey(todayKey()).getTime();
+const challengeLocked = (kind, key) => (kind === 'daily' ? key : weekStartKey(key)) > todayKey();
+// every other month: a themed generator, picked by the date alone (same puzzle for everyone, no server)
+const MONTH_THEMES = [
+  {theme:'Fresh start', names:['New year, new roads','Frosty morning','Clean slate','First commute','Resolution route','Snowy start','Winter sunrise','Cold snap','Fresh tracks','Calendar page','Quiet streets','Open road']},
+  {theme:'Heart of the city', names:['Neighbours helping','Good turn','Friendly junction','Shared ride','Helping hand','Kind corner','Community loop','Thank-you route','Open door','Warm welcome','City square','Carpool day']},
+  {theme:'Spring rain', names:['Puddle jumper','Umbrella weather','April showers','Drizzle drive','Rainbow after rain','Wet pavement','Misty morning','Green shoots','Rain check','Splash zone','Muddy boots','Clearing skies']},
+  {theme:'Blossom bridges', names:['Petal path','Blossom bridge','Cherry lane','Spring fair','Bright blooms','Pollen season','Garden gate','Bee line','Sunny spell','Fresh paint','Kite weather','Soft breeze']},
+  {theme:'Garden routes', names:['Flower market','Green thumb','Hedge maze','Allotment run','Picnic traffic','Greenhouse rush','Rose road','Park gates','Sprinkler shift','Herb lane','Lawn day','Bloom season']},
+  {theme:'Summer holidays', names:['School is out','Long daylight','Road trip','Ice cream run','Holiday queue','Sunny detour','Campsite convoy','Lemonade stand','Seaside shuttle','Midsummer','Day trip','Hot pavement']},
+  {theme:'Heatwave', names:['Shimmering streets','Cool shade','Fan season','Melting asphalt','Water break','Sun hats','Lazy afternoon','Siesta hour','Sunset rush','Sprinkler street','Warm night','Breezy bridge']},
+  {theme:'Beach traffic', names:['Sandcastle shuttle','Tide times','Boardwalk rush','Beach day','Surf and turf','Seagull alley','Pier parking','Coastal crawl','Sunscreen stop','Harbour holiday','Shell collector','Lifeguard lane']},
+  {theme:'Back to the city', names:['First bell','School run','Fresh notebooks','New term','Busy platforms','Pencil case','Homework rush','Library lane','Playground gate','Bus stop shuffle','Autumn start','Backpack brigade']},
+  {theme:'Autumn leaves', names:['Leaf pile','Golden avenue','Crunchy streets','Harvest market','Windy way','Conker corner','Orange trees','Pumpkin patch','Woolly hats','Rustling road','Apple orchard','Early sunset']},
+  {theme:'Fog and lanterns', names:['Foggy bridge','Lantern walk','Misty harbour','Low clouds','Glowing windows','Dark by five','Cosy commute','Streetlight glow','Hazy hills','Quiet fog','Lamplight lane','Warm soup']},
+  {theme:'Winter lights', names:['Lights on','Snow day','First frost','Holiday traffic','Frosted windows','Ice bridge','Long nights','Year-end rush','Cosy lanterns','Twinkle street','Winter market','Slush hour']},
+];
+const monthTheme = m => MONTH_THEMES[m];
+const MOD_TIERS = [['diag','rainbow'], ['busy','nobridge'], ['rush','tight']]; // easy to hard
+function genChallenge(kind, key){
   const r = mulberry32(key*7919 + (kind==='daily'?1:2));
   const city = CITIES[Math.floor(r()*CITIES.length)];
-  const pool = MODS.slice(); const mods = [];
-  while (mods.length < 2) mods.push(pool.splice(Math.floor(r()*pool.length),1)[0]);
-  return {kind, key, city, mods, seed:key*31 + (kind==='daily'?3:5)};
+  let date, weekend = false;
+  if (kind === 'daily') { date = dateOfKey(key); weekend = date.getDay() === 0 || date.getDay() === 6; }
+  else { const mon = dateOfKey(weekStartKey(key)); date = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 3); } // an ISO week belongs to the month of its Thursday
+  const dim = new Date(date.getFullYear(), date.getMonth()+1, 0).getDate(), day = date.getDate();
+  const finale = kind === 'daily' ? day === dim : day + 7 > dim;
+  const th = MONTH_THEMES[date.getMonth()], f = (day-1)/Math.max(1, dim-1);
+  const level = Math.min(2, Math.round(f*2 + (weekend ? 0.6 : 0)));
+  const A = MOD_TIERS[level][Math.floor(r()*2)];
+  const rest = MOD_TIERS.slice(0, level+1).flat().filter(x => x !== A);
+  const ids = finale ? ['rush', 'tight', ['busy','nobridge','diag','rainbow'][Math.floor(r()*4)]] : [A, rest[Math.floor(r()*rest.length)]];
+  const n = th.names.length, i = kind === 'daily' ? day-1 : (Math.floor((day-1)/7)*5 + 2), cyc = Math.floor(i/n);
+  const name = finale ? 'Month finale · ' + th.theme : th.names[i % n] + (cyc ? ' ' + 'I'.repeat(cyc+1) : '');
+  return {kind, key, name, city, mods: ids.map(id => MODS.find(m => m.id === id)), seed: key*31 + (kind==='daily'?3:5)};
 }
+function challengeFor(kind, at){
+  const key = at || (kind==='daily' ? todayKey() : weekKey());
+  const hand = DEC2026[kind] && DEC2026[kind][key];
+  if (hand) return {kind, key, name: hand.name, city: CITIES.find(c => c.id === hand.city), mods: hand.mods.map(id => MODS.find(m => m.id === id)), seed: hand.seed || key*31 + (kind==='daily'?3:5)};
+  return genChallenge(kind, key);
+}
+// ==== DEC2026 END ====
 
 // ---------- theme ----------
 let TH = {};
@@ -1144,6 +1304,14 @@ function measureTraffic(){
   }
   G.load = load; G.queue = queue; G.dcache.clear();
 }
+// jam markers for the map (visual only, nothing in the sim reads them): tiles with a long queue or a long average wait
+function measureJams(){
+  const q = new Map();
+  for (const c of G.cars) { if (c.state === 'unload' || c.seg >= c.path.length-1 || !(c.stuck > 0.4)) continue;
+    const b = c.path[c.seg+1]; if (G.occ[b] !== 1) continue; const e = q.get(b) || [0, 0]; e[0]++; e[1] += c.stuck; q.set(b, e); }
+  const out = []; for (const [t, [n, w]] of q) if (n >= 4 || (n >= 2 && w/n > 3)) out.push([t, n]);
+  G.jams = out;
+}
 function pathCost(path, from){ let t = 0; for (let k=from; k<path.length-1; k++) t += edgeCost(path[k], path[k+1]); return t; }
 // how many more cars are headed to a parking lot than it has stalls (0 when there is room)
 function boundCounts(){ const m = new Map(); for (const o of G.cars) if (!o.kind && (o.state === 'go' || o.state === 'unload')) { const e = o.path[o.path.length-1]; m.set(e, (m.get(e)||0) + 1); } return m; }
@@ -1382,15 +1550,33 @@ function ringYield(n, c, from, to, m){
   for (const o of G.cars) { if (o === c || !m.has(o.id)) continue;
     const t = ringT(o, n); if (t < 0) continue; const mv = m.get(o.id), g = ringGeo(n, mv[0], mv[1]);
     const po = g.p1 - g.D*g.d*t, up = me.D > 0 ? mod2pi(po - me.p1) : mod2pi(me.p1 - po), rem = g.d*(1 - t);
-    if (up > 2*Math.PI - 0.5) return false; // just passed our entry: let it get clear first
-    if (rem > up - 0.15 && up < 1.9) return false; }
+    if (up > 2*Math.PI - 0.25) return false; // right alongside our entry: don't merge into its side
+    // gap acceptance: only a circulating car that will reach our entry within ~1.2 s makes us wait
+    if (rem > up - 0.15 && up*RING_R / Math.max(0.25, o.v||0) < 1.2) return false; }
   return true;
 }
+// how soon a car reaches the box of `node` (0 = already inside, Infinity = not heading there)
+function boxEta(o, node){
+  if (!o || o.state === 'unload' || o.seg >= o.path.length-1) return Infinity;
+  if (o.path[o.seg] === node) return o.s < 0.62 ? 0 : Infinity;
+  if (o.path[o.seg+1] !== node) return Infinity;
+  return Math.max(0, edgeLen(o.path[o.seg], node) - o.s) / Math.max(0.15, o.v||0);
+}
+const RING_CAP = Math.max(3, Math.floor(2*Math.PI*RING_R / 0.95));
+// gap acceptance instead of an empty box: a crossing move may go when the conflicting traffic is still more than ~1.5 s
+// away; bookings still settle who goes first (nearer car, then lower id) so two cars never share the box
 function junctionFree(node, c, from, to){
-  const m = G.res.get(node); if (!m || !m.size || m.has(c.id)) return true;
-  if (G.round.has(node)) return m.size < 4 && ringYield(node, c, from, to, m);
-  for (const mv of m.values()) if (moveConflict(node, from, to, mv[0], mv[1])) return false;
-  return m.size < 4;
+  const m = G.res.get(node); if (!m || !m.size) return true;
+  const mine = m.has(c.id);
+  if (G.round.has(node)) return mine || (m.size < RING_CAP && ringYield(node, c, from, to, m));
+  const ec = boxEta(c, node), byId = G.byId;
+  for (const [id, mv] of m) { if (id === c.id || !moveConflict(node, from, to, mv[0], mv[1])) continue;
+    const o = byId && byId.get(id), eo = boxEta(o, node);
+    if (eo === 0) return false;
+    const first = eo < ec || (eo === ec && id < c.id);
+    if (first && eo < Math.max(1.5, ec + 1)) return false;
+    if (!mine && eo < 1.5) return false; }
+  return mine || m.size < 4;
 }
 function reserve(node, c, from, to){
   if (G.blocked.has(node) && c.kind !== 'amb') return false;
@@ -1430,6 +1616,8 @@ function carsOn(a, b){
   return G.onEdge.get(a*N + b) || [];
 }
 function stepCar(c, dt){ const k0 = carKey(c), n0 = G.cars.length; stepCar0(c, dt); if (G.cars.length !== n0 || carKey(c) !== k0) G.onEdgeDirty = true; }
+// bumper-to-bumper spacing: trucks are longer, so the car behind keeps more room
+const vehGap = (o, c) => (o.kind === 'truck' || c.kind === 'truck') ? 0.8 : 0.62;
 function stepCar0(c, dt){
   if (c.state === 'unload') {
     c.waitT -= dt;
@@ -1467,11 +1655,12 @@ function stepCar0(c, dt){
   let vRoad = SPEED*kf*roadF(a, b);
   const rIn = G.round.has(b) && !last, rOut = G.round.has(a) && c.seg > 0;
   if (rIn || rOut) { const rg = ringGeo(rIn ? b : a, rIn ? a : c.path[c.seg-1], rIn ? c2 : b); const onArc = rIn ? c.s >= RA_IN : c.s < RA_OUT;
-    vRoad = SPEED*kf*(onArc ? Math.min(1.25, 0.85*(RA_IN + 1 - RA_OUT) / (RING_R*rg.d)) : 0.8); }
+    vRoad = SPEED*kf*(onArc ? Math.min(1.25, 0.85*(RA_IN + 1 - RA_OUT) / (RING_R*rg.d)) : rOut ? 0.62 + 0.3*Math.min(1, rg.d/(1.5*Math.PI)) : 0.8); }
   let mv = vRoad*dt;
-  const stopD = G.round.has(b) ? 1 - RA_IN : 0.32;
+  // stop line: roundabouts give way at the ring, lights a touch further back, long (diagonal) approaches a bit more room
+  const stopD = G.round.has(b) ? 1 - RA_IN : (G.lights.has(b) ? 0.36 : 0.32) * (len > 1.2 ? 1.15 : 1);
   let lim = len, lead = null, leadGap = 1e9;
-  if (!amb) for (const o of carsOn(a, b)) if (o!==c && o.state!=='unload' && o.path[o.seg]===a && o.path[o.seg+1]===b && o.s > c.s) { if (o.s - 0.62 < lim) lim = o.s - 0.62; if (o.s - c.s - 0.62 < leadGap) { leadGap = o.s - c.s - 0.62; lead = o; } }
+  if (!amb) for (const o of carsOn(a, b)) if (o!==c && o.state!=='unload' && o.path[o.seg]===a && o.path[o.seg+1]===b && o.s > c.s) { const gl = vehGap(o, c); if (o.s - gl < lim) lim = o.s - gl; if (o.s - c.s - gl < leadGap) { leadGap = o.s - c.s - gl; lead = o; } }
   if (!amb && G.ambOut && G.cars.some(o => o.kind==='amb' && o.state!=='unload' && o.path[o.seg+1]===b && o!==c && o.path[o.seg]!==a)) lim = Math.min(lim, len - 0.4);
   let stopAt = len; // where the car has to be able to stop (crossing, light, yield line)
   // look ahead: start braking early if the crossing ahead is busy, instead of slamming to a stop at the line
@@ -1492,16 +1681,19 @@ function stepCar0(c, dt){
     else if (G.round.has(b)) vNode = Math.min(vNode, 0.8*SPEED*kf);
     vWant = Math.min(vWant, Math.sqrt(vNode*vNode + 2*BRK*Math.max(0, len - c.s)));
     // the car just past the crossing counts as the car in front
-    if (!amb && !lead) for (const o of carsOn(b, c2)) if (o!==c && o.state!=='unload' && o.path[o.seg]===b && o.path[o.seg+1]===c2) { const g = len - c.s + o.s - 0.62; if (g < leadGap) { leadGap = g; lead = o; } }
+    if (!amb && !lead) for (const o of carsOn(b, c2)) if (o!==c && o.state!=='unload' && o.path[o.seg]===b && o.path[o.seg+1]===c2) { const g = len - c.s + o.s - vehGap(o, c); if (g < leadGap) { leadGap = g; lead = o; } }
   }
   if (lead) vWant = Math.min(vWant, Math.sqrt(Math.max(0, (lead.v||0)*(lead.v||0) + 2*BRK*Math.max(0, leadGap - (c.v||0)*HEADWAY))));
-  if (stopAt < len) vWant = Math.min(vWant, Math.sqrt(2*BRK*Math.max(0, stopAt - c.s - 0.01)) + (stopAt - c.s > 0.04 ? 0.06 : 0));
+  if (stopAt < len) { vWant = Math.min(vWant, Math.sqrt(2*BRK*Math.max(0, stopAt - c.s - 0.01)) + (stopAt - c.s > 0.04 ? 0.06 : 0));
+    // at a give-way (not a red light) creep up to the line at about a third of road speed instead of stopping short
+    if (!G.lights.has(b) && stopAt - c.s > 0.12 && (!lead || leadGap > 0.25)) vWant = Math.max(vWant, Math.min(0.3*vRoad, Math.sqrt(2*BRK*Math.max(0, stopAt - c.s - 0.02)) + 0.1)); }
   // gridlock valve: after a long wait, cars inch forward instead of the jam freezing solid
   if (c.stuck > 6) { lim = Math.max(lim, Math.min(len, c.s + mv*0.3 + 0.02)); vWant = Math.max(vWant, 0.3*vRoad); c.rx = 0; }
   const room = Math.max(0, lim - c.s);
   if (c.v === undefined) c.v = 0;
   // a stopped car pulls away a moment after the way clears, so a queue starts one car after another
-  if (c.v < 0.04) { if (vWant < 0.1) c.rx = 0.12 + ((c.id * 7919) % 101) / 101 * 0.22; else if (c.rx > 0) { c.rx -= dt; vWant = 0; } }
+  // the reaction delay only counts down once the car ahead has started moving (or the way is open), so queues ripple
+  if (c.v < 0.04) { if (vWant < 0.1) c.rx = 0.16 + ((c.id * 7919) % 101) / 101 * 0.12; else if (c.rx > 0) { if (!lead || (lead.v||0) > 0.12 || leadGap > 0.45) c.rx -= dt; vWant = 0; } }
   if (vWant < c.v) { const nv = Math.max(vWant, c.v - BRK_MAX*dt); c.brk = c.v - nv > 0.6*dt || vWant < 0.05 ? 1 : 0; c.v = nv; }
   else { c.brk = 0; c.v = Math.min(vWant, c.v + ACC*Math.max(0.3, 1 - Math.pow(c.v / Math.max(vRoad, 0.01), 4))*dt); }
   let ns = c.s + Math.min(c.v*dt, room);
@@ -1524,7 +1716,10 @@ function loseCarSilent(c){ if (c.held>=0) release(c.held,c); dropCar(c); G.retur
 
 // ---------- simulation ----------
 const isRush = () => PLUS() && G.week >= 3 && ((G.weekT > 10 && G.weekT < 17) || (G.weekT > 29 && G.weekT < 36));
-const pinInterval = d => (1 - 0.12*(((d && d.level)||1)-1)) * (G.city.practice ? 1.4 : 1) * Math.max(2.6, 5 - G.week*0.18) * (G.mods.has('rush') ? 0.67 : 1) * (isRush() ? 0.65 : 1) * (G.gameDay === d ? 0.45 : 1);
+// demand follows supply: a workplace with few homes of its color asks for cars more slowly (pressure comes from routing, not
+// from a color that hasn't grown yet); the first two weeks are a little gentler
+const supplyF = d => { if (!d || d.color < 0) return 1; let h = 0, n = 0; for (const o of G.houses) if (o.color === d.color) h++; for (const o of G.dests) if (o.color === d.color) n++; return Math.min(1.6, Math.max(1, 4.5 / Math.max(1, h / Math.max(1, n)))); };
+const pinInterval = d => (G.week <= 2 ? 1.2 : 1) * supplyF(d) * (1 - 0.12*(((d && d.level)||1)-1)) * (G.city.practice ? 1.4 : 1) * Math.max(2.6, 5 - G.week*0.18) * (G.mods.has('rush') ? 0.67 : 1) * (isRush() ? 0.65 : 1) * (G.gameDay === d ? 0.45 : 1);
 // at most about one house per 11 open tiles of the current city area (about 110 on the full map)
 const houseCap = () => Math.max(12, Math.round(G.rect.w * G.rect.h / 11));
 const houseInterval = () => (G.city.practice ? 1.5 : 1) * Math.max(2.2, 7 - G.week*0.4) * (G.mods.has('busy') ? 0.5 : 1);
@@ -1554,15 +1749,21 @@ function update(dt){
       toast(`The ${d.color < 0 ? 'airport' : COLOR_NAMES[d.color] + ' workplace'} overflowed: -${lose}`, 1800); sfx('thud');
     }
   }
+  // more workplaces as the city grows: about one per 6 homes of a color, checked every few seconds from week 3
+  if (G.week >= 3 && !G.city.practice) { G.wpT = (G.wpT||0) + dt; if (G.wpT >= 8) { G.wpT = 0; if (!(G.incoming && G.incoming.length)) {
+    let best = -1, br = 6; for (let c=0;c<G.colors;c++){ const {h,d} = countColor(c); const r = h / Math.max(1, d); if (d && r > br) { br = r; best = c; } }
+    if (best >= 0) announceDest(best, false); } } }
   G.houseT += dt; if (G.houseT >= houseInterval()) { G.houseT = 0; if (G.houses.length < houseCap()) spawnHouse(); }
   landIncoming();
   if (G.airportAt !== undefined && G.time >= G.airportAt) { G.airportAt = undefined; const ap = G.city.airport; if (!G.dests.some(d => d.color === -1) && spawnDest(-1, false, ap)) toast(`The ${G.city.name} airport opened. It takes cars of every color.`, 3500); }
   if (G.endless && !G.city.practice && G.cfg.kind !== 'sandbox' && !G.city.custom) { store.endless = store.endless || {}; if (G.score > (store.endless[G.city.id]||0)) { store.endless[G.city.id] = G.score; G.endDirty = true; } }
   if (PLUS() && G.week >= 4 && !G.city.practice) { G.ambT += dt; if (G.ambT > 40) { G.ambT = 0; spawnAmbulance(); } }
   if (G.wh) { G.truckT += dt; if (G.truckT > 7) { G.truckT = 0; spawnTruck(); } }
-  { G.trafT = (G.trafT||0) + dt; if (G.trafT >= 1) { G.trafT = 0; measureTraffic(); sweepRes(); } G.rerT = (G.rerT||0) + dt; if (G.rerT >= 1) { G.rerT = 0; rerouteCars(); } }
+  { G.jamT = (G.jamT||0) + dt; if (G.jamT >= 0.5) { G.jamT = 0; measureJams(); }
+    G.trafT = (G.trafT||0) + dt; if (G.trafT >= 1) { G.trafT = 0; measureTraffic(); sweepRes(); } G.rerT = (G.rerT||0) + dt; if (G.rerT >= 1) { G.rerT = 0; rerouteCars(); } }
   G.dispT += dt; if (G.dispT >= 0.2) { G.dispT = 0; dispatch(); }
   G.onEdgeDirty = true; G.ambOut = G.cars.some(o => o.kind === 'amb');
+  G.byId = new Map(); for (const c of G.cars) G.byId.set(c.id, c);
   for (const c of [...G.cars]) if (c.path && G.cars.indexOf(c) >= 0) stepCar(c, dt);
   let reopened = false;
   for (const [t, until] of G.closed) if (G.time >= until) { G.closed.delete(t); if (G.flooded) G.flooded.delete(t); reopened = true; }
@@ -1753,7 +1954,35 @@ function duelAutoPick(){
   const tick = () => { if (!G || G.pending !== pend || G.over) return; if (performance.now() < pend.dl) { setTimeout(tick, 250); return; } const b = sheetCard.querySelector('#gotIt') || sheetCard.querySelector('[data-upg]'); if (b) b.click(); };
   clearTimeout(duelAutoPick.t); duelAutoPick.t = setTimeout(tick, 250);
 }
-function showUpgrade(){
+// solo games: a slide-in tray, the city keeps running (slowed); live and saved duels keep the old blocking sheet and its 20 s limit
+const TRAY_SLOW = 0.25, TRAY_SECS = 15;
+function showUpgrade(){ if (isDuel()) showUpgradeSheet(); else showTray(); }
+function showTray(){
+  const pend = G.pending, {picks, willExpand} = pend, tray = el('tray');
+  G.seen = G.seen || new Set(['roads']); G.tray = true; G.modal = false;
+  tray.innerHTML = `<div class="tr-head"><div><div class="small">Sunday · week ${G.week} begins</div><b>${picks.length > 1 ? 'Choose an upgrade' : 'Your upgrade'}</b></div>
+    <div class="tr-timer" title="The first card is picked for you when the ring runs out"><svg viewBox="0 0 32 32" aria-hidden="true"><circle class="bg" cx="16" cy="16" r="13"/><circle class="fg" id="trRing" cx="16" cy="16" r="13"/></svg><span id="trSecs">${TRAY_SECS}</span></div></div>
+    <div class="tr-cards">${picks.map((k, i) => { const u = UPG[k], fresh = !G.seen.has(k); return `<button class="tcard${fresh ? ' fresh' : ''}" data-tray="${k}" title="${u.desc.replace(/"/g, '&quot;')}">
+      ${fresh ? '<span class="t-new">New!</span>' : ''}<span class="t-key" aria-hidden="true">${i+1}</span>
+      <span class="t-ico">${ICON[k]}</span>
+      <span class="t-txt"><span class="t-main">+${u.n()} ${u.unit}</span>${u.roads() ? `<span class="t-sub">+${u.roads()} road tiles</span>` : ''}<span class="t-name">${u.name} · you have ${u.have()}</span><span class="t-desc">${u.desc}</span></span></button>`; }).join('')}</div>
+    ${willExpand ? '<div class="t-foot">The city grows after you choose.</div>' : ''}`;
+  tray.hidden = false; tray.classList.remove('in'); void tray.offsetWidth; tray.classList.add('in');
+  let dl = performance.now() + TRAY_SECS*1000, lastT = performance.now();
+  const ring = tray.querySelector('#trRing'), secs = tray.querySelector('#trSecs'), C = 2*Math.PI*13;
+  ring.style.strokeDasharray = C;
+  const close = () => { clearInterval(showTray.t); tray.hidden = true; tray.innerHTML = ''; if (G) G.tray = false; };
+  tray.querySelectorAll('[data-tray]').forEach(b => b.onclick = () => { if (G.pending !== pend) return; for (const q of picks) G.seen.add(q); close(); applyUpgrade(b.dataset.tray, willExpand, true); });
+  clearInterval(showTray.t);
+  showTray.t = setInterval(() => {
+    if (!G || G.pending !== pend || G.over) { close(); return; }
+    const t = performance.now(); if (!sheet.hidden) dl += t - lastT; lastT = t; // the countdown waits while a menu is open
+    const left = Math.max(0, dl - t); ring.style.strokeDashoffset = C * (1 - left/(TRAY_SECS*1000)); secs.textContent = Math.ceil(left/1000);
+    if (left <= 0) { const b = tray.querySelector('[data-tray]'); if (b) b.click(); }
+  }, 100);
+  sfx('arp');
+}
+function showUpgradeSheet(){
   const {picks, willExpand} = G.pending;
   G.modal = true;
   G.seen = G.seen || new Set(['roads']);
@@ -1775,8 +2004,10 @@ function showUpgrade(){
   const peek = on => { sheet.style.opacity = on ? '0.06' : ''; };
   pk.addEventListener('pointerdown', e => { e.preventDefault(); peek(true); });
   for (const ev of ['pointerup','pointerleave','pointercancel']) pk.addEventListener(ev, () => peek(false));
-  sheetCard.querySelectorAll('[data-upg]').forEach(b => b.onclick = () => {
-    UPG[b.dataset.upg].apply(); G.undo = []; sheet.style.opacity = ''; G.pending = null; closeSheet(); toast(`+${UPG[b.dataset.upg].n()} ${UPG[b.dataset.upg].unit}`); G.modal = false; sfx('pick');
+  sheetCard.querySelectorAll('[data-upg]').forEach(b => b.onclick = () => applyUpgrade(b.dataset.upg, willExpand));
+}
+function applyUpgrade(k, willExpand, viaTray){
+    UPG[k].apply(); G.undo = []; sheet.style.opacity = ''; G.pending = null; if (!viaTray) closeSheet(); toast(`+${UPG[k].n()} ${UPG[k].unit}`); if (!viaTray) G.modal = false; sfx('pick');
     if (willExpand) expandStage();
     if (PLUS() && G.week >= 7 && !G.wh && !G.city.practice) openWarehouse();
     pickWeather();
@@ -1786,7 +2017,6 @@ function showUpgrade(){
     if (G.week % every === 0 && G.colors < CAR_COLORS.length) { G.colors++; announceDest(G.colors-1, true); }
     else if (G.week >= 2) { let best=0, bs=-1; for (let c=0;c<G.colors;c++){ const {h,d}=countColor(c); if (h/Math.max(1,d) > bs){bs=h/Math.max(1,d); best=c;} } announceDest(best, false); }
     saveGame();
-  });
 }
 // a soft pulse marks where a new workplace is coming, a few seconds before it appears
 function announceDest(color, withHouses){
@@ -2394,21 +2624,24 @@ const BOARDS = {
   ocean:   {name:'Ocean Blue', table:'#84c4e8', grain:'#72b4da', slab:'#e8f3fb', land:'#f4e8bd', land2:'#ecdeaf', water:'#2f92e6', deep:'#2582d8', rim:'#b8e8fb', hill:'#a9bccf', hillSide:'#7c93ab', tree:'#2f9e7c', tree2:'#5cc7a4', road:'#6e7f90', curb:'#fff9e8', roadLine:'#ffffff', ol:'#5f87a8', mark:'#d0c08a'},
   neon:    {name:'Neon Night', night:true, table:'#191433', grain:'#241c47', slab:'#40367a', land:'#2e2756', land2:'#352d62', water:'#0f6fc0', deep:'#0c5fae', rim:'#3fe3ff', hl:'rgba(120,255,255,.55)', hill:'#4c3c8a', hillSide:'#2f2462', hillMark:'#6c58b8', tree:'#17b085', tree2:'#3fe8b0', road:'#403a72', curb:'#3fe3ff', roadLine:'#ff55d6', ol:'#0b0818', mark:'#6a5fb4', rail:'#bff6ff'},
   classic: {name:'Classic Toy', table:'#b8864f', grain:'#a2723e', slab:'#7a5a38', land:'#8cbc5a', land2:'#84b452', water:'#3d97cf', deep:'#2f80b8', rim:'#1d5f8c', hill:'#c2aa76', hillSide:'#8a7347', hillMark:'#a18a58', tree:'#3e7d3a', tree2:'#58a24a', road:'#3d4249', curb:'#d2cab5', roadLine:'#cfc7a8', ol:'#1b1612', mark:'#6c7a4a', rail:'#efe6cc', hard:true},
+  // the flat look from before the toy-diorama restyle (v38): no table, no baseplate, no outlines or side faces; `dk` = its own dark palette
+  original:{name:'Original (flat)', flat:true, table:'#c9d3d2', slab:'#c9d3d2', land:'#eef2ef', land2:'#eef2ef', water:'#9cc5df', deep:'#86b6d4', rim:'#9cc5df', hill:'#d6dac8', hillSide:'#b9bfa6', hillMark:'#b9bfa6', tree:'#b9bfa6', tree2:'#b9bfa6', road:'#4b5561', curb:'#26303a', roadLine:'#eef2ef', ol:'#26303a', mark:'#b9bfa6', dot:'#5b6973', rail:'#26303a',
+    dk:{table:'#11171a', slab:'#11171a', land:'#1f282c', land2:'#1f282c', water:'#1b425b', deep:'#173a50', rim:'#1b425b', hill:'#2a322d', hillSide:'#38423b', hillMark:'#38423b', tree:'#38423b', tree2:'#38423b', road:'#a3adb6', curb:'#d6dde3', ol:'#d6dde3', mark:'#38423b', roadLine:'#1f282c', dot:'#98a7b0', rail:'#d6dde3'}},
 };
-const BOARD_ORDER = ['sunny','candy','snow','autumn','desert','ocean','neon','classic'];
+const BOARD_ORDER = ['sunny','candy','snow','autumn','desert','ocean','neon','classic','original'];
 const BPAL = {};
 function boardPal(id, dk){
-  const b = BOARDS[id] || BOARDS.sunny, night = !!b.night, dim = !!dk && !night, key = (BOARDS[id] ? id : 'sunny') + (dim ? 'D' : 'L');
+  const b0 = BOARDS[id] || BOARDS.sunny, b = dk && b0.dk ? Object.assign({}, b0, b0.dk) : b0, night = !!b.night, dim = !!dk && !night && !b0.dk, key = (BOARDS[id] ? id : 'sunny') + (dim ? 'D' : 'L');
   if (BPAL[key]) return BPAL[key];
   const D = c => dim ? mixc(c, '#0b1014', .5) : c;
   const road = dim ? mixc(b.road, '#0b1014', .2) : b.road;
   const P = {id: key, night, table: D(b.table), grain: D(b.grain || shade(b.table, -.08)), land: D(b.land), land2: D(b.land2 || shade(b.land, -.04)),
     water: D(b.water), waterDeep: D(b.deep || shade(b.water, -.1)), waterEdge: D(b.rim), hl: b.hl || 'rgba(255,255,255,.5)',
     hill: D(b.hill), hillSide: D(b.hillSide || shade(b.hill, -.22)), hillMark: D(b.hillMark || shade(b.hill, -.1)),
-    tree: D(b.tree), tree2: D(b.tree2 || shade(b.tree, .18)), mark: D(b.mark), dot: '#ffffff',
+    tree: D(b.tree), tree2: D(b.tree2 || shade(b.tree, .18)), mark: D(b.mark), dot: b.dot || '#ffffff', flat: !!b.flat,
     road, curb: dim ? mixc(b.curb, '#0b1014', .25) : b.curb, roadLine: dim ? mixc(b.roadLine, '#0b1014', .2) : b.roadLine,
     outline: b.hard ? (dim ? '#05080a' : b.ol) : D(b.ol), hard: !!b.hard, vig: night || dim ? .3 : .12};
-  P.roadOl = night ? '#0b0818' : mixc(road, '#000000', b.hard ? .55 : .3);
+  P.roadOl = night ? '#0b0818' : b.flat ? b.curb : mixc(road, '#000000', b.hard ? .55 : .3);
   P.slab = D(b.slab); P.slabSide = shade(P.slab, -.16); P.slabTop = shade(P.land, .1);
   P.rail = b.rail || '#fbf6e8'; P.deck = shade(road, -.25); P.ferry = shade(P.water, -.3);
   P.slabLine = b.hard ? P.outline : night ? '#0b0818' : mixc(P.slab, '#000000', .35); P.shade = night || dim ? 1.25 : 1; // shadow strength multiplier
@@ -2422,16 +2655,16 @@ const NIGHT = () => TH.dark || boardPal(SET.board, TH.dark).night;
 function drawBoardPreview(c, id){
   const P = boardPal(id, TH.dark), g = c.getContext('2d'), w = c.width, h = c.height;
   g.fillStyle = P.table; g.fillRect(0, 0, w, h);
-  const x0 = 8, y0 = 6, bw = w - 22, bh = h - 20, ed = 6;
-  g.fillStyle = 'rgba(0,0,0,.12)'; g.fillRect(x0 + 3, y0 + 5, bw + ed, bh + ed);
-  g.fillStyle = P.slab; g.fillRect(x0 + ed, y0 + 2, bw, bh + ed - 2); g.fillStyle = P.slabSide; g.fillRect(x0, y0 + bh, bw + ed, ed);
-  g.fillStyle = P.land; g.fillRect(x0, y0, bw, bh); g.fillStyle = P.land2; const q = bw / 8; for (let yy = 0; yy < 4; yy++) for (let xx = yy & 1; xx < 8; xx += 2) g.fillRect(x0 + xx*q, y0 + yy*q, q, q);
-  g.fillStyle = P.hillSide; g.fillRect(x0 + bw*.64, y0 + 2 + 3, bw*.3, bh*.34); g.fillStyle = P.hill; g.fillRect(x0 + bw*.64, y0 + 2, bw*.3, bh*.34);
+  const x0 = 8, y0 = 6, bw = w - 22, bh = h - 20, ed = P.flat ? 0 : 6;
+  if (!P.flat) { g.fillStyle = 'rgba(0,0,0,.12)'; g.fillRect(x0 + 3, y0 + 5, bw + ed, bh + ed);
+  g.fillStyle = P.slab; g.fillRect(x0 + ed, y0 + 2, bw, bh + ed - 2); g.fillStyle = P.slabSide; g.fillRect(x0, y0 + bh, bw + ed, ed); }
+  g.fillStyle = P.land; g.fillRect(x0, y0, bw, bh); g.fillStyle = P.flat ? P.land : P.land2; const q = bw / 8; for (let yy = 0; yy < 4; yy++) for (let xx = yy & 1; xx < 8; xx += 2) g.fillRect(x0 + xx*q, y0 + yy*q, q, q);
+  if (!P.flat) { g.fillStyle = P.hillSide; g.fillRect(x0 + bw*.64, y0 + 2 + 3, bw*.3, bh*.34); } g.fillStyle = P.hill; g.fillRect(x0 + bw*.64, y0 + 2, bw*.3, bh*.34);
   g.fillStyle = P.waterEdge; g.fillRect(x0 - 0, y0 + bh*.55 - 1, bw*.38 + 2, bh*.45 + 1); g.fillStyle = P.water; g.fillRect(x0, y0 + bh*.55, bw*.38, bh*.45);
   g.fillStyle = P.tree; g.beginPath(); g.arc(x0 + bw*.5, y0 + bh*.2, 4, 0, 7); g.arc(x0 + bw*.25, y0 + bh*.28, 3.5, 0, 7); g.fill(); g.fillStyle = P.tree2; g.beginPath(); g.arc(x0 + bw*.5 - 1, y0 + bh*.2 - 1.5, 2, 0, 7); g.fill();
   const road = (lw, col) => { g.strokeStyle = col; g.lineWidth = lw; g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath(); g.moveTo(x0 + bw*.18, y0 + bh*.42); g.lineTo(x0 + bw*.55, y0 + bh*.42); g.lineTo(x0 + bw*.55, y0 + bh*.8); g.lineTo(x0 + bw*.9, y0 + bh*.8); g.stroke(); };
   road(8, P.roadOl); road(6.5, P.curb); road(4.5, P.road);
-  const blk = (x, y, col) => { g.fillStyle = shade(col, -.4); g.fillRect(x + 2, y + 2, 9, 9); g.fillStyle = col; g.fillRect(x, y, 9, 9); };
+  const blk = (x, y, col) => { if (!P.flat) { g.fillStyle = shade(col, -.4); g.fillRect(x + 2, y + 2, 9, 9); } g.fillStyle = col; g.fillRect(x, y, 9, 9); };
   blk(x0 + bw*.1, y0 + bh*.15, CAR_COLORS[0]); blk(x0 + bw*.7, y0 + bh*.5, CAR_COLORS[2]); blk(x0 + bw*.5, y0 + bh*.62, CAR_COLORS[1]);
 }
 // table: warm wood / felt with a faint grain, drawn once to an offscreen canvas and reused until size or theme changes
@@ -2524,22 +2757,22 @@ function buildTerrain(){
     const g = oc.getContext('2d'); g.scale(k, k);
     g.fillStyle = P.land; g.fillRect(0, 0, W, H);
     // felt-like checker so tiles read as a toy board
-    g.fillStyle = P.land2; g.beginPath(); for (let y=0;y<H;y++) for (let x=(y&1);x<W;x+=2) g.rect(x, y, 1, 1); g.fill();
+    if (!P.flat) { g.fillStyle = P.land2; g.beginPath(); for (let y=0;y<H;y++) for (let x=(y&1);x<W;x+=2) g.rect(x, y, 1, 1); g.fill(); }
     const fw = smoothField(1), fh = smoothField(2);
     // hills: raised blocks with a darker side face
-    g.save(); g.translate(0.07, 0.16); contour(g, fh, 0.5, P.hillSide); g.restore();
-    g.save(); g.translate(0.035, 0.08); contour(g, fh, 0.5, P.hillSide); g.restore();
+    if (!P.flat) { g.save(); g.translate(0.07, 0.16); contour(g, fh, 0.5, P.hillSide); g.restore();
+    g.save(); g.translate(0.035, 0.08); contour(g, fh, 0.5, P.hillSide); g.restore(); }
     contour(g, fh, 0.5, P.hill);
-    g.globalAlpha = 0.45; contour(g, fh, 0.84, P.hillMark); g.globalAlpha = 1;
+    g.globalAlpha = P.flat ? 0.35 : 0.45; contour(g, fh, P.flat ? 0.82 : 0.84, P.hillMark); g.globalAlpha = 1;
     // water: dark rim, body, deep centre, a few static highlight strokes
-    contour(g, fw, 0.36, P.waterEdge);
+    if (!P.flat) contour(g, fw, 0.36, P.waterEdge);
     contour(g, fw, 0.5, P.water);
     contour(g, fw, 0.9, P.waterDeep);
-    g.strokeStyle = P.hl; g.lineWidth = 0.05; g.lineCap = 'round'; g.beginPath();
+    g.strokeStyle = P.flat ? 'rgba(0,0,0,0)' : P.hl; g.lineWidth = 0.05; g.lineCap = 'round'; g.beginPath();
     for (let i=0;i<N;i++) if (G.terrain[i]===1 && waterInner(i)) { const h = hash(i*3+1); if (h % 3) continue; const x = ix(i)+.2+(h>>5 & 7)/16, y = iy(i)+.3+(h>>9 & 7)/14; g.moveTo(x, y); g.quadraticCurveTo(x+.18, y-.07, x+.36, y); }
     g.stroke();
     g.fillStyle = P.hillMark;
-    for (let i=0;i<N;i++) if (G.terrain[i]===2 && (ix(i)+iy(i))%2===0 && fh[(iy(i)*4+2)*(W*4+1) + ix(i)*4+2] > 0.75) { const x=ix(i)+.5, y=iy(i)+.55; g.beginPath(); g.moveTo(x-.28,y+.18); g.lineTo(x,y-.22); g.lineTo(x+.28,y+.18); g.closePath(); g.fill(); g.fillStyle = 'rgba(255,255,255,.22)'; g.beginPath(); g.moveTo(x,y-.22); g.lineTo(x+.1,y-.02); g.lineTo(x-.04,y-.02); g.closePath(); g.fill(); g.fillStyle = P.hillMark; }
+    for (let i=0;i<N;i++) if (G.terrain[i]===2 && (ix(i)+iy(i))%2===0 && fh[(iy(i)*4+2)*(W*4+1) + ix(i)*4+2] > 0.75) { const x=ix(i)+.5, y=iy(i)+.55; g.beginPath(); g.moveTo(x-.28,y+.18); g.lineTo(x,y-.22); g.lineTo(x+.28,y+.18); g.closePath(); g.fill(); if (P.flat) continue; g.fillStyle = 'rgba(255,255,255,.22)'; g.beginPath(); g.moveTo(x,y-.22); g.lineTo(x+.1,y-.02); g.lineTo(x-.04,y-.02); g.closePath(); g.fill(); g.fillStyle = P.hillMark; }
     for (const m of (G.city.marks||[])) drawMark(m, g);
     return oc;
   } catch (e) { return null; }
@@ -2549,6 +2782,7 @@ function buildTrees(){
     const P = pal(), k = 32, oc = document.createElement('canvas'); oc.width = W*k; oc.height = H*k;
     const g = oc.getContext('2d'); g.scale(k, k); g.lineWidth = 0.02; g.strokeStyle = shade(P.tree, -.35);
     const tree = (x, y, r, c1, c2) => {
+      if (P.flat) { g.fillStyle = 'rgba(0,0,0,.07)'; g.beginPath(); g.arc(x+.05, y+.07, .17, 0, 7); g.fill(); g.fillStyle = c1; g.beginPath(); g.arc(x, y, .16, 0, 7); g.fill(); if (hash(Math.round(x*40+y*400)) & 1) { g.beginPath(); g.arc(x+.22, y+.12, .11, 0, 7); g.fill(); } return; }
       g.fillStyle = `rgba(0,0,0,${.12*P.shade})`; g.beginPath(); g.ellipse(x+.06, y+.12, r*.95, r*.6, 0, 0, 7); g.fill();
       g.fillStyle = '#6b4a2b'; g.fillRect(x-.025, y-.02, .05, .13);
       g.fillStyle = c1; g.beginPath(); g.arc(x, y-.06, r, 0, 7); g.fill(); g.stroke();
@@ -2600,18 +2834,25 @@ function waterInner(i){ const x=ix(i), y=iy(i); for (const [dx,dy] of [[1,0],[-1
 // a house looks the same every frame, so draw each look once and reuse it. Two pictures per house:
 // the driveway + parked cars (rotates with the house) and the toy block (always lit from the same side, so it never rotates)
 const HS_R = 0.9, HS_PX = 80, HSPR = new Map(), HBLK = new Map(), HB_R = 0.5, HB_PX = 96;
+function flatHouseBody(col, apt, sz){ // v38 house: flat rounded square with a shaded half, no outline or shadow
+  const hy = -0.12; ctx.fillStyle = col; rr(-sz, hy-sz, sz*2, sz*2, sz*0.35); ctx.fill();
+  ctx.save(); rr(-sz, hy-sz, sz*2, sz*2, sz*0.35); ctx.clip(); ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.fillRect(-sz, hy-sz, sz, sz*2); ctx.restore();
+  if (apt) { ctx.fillStyle = 'rgba(255,255,255,.6)'; for (let q=0;q<3;q++) for (let w=0;w<2;w++) ctx.fillRect(-sz+0.08+w*(sz-0.02), hy-sz+0.08+q*0.2, 0.1, 0.07); }
+  else { ctx.fillStyle = 'rgba(255,255,255,.22)'; ctx.fillRect(-0.012, hy-sz+0.03, 0.024, sz*2-0.06); }
+}
 function houseSprite(col, diag, apt, nPark){
-  const P = pal(), key = col + (diag ? 'd' : 's') + nPark + P.id;
+  const P = pal(), key = col + (diag ? 'd' : 's') + (P.flat && apt ? 'a' : '') + nPark + P.id;
   let c = HSPR.get(key); if (c !== undefined) return c;
   try {
     c = document.createElement('canvas'); c.width = c.height = Math.round(HS_R*2*HS_PX);
     const g = c.getContext('2d'); g.scale(HS_PX, HS_PX); g.translate(HS_R, HS_R);
     const keep = ctx; ctx = g;
     const reach = diag ? 0.66 : 0.5;
+    if (P.flat) { ctx.fillStyle = P.roadOl; rr(-0.2, -0.02, 0.4, reach + 0.02, 0.08); ctx.fill(); ctx.fillStyle = P.road; rr(-0.17, 0.0, 0.34, reach - 0.02, 0.07); ctx.fill(); flatHouseBody(col, apt, apt ? 0.33 : 0.25); } else {
     ctx.fillStyle = `rgba(0,0,0,${.12*P.shade})`; rr(-0.2+0.03, 0.02, 0.4, reach, 0.04); ctx.fill();
     ctx.fillStyle = P.roadOl; rr(-0.2, -0.01, 0.4, reach + 0.02, 0.05); ctx.fill();
     ctx.fillStyle = P.curb; rr(-0.19, -0.02, 0.38, reach + 0.02, 0.04); ctx.fill();
-    ctx.fillStyle = P.road; rr(-0.15, 0.0, 0.3, reach - 0.02, 0.03); ctx.fill();
+    ctx.fillStyle = P.road; rr(-0.15, 0.0, 0.3, reach - 0.02, 0.03); ctx.fill(); }
     drawParked(col, nPark);
     ctx = keep;
   } catch (e) { c = null; }
@@ -2620,6 +2861,7 @@ function houseSprite(col, diag, apt, nPark){
 }
 function houseBlock(col, apt){
   const P = pal(), key = col + (apt ? 'a' : 'h') + P.id;
+  if (P.flat) return null; // the flat look draws the house body inside houseSprite
   let c = HBLK.get(key); if (c !== undefined) return c;
   try {
     c = document.createElement('canvas'); c.width = c.height = Math.round(HB_R*2*HB_PX);
@@ -2667,6 +2909,7 @@ function drawHouse(h){
       ctx.fillStyle = P.roadOl; rr(-0.2, -0.01, 0.4, reach + 0.02, 0.05); ctx.fill();
       ctx.fillStyle = P.curb; rr(-0.19, -0.02, 0.38, reach + 0.02, 0.04); ctx.fill();
       ctx.fillStyle = P.road; rr(-0.15, 0.0, 0.3, reach - 0.02, 0.03); ctx.fill();
+      if (P.flat) flatHouseBody(col, h.apt, (h.apt ? 0.33 : 0.25)*k);
       drawParked(col, nPark);
     }
     ctx.restore();
@@ -2699,6 +2942,12 @@ function buildHouseLayer(pick){
 }
 function toyCar(col, L, Wd, rad, roof){
   const P = pal(), dk = shade(col, -.42);
+  if (P.flat) { // v38 car: flat body, dark roof patch, pale windscreen; no outline or shadow
+    ctx.fillStyle = col; rr(-L, -Wd, L*2, Wd*2, rad); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,.2)'; rr(-L*0.37, -Wd*0.77, L*0.79, Wd*1.55, 0.04); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.75)'; rr(L*0.42, -Wd*0.73, L*0.26, Wd*1.45, 0.02); ctx.fill();
+    return;
+  }
   ctx.fillStyle = `rgba(0,0,0,${.16*P.shade})`; rr(-L+0.025, -Wd+0.045, L*2, Wd*2, rad); ctx.fill();
   ctx.fillStyle = col; rr(-L, -Wd, L*2, Wd*2, rad); ctx.fill();
   ctx.lineWidth = 0.016; ctx.strokeStyle = OL(P, col, -.45); ctx.stroke();
@@ -2717,6 +2966,7 @@ function drawParked(col, n){
 function drawVehicle(car){
   const P = pal(), col = car.color >= 0 ? CAR_COLORS[car.color] : '#f4f7f8';
   if (car.kind === 'truck') {
+    if (P.flat) { ctx.fillStyle = '#e9edf0'; rr(-0.26, -0.12, 0.36, 0.24, 0.04); ctx.fill(); ctx.fillStyle = '#7d8b96'; rr(0.12, -0.11, 0.14, 0.22, 0.05); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.fillRect(0.19, -0.08, 0.04, 0.16); return; }
     ctx.fillStyle = 'rgba(0,0,0,.16)'; rr(-0.26+0.03, -0.12+0.05, 0.52, 0.24, 0.04); ctx.fill();
     ctx.fillStyle = '#e9edf0'; rr(-0.26, -0.12, 0.36, 0.24, 0.03); ctx.fill(); ctx.lineWidth = 0.016; ctx.strokeStyle = '#7d8b96'; ctx.stroke();
     ctx.fillStyle = '#7d8b96'; rr(0.12, -0.11, 0.14, 0.22, 0.04); ctx.fill(); ctx.stroke();
@@ -2781,11 +3031,11 @@ function render(){
   if (!G) return;
   if (G.replay) { drawReplay(); return; }
   const c = cam(), s = c.s, P = pal(), r = G.rect;
-  { const tl = tableLayer(); if (tl) { ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(tl, 0, 0); } }
+  if (!P.flat) { const tl = tableLayer(); if (tl) { ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(tl, 0, 0); } }
   ctx.setTransform(dpr*s, 0, 0, dpr*s, dpr*c.ox, dpr*c.oy);
   const lw = 1/s;
-  drawSlab(r, P, lw);
-  ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+  if (!P.flat) drawSlab(r, P, lw);
+  ctx.save(); ctx.beginPath(); if (P.flat) ctx.rect(-2, -2, W+4, H+4); else ctx.rect(r.x, r.y, r.w, r.h); ctx.clip(); // flat look: land shows (fogged) outside the buildable area
   // ---- terrain: land base, soft-edged water and hills, trees ----
   ctx.fillStyle = P.land; ctx.fillRect(-0.5, -0.5, W+1, H+1);
   const tkey = G.city.id + P.id + TH.dark;
@@ -2808,13 +3058,15 @@ function render(){
   for (let i=0;i<N;i++) {
     if (!inRect(r,i)) continue;
     const a = clamp((now - G.revealAt[i])/0.35, 0, 1);
-    if (a < 1) { ctx.globalAlpha = 0.9*(1-a); ctx.fillStyle = P.slabTop; ctx.fillRect(ix(i), iy(i), 1, 1); }
+    if (a < 1) { ctx.globalAlpha = (P.flat ? 0.74 : 0.9)*(1-a); ctx.fillStyle = P.flat ? TH.bg : P.slabTop; ctx.fillRect(ix(i), iy(i), 1, 1); }
   }
   ctx.globalAlpha = 1;
+  if (P.flat) { ctx.fillStyle = TH.bg; ctx.globalAlpha = 0.74; ctx.beginPath(); ctx.rect(-2,-2,W+4,H+4); ctx.rect(r.x, r.y+r.h, r.w, -r.h); ctx.fill('evenodd'); ctx.globalAlpha = 1; } // v38: fog outside the buildable area
   ctx.restore();
+  if (P.flat) { ctx.strokeStyle = TH.muted; ctx.globalAlpha = 0.35; ctx.lineWidth = 1.5*lw; ctx.setLineDash([6*lw, 5*lw]); ctx.strokeRect(r.x, r.y, r.w, r.h); ctx.setLineDash([]); ctx.globalAlpha = 1; } else {
   // rim of the playable top face
   ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 1.5*lw; ctx.strokeRect(r.x + .75*lw, r.y + .75*lw, r.w - 1.5*lw, r.h - 1.5*lw);
-  ctx.strokeStyle = P.slabLine; ctx.lineWidth = lw; ctx.strokeRect(r.x, r.y, r.w, r.h);
+  ctx.strokeStyle = P.slabLine; ctx.lineWidth = lw; ctx.strokeRect(r.x, r.y, r.w, r.h); }
   if (PLUS() && G.city.rail !== undefined) {
     const y = G.city.rail + .5;
     ctx.strokeStyle = P.roadOl; ctx.globalAlpha = 0.7; ctx.lineWidth = 0.05;
@@ -2848,30 +3100,32 @@ function render(){
   const roadNodes = []; for (let i=0;i<N;i++) if (G.occ[i]===1) roadNodes.push(i);
   // toy roads: contact shadow, dark outline, light curb, asphalt, centre dashes on straights, all as joined ribbons
   if (P.night) { ctx.save(); ctx.globalAlpha = 0.16; strokeEdges(edges, 1.0, P.curb); strokeEdges(drives, 0.7, P.curb); ctx.globalAlpha = 0.22; strokeEdges(edges, 0.8, P.curb); ctx.restore(); }
-  ctx.save(); ctx.translate(0.05, 0.09); ctx.globalAlpha = 0.13*P.shade; strokeEdges(edges, 0.6, '#000'); ctx.restore();
+  const fw = (a, b) => P.flat ? b : a; // the flat look uses the old v38 widths
+  if (!P.flat) { ctx.save(); ctx.translate(0.05, 0.09); ctx.globalAlpha = 0.13*P.shade; strokeEdges(edges, 0.6, '#000'); ctx.restore(); }
   const bridgeE = edges.filter(([a,b]) => G.terrain[a]===1 || G.terrain[b]===1);
-  strokeEdges(edges, 0.585, P.roadOl);
-  strokeEdges(drives, 0.365, P.roadOl);
-  strokeEdges(edges, 0.54, P.curb);
-  strokeEdges(drives, 0.32, P.curb);
+  if (P.flat) strokeEdges(bridgeE, 0.74, P.roadOl);
+  strokeEdges(edges, fw(0.585, 0.56), P.roadOl);
+  strokeEdges(drives, fw(0.365, 0.34), P.roadOl);
+  strokeEdges(edges, fw(0.54, 0.56), P.curb);
+  strokeEdges(drives, fw(0.32, 0.34), P.curb);
   const driveStubs = drives.map(([a,b]) => { const r = G.occ[a]===1 ? a : G.occ[b]===1 ? b : -1; if (r<0) return null; const h = r===a?b:a; const [x1,y1]=nodePos(r),[x2,y2]=nodePos(h); return [x1,y1,x1+(x2-x1)*0.42,y1+(y2-y1)*0.42]; }).filter(Boolean);
   const strokeStubs = (w, col) => { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.lineCap = 'butt'; ctx.beginPath(); for (const [a,b,c2,d2] of driveStubs) { ctx.moveTo(a,b); ctx.lineTo(c2,d2); } ctx.stroke(); ctx.lineCap = 'round'; };
-  strokeStubs(0.585, P.roadOl); strokeStubs(0.54, P.curb);
-  const eNodes = new Set(); for (const [a,b] of edges) { eNodes.add(a); eNodes.add(b); } const discNodes = roadNodes.filter(i => !eNodes.has(i)); // ribbons already round their own joins; only lone nodes need a disc
-  ctx.fillStyle = P.roadOl; ctx.beginPath(); for (const i of discNodes) { ctx.moveTo(ix(i)+.79, iy(i)+.5); ctx.arc(ix(i)+.5, iy(i)+.5, 0.29, 0, 7); } ctx.fill();
-  ctx.fillStyle = P.curb; ctx.beginPath(); for (const i of discNodes) { ctx.moveTo(ix(i)+.77, iy(i)+.5); ctx.arc(ix(i)+.5, iy(i)+.5, 0.27, 0, 7); } ctx.fill();
-  strokeEdges(edges, 0.44, P.road);
+  strokeStubs(fw(0.585, 0.56), P.roadOl); strokeStubs(fw(0.54, 0.56), P.curb);
+  const eNodes = new Set(); for (const [a,b] of edges) { eNodes.add(a); eNodes.add(b); } const discNodes = P.flat ? roadNodes : roadNodes.filter(i => !eNodes.has(i)); // ribbons already round their own joins; only lone nodes need a disc
+  ctx.fillStyle = P.roadOl; ctx.beginPath(); for (const i of discNodes) { ctx.moveTo(ix(i)+.79, iy(i)+.5); ctx.arc(ix(i)+.5, iy(i)+.5, fw(0.29, 0.28), 0, 7); } ctx.fill();
+  ctx.fillStyle = P.curb; ctx.beginPath(); for (const i of discNodes) { ctx.moveTo(ix(i)+.77, iy(i)+.5); ctx.arc(ix(i)+.5, iy(i)+.5, fw(0.27, 0.28), 0, 7); } ctx.fill();
+  strokeEdges(edges, fw(0.44, 0.46), P.road);
   strokeEdges(drives, 0.24, P.road);
-  strokeStubs(0.44, P.road);
-  ctx.fillStyle = P.road; ctx.beginPath(); for (const i of discNodes) { ctx.moveTo(ix(i)+.72, iy(i)+.5); ctx.arc(ix(i)+.5, iy(i)+.5, 0.22, 0, 7); } ctx.fill();
-  if (s > 9) { // centre dashes only where the road runs straight through (not at junctions or bends)
+  strokeStubs(fw(0.44, 0.46), P.road);
+  ctx.fillStyle = P.road; ctx.beginPath(); for (const i of discNodes) { ctx.moveTo(ix(i)+.72, iy(i)+.5); ctx.arc(ix(i)+.5, iy(i)+.5, fw(0.22, 0.23), 0, 7); } ctx.fill();
+  if (s > 9 && !P.flat) { // centre dashes only where the road runs straight through (not at junctions or bends)
     const straight = (n, o) => { const nb = G.adj.get(n); if (!nb || nb.size > 2) return false; if (nb.size < 2) return true; for (const m of nb) if (m !== o) return (ix(n)-ix(o)) === (ix(m)-ix(n)) && (iy(n)-iy(o)) === (iy(m)-iy(n)); return false; };
     ctx.strokeStyle = P.roadLine; ctx.globalAlpha = 0.75; ctx.lineWidth = 0.035; ctx.lineCap = 'butt'; ctx.setLineDash([0.13, 0.17]); ctx.beginPath();
     for (const [a,b] of edges) if (straight(a,b) && straight(b,a) && G.occ[a]===1 && G.occ[b]===1) { const [x1,y1]=nodePos(a),[x2,y2]=nodePos(b); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); }
     ctx.stroke(); ctx.setLineDash([]); ctx.lineCap = 'round'; ctx.globalAlpha = 1;
   }
   // bridges: raised deck with a shadow on the water, rails on both sides
-  if (bridgeE.length) {
+  if (bridgeE.length && !P.flat) {
     ctx.save(); ctx.translate(0.07, 0.15); ctx.globalAlpha = 0.16*P.shade; strokeEdges(bridgeE, 0.7, '#000'); ctx.restore();
     ctx.lineCap = 'butt';
     ctx.save(); ctx.translate(0, 0.07); strokeEdges(bridgeE, 0.74, P.roadOl); strokeEdges(bridgeE, 0.7, P.deck); ctx.restore();
@@ -2895,12 +3149,14 @@ function render(){
   }
   // tunnel portals
   for (const i of roadNodes) if (G.terrain[i]===2) { const x=ix(i)+.5, y=iy(i)+.5;
+    if (P.flat) { ctx.strokeStyle = P.hillMark; ctx.lineWidth = 0.08; ctx.beginPath(); ctx.arc(x, y, 0.3, 0, 7); ctx.stroke(); continue; }
     ctx.beginPath(); ctx.moveTo(x-.3, y+.24); ctx.lineTo(x-.3, y-.02); ctx.arc(x, y-.02, .3, Math.PI, 0); ctx.lineTo(x+.3, y+.24); ctx.closePath();
     ctx.fillStyle = P.hillSide; ctx.fill(); ctx.lineWidth = 0.022; ctx.strokeStyle = shade(P.hillSide, -.3); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x-.19, y+.24); ctx.lineTo(x-.19, y-.02); ctx.arc(x, y-.02, .19, Math.PI, 0); ctx.lineTo(x+.19, y+.24); ctx.closePath();
     ctx.fillStyle = '#0b0d10'; ctx.fill(); }
   for (const [a,b] of mws) {
     const [x1,y1]=nodePos(a),[x2,y2]=nodePos(b);
+    if (P.flat) { ctx.strokeStyle = P.roadOl; ctx.lineWidth = 0.7; ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); ctx.strokeStyle = P.road; ctx.lineWidth = 0.5; ctx.stroke(); ctx.strokeStyle = P.land; ctx.lineWidth = 0.05; ctx.setLineDash([0.25,0.25]); ctx.stroke(); ctx.setLineDash([]); continue; }
     ctx.strokeStyle = 'rgba(0,0,0,.15)'; ctx.lineWidth = 0.7; ctx.beginPath(); ctx.moveTo(x1+.1,y1+.2); ctx.lineTo(x2+.1,y2+.2); ctx.stroke();
     ctx.strokeStyle = P.deck; ctx.lineWidth = 0.74; ctx.beginPath(); ctx.moveTo(x1,y1+.07); ctx.lineTo(x2,y2+.07); ctx.stroke();
     ctx.strokeStyle = P.roadOl; ctx.lineWidth = 0.72; ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
@@ -2914,6 +3170,7 @@ function render(){
   }
   // roundabouts: a big circle over the plus shape, with a planted island
   for (const t of G.round) { const x=ix(t)+.5, y=iy(t)+.5;
+    if (P.flat) { ctx.fillStyle = P.roadOl; ctx.beginPath(); ctx.arc(x, y, 1.06, 0, 7); ctx.fill(); ctx.fillStyle = P.road; ctx.beginPath(); ctx.arc(x, y, 0.98, 0, 7); ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 0.035; ctx.setLineDash([0.12, 0.12]); ctx.beginPath(); ctx.arc(x, y, 0.72, 0, 7); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = P.roadOl; ctx.beginPath(); ctx.arc(x, y, 0.46, 0, 7); ctx.fill(); ctx.fillStyle = P.hill; ctx.beginPath(); ctx.arc(x, y, 0.4, 0, 7); ctx.fill(); continue; }
     ctx.fillStyle = `rgba(0,0,0,${.13*P.shade})`; ctx.beginPath(); ctx.arc(x+.06, y+.1, 1.06, 0, 7); ctx.fill();
     ctx.fillStyle = P.roadOl; ctx.beginPath(); ctx.arc(x, y, 1.04, 0, 7); ctx.fill();
     ctx.fillStyle = P.curb; ctx.beginPath(); ctx.arc(x, y, 1.0, 0, 7); ctx.fill();
@@ -2967,9 +3224,10 @@ function render(){
       // the lot is joined to the building by a strip in the building's color
       ctx.fillStyle = col;
       if (bdy) ctx.fillRect(x0+0.2, bdy > 0 ? y0+h-0.3 : y0-0.12, w-0.4, 0.42); else ctx.fillRect(bdx > 0 ? x0+w-0.3 : x0-0.12, y0+0.2, 0.42, h-0.4);
+      if (P.flat) { ctx.fillStyle = col; rr(x0+0.04, y0+0.04, w-0.08, h-0.08, 0.22); ctx.fill(); ctx.fillStyle = P.road; rr(x0+0.12, y0+0.12, w-0.24, h-0.24, 0.14); ctx.fill(); } else {
       ctx.fillStyle = `rgba(0,0,0,${.14*P.shade})`; rr(x0+0.09, y0+0.14, w-0.1, h-0.1, 0.07); ctx.fill();
       ctx.fillStyle = col; rr(x0+0.04, y0+0.04, w-0.08, h-0.08, 0.07); ctx.fill(); ctx.lineWidth = 0.02; ctx.strokeStyle = OL(P, col, -.42); ctx.stroke();
-      ctx.fillStyle = P.road; rr(x0+0.12, y0+0.12, w-0.24, h-0.24, 0.04); ctx.fill(); ctx.strokeStyle = P.roadOl; ctx.stroke();
+      ctx.fillStyle = P.road; rr(x0+0.12, y0+0.12, w-0.24, h-0.24, 0.04); ctx.fill(); ctx.strokeStyle = P.roadOl; ctx.stroke(); }
       // painted stalls along the building side, a driving lane on the open side
       const along = bdy ? w : h, nSt = lot.length === 2 ? 3 : 4, step = (along - 0.24) / nSt;
       ctx.strokeStyle = 'rgba(255,255,255,.62)'; ctx.lineWidth = 0.035; ctx.lineCap = 'butt'; ctx.beginPath();
@@ -2981,7 +3239,7 @@ function render(){
       // the driveway: a short paved stub out of the lot, the only place a road can join it
       { const [gx, gy] = nodePos(L.gate), [fx, fy] = DIRS[L.face], tw = L.turned ? Math.max(0, 1 - (now - L.turned)*4) : 0;
         ctx.save(); ctx.translate(gx, gy); ctx.rotate(Math.atan2(fy, fx)); ctx.scale(1 + tw*0.2, 1 + tw*0.2);
-        ctx.fillStyle = OL(P, col, -.42); rr(0.2, -0.25, 0.43, 0.5, 0.05); ctx.fill();
+        if (!P.flat) { ctx.fillStyle = OL(P, col, -.42); rr(0.2, -0.25, 0.43, 0.5, 0.05); ctx.fill(); }
         ctx.fillStyle = col; rr(0.2, -0.235, 0.42, 0.47, 0.04); ctx.fill();
         ctx.fillStyle = P.road; rr(0.2, -0.17, 0.44, 0.34, 0.03); ctx.fill();
         ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.moveTo(0.5, -0.08); ctx.lineTo(0.38, 0); ctx.lineTo(0.5, 0.08); ctx.closePath(); ctx.fill();
@@ -2989,6 +3247,14 @@ function render(){
     }
     // building: a chunky toy block with a darker side face; taller when grown, with a tier on top at level 3
     const lvl = d.level || 1, pop = d.grew ? Math.max(0, 1 - (now - d.grew)*1.5) : 0, sz = (0.88 + 0.12*pop)*k;
+    if (P.flat) { // v38: flat rounded block, a big round building when grown, no side face or outline
+      const big = lvl >= 2 && d.color >= 0, R0 = big ? sz*0.98 : 0.24, R1 = big ? sz*0.72 : 0.14;
+      ctx.fillStyle = col; rr(cx-sz, cy-sz, sz*2, sz*2, R0); ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,.12)'; rr(cx-sz*0.72, cy-sz*0.72, sz*1.44, sz*1.44, R1); ctx.fill();
+      ctx.fillStyle = col; rr(cx-sz*0.66, cy-sz*0.7, sz*1.32, sz*1.32, big ? sz*0.66 : 0.12); ctx.fill();
+      if (lvl >= 3) { ctx.fillStyle = 'rgba(0,0,0,.1)'; ctx.beginPath(); ctx.arc(cx, cy-sz*0.02, sz*0.5, 0, 7); ctx.fill(); ctx.fillStyle = col; ctx.beginPath(); ctx.arc(cx, cy-sz*0.04, sz*0.46, 0, 7); ctx.fill(); }
+      if (lvl >= 2) { ctx.fillStyle = 'rgba(255,255,255,.9)'; for (let q=0;q<lvl-1;q++) { const sx = cx + sz*0.62 - q*0.2, sy = cy + sz*0.66; ctx.beginPath(); for (let a=0;a<10;a++) { const rr2 = a%2 ? 0.035 : 0.08, an = -Math.PI/2 + a*Math.PI/5; ctx.lineTo(sx + Math.cos(an)*rr2, sy + Math.sin(an)*rr2); } ctx.closePath(); ctx.fill(); } }
+    } else {
     const hgt = 0.2 + 0.07*(lvl-1), ex = hgt*0.45, ey = hgt, sideC = shade(col, -.3), dkC = shade(col, -.55), hiC = shade(col, .2);
     ctx.lineJoin = 'round';
     ctx.fillStyle = `rgba(0,0,0,${.17*P.shade})`; rr(cx-sz+ex+0.1, cy-sz+ey+0.1, sz*2, sz*2, 0.06); ctx.fill();
@@ -3011,6 +3277,7 @@ function render(){
       ctx.fillStyle = col; ctx.fillRect(bx2+0.05, by2+0.06, bw*0.55, bh-0.12); ctx.fillStyle = '#c9bfa3'; for (let q=0;q<3;q++) ctx.fillRect(bx2+bw*0.65+q*0.07, by2+0.05, 0.04, bh-0.1);
     }
     if (lvl >= 2) { ctx.fillStyle = '#fff'; ctx.strokeStyle = OL(P, col, -.5); ctx.lineWidth = 0.016; for (let q=0;q<lvl-1;q++) { const sx = cx + sz*0.74 - q*0.2, sy = cy - sz*0.78; ctx.beginPath(); for (let a=0;a<10;a++) { const rr2 = a%2 ? 0.035 : 0.08, an = -Math.PI/2 + a*Math.PI/5; ctx.lineTo(sx + Math.cos(an)*rr2, sy + Math.sin(an)*rr2); } ctx.closePath(); ctx.fill(); ctx.stroke(); } }
+    }
     if (d.color === -2) {
       ctx.fillStyle = 'rgba(255,255,255,.85)'; for (let q=0;q<3;q++) ctx.fillRect(cx-0.55, cy-0.45+q*0.32, 1.1, 0.12);
       ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(cx-0.25, cy+0.35, 0.5, 0.3);
@@ -3159,10 +3426,36 @@ function render(){
     if (G.nightK > 0.12 && !onFerry) { const g = ctx.createRadialGradient(0.2, 0, 0.02, 0.45, 0, 0.55); g.addColorStop(0, `rgba(255,236,170,${G.nightK})`); g.addColorStop(1, 'rgba(255,236,170,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(0.12, 0); ctx.lineTo(0.95, -0.32); ctx.lineTo(0.95, 0.32); ctx.closePath(); ctx.fill(); }
     drawVehicle(car);
     ctx.restore();
+    if (car.stuck > 6 && car.state !== 'unload' && !car.kind) JAM_BUB.push(px, py);
   }
+  drawJams();
   ctx.setTransform(dpr,0,0,dpr,0,0);
   drawWeather();
   drawDangerArrows();
+}
+// show what's wrong on the map itself: a soft pulsing ring and a queue-length badge on jammed tiles,
+// and a little "…" bubble over cars that have been waiting a long time
+const JAM_BUB = [];
+function drawJams(){
+  const dark = NIGHT(), k = ctx.globalAlpha;
+  if (G.jams && G.jams.length && !G.replay) for (const [t, n] of G.jams) {
+    const x = ix(t)+.5, y = iy(t)+.5, ph = 0.5 + 0.5*Math.sin(now*3.2 + t);
+    ctx.globalAlpha = 0.16 + 0.12*ph; ctx.fillStyle = TH.danger; ctx.beginPath(); ctx.arc(x, y, 0.62 + 0.1*ph, 0, 7); ctx.fill();
+    ctx.globalAlpha = 0.55 + 0.3*ph; ctx.strokeStyle = TH.danger; ctx.lineWidth = 0.06; ctx.beginPath(); ctx.arc(x, y, 0.62 + 0.1*ph, 0, 7); ctx.stroke();
+    ctx.globalAlpha = 1; const bx = x + 0.5, by = y - 0.5;
+    ctx.fillStyle = TH.danger; ctx.beginPath(); ctx.arc(bx, by, 0.22, 0, 7); ctx.fill();
+    ctx.lineWidth = 0.035; ctx.strokeStyle = dark ? '#1b1f24' : '#fff'; ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = '700 0.26px Lexend, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(n > 9 ? '9+' : String(n), bx, by + 0.01);
+  }
+  for (let i = 0; i < JAM_BUB.length; i += 2) {
+    const x = JAM_BUB[i], y = JAM_BUB[i+1] - 0.36;
+    ctx.globalAlpha = 0.92; ctx.fillStyle = dark ? '#2b3138' : '#ffffff'; ctx.strokeStyle = dark ? 'rgba(255,255,255,.35)' : 'rgba(0,0,0,.25)'; ctx.lineWidth = 0.02;
+    rr(x - 0.17, y - 0.09, 0.34, 0.18, 0.08); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - 0.03, y + 0.088); ctx.lineTo(x, y + 0.15); ctx.lineTo(x + 0.04, y + 0.088); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1; ctx.fillStyle = dark ? '#e8ecef' : '#3b4148';
+    for (let d = -1; d <= 1; d++) { ctx.beginPath(); ctx.arc(x + d*0.085, y + 0.003, 0.028, 0, 7); ctx.fill(); }
+  }
+  JAM_BUB.length = 0; ctx.globalAlpha = k;
 }
 function drawDangerArrows(){
   if (!G || G.over || G.replay) return;
@@ -3183,12 +3476,15 @@ function drawDangerArrows(){
 
 // ---------- HUD ----------
 const el = id => document.getElementById(id);
+el('hint').addEventListener('click', () => { if (el('hint').classList.contains('min')) { tutHidden = false; el('hint').classList.remove('min'); } });
+el('hint').setAttribute('aria-label', 'Tip');
 const TUT = [
   {title: 'Connect a house', text: 'Drag a road from a house to the driveway of the same-color parking lot (the little arrow). Drag at an angle for a diagonal road.', when: () => true, done: () => G.score >= 1},
   {title: 'Keep crates low', text: 'Crates pile up on workplaces. Too many starts a red timer, and if it fills, the game ends.', when: () => G.score >= 1, done: () => false},
   {title: 'Sunday upgrades', text: 'Each week you pick one upgrade set. New tools unlock as the weeks go by.', when: () => G.week >= 2, done: () => false},
   {title: 'Driveways and erasing', text: 'Drag from a house or a parking lot to turn its driveway, even diagonally for houses. A road with cars on it turns gray and disappears after they pass.', when: () => G.week >= 2 && G.score >= 15, done: () => false},
 ];
+let tutHidden = false;
 function tutStep(){
   if (!G || G.cfg.kind !== 'classic' || G.city.custom) return -1;
   let k = store.tut || 0;
@@ -3209,19 +3505,21 @@ function updateHud(){
   if (photo) { return; }
   const hint = el('hint');
   const step = tutStep();
-  if (step >= 0 && !G.over && !G.modal) {
+  if (step >= 0 && !G.over && !G.modal && !G.tray && !G.plan) {
     const T = TUT[step];
     if (hint.dataset.step !== String(step)) {
       hint.dataset.step = step;
-      hint.innerHTML = `<div class="tut-num">${step+1}/${TUT.length}</div><div class="tut-body"><b>${T.title}</b><span>${T.text}</span></div><button class="tut-ok" id="tutOk">Got it</button>`;
+      hint.innerHTML = `<div class="tut-num">${step+1}/${TUT.length}</div><div class="tut-body"><b>${T.title}</b><span>${T.text}</span></div><button class="tut-ok" id="tutOk">Got it</button><button class="tut-min" id="tutMin" aria-label="Hide tip" title="Hide tip">&minus;</button>`;
+      el('tutMin').onclick = e => { e.stopPropagation(); tutHidden = true; hint.classList.add('min'); };
       el('tutOk').onclick = () => { store.tut = step + 1; save(); hint.hidden = true; hint.dataset.step = ''; };
     }
-    hint.hidden = false;
+    hint.classList.toggle('min', tutHidden); hint.hidden = false;
   } else hint.hidden = true;
   el('score').textContent = G.score;
   if (G._hudScore !== undefined && G.score > G._hudScore) { for (const [id, cls] of [['score','pop'],['scorePlus','go']]) { const n = el(id); n.classList.remove(cls); void n.offsetWidth; n.classList.add(cls); } el('scorePlus').textContent = '+' + (G.score - G._hudScore); }
   G._hudScore = G.score;
-  el('weekLbl').textContent = (G.endless ? 'Endless · ' : '') + 'Week ' + G.week + (isRush() ? ' · rush hour' : '') + (G.weather !== 'clear' ? ' · ' + G.weather : '');
+  el('weekLbl').textContent = 'Week ' + G.week;
+  { const sub = [G.endless ? 'Endless' : '', isRush() ? 'Rush hour' : '', G.weather !== 'clear' ? G.weather : ''].filter(Boolean).join(' · '), w = el('wkSub'); if (w.textContent !== sub) w.textContent = sub; w.hidden = !sub; }
   const wf = G.weekT/WEEK_LEN; el('dayFill').style.width = (wf*100).toFixed(1)+'%';
   el('dayLbl').textContent = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][Math.min(6, Math.floor(wf*7))];
   { const b = el('nRoads').parentElement; if (G._lastRoads !== undefined && G.roads > G._lastRoads + 2) { b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); } G._lastRoads = G.roads; }
@@ -3262,12 +3560,19 @@ function closeSheet(){ sheet.hidden = true; sheetCard.innerHTML = ''; menuOpen =
   const dock = document.querySelector('.tools');
   const fade = () => { dock.classList.toggle('fade-l', dock.scrollLeft > 4); dock.classList.toggle('fade-r', dock.scrollLeft + dock.clientWidth < dock.scrollWidth - 4); };
   dock.addEventListener('scroll', fade, {passive: true});
+  const arr = () => { el('dockL').hidden = !(dock.scrollLeft > 4); el('dockR').hidden = !(dock.scrollLeft + dock.clientWidth < dock.scrollWidth - 4); };
+  dock.addEventListener('scroll', arr, {passive: true});
+  el('dockL').onclick = () => dock.scrollBy({left: -dock.clientWidth * 0.7, behavior: 'smooth'}); el('dockR').onclick = () => dock.scrollBy({left: dock.clientWidth * 0.7, behavior: 'smooth'});
+  if (window.ResizeObserver) new ResizeObserver(arr).observe(dock);
+  new MutationObserver(arr).observe(dock, {subtree: true, attributes: true, attributeFilter: ['hidden']});
+  addEventListener('resize', arr);
   if (window.ResizeObserver) new ResizeObserver(fade).observe(dock);
   new MutationObserver(fade).observe(dock, {subtree: true, attributes: true, attributeFilter: ['hidden']});
   addEventListener('keydown', e => {
     if (e.ctrlKey || e.metaKey || e.altKey || !'123'.includes(e.key) || e.key.length !== 1) return;
-    const b = sheetCard.querySelectorAll('[data-upg]')[+e.key - 1] || (e.key === '1' && sheetCard.querySelector('#gotIt'));
-    if (!b || sheet.hidden) return;
+    const tb = !el('tray').hidden && sheet.hidden ? el('tray').querySelectorAll('[data-tray]')[+e.key - 1] : null;
+    const b = tb || sheetCard.querySelectorAll('[data-upg]')[+e.key - 1] || (e.key === '1' && sheetCard.querySelector('#gotIt'));
+    if (!b || (sheet.hidden && !tb)) return;
     e.preventDefault(); e.stopImmediatePropagation(); b.classList.add('chosen'); setTimeout(() => { if (b.isConnected) b.click(); }, 140);
   }, true);
 })();
@@ -3354,19 +3659,19 @@ function thumb(c){
     const P = pal(), k = 6, cv2 = document.createElement('canvas'); cv2.width = W*k; cv2.height = H*k;
     const g = cv2.getContext('2d'), t = c.gen();
     for (const m of (c.marks||[])) t[m.y*W+m.x] = 3;
-    const ed = 2; // baseplate side edge, in thumbnail pixels
+    const ed = P.flat ? 0 : 2; // baseplate side edge, in thumbnail pixels
     g.fillStyle = P.table; g.fillRect(0, 0, cv2.width, cv2.height);
-    g.fillStyle = P.slab; g.fillRect(3, 3 + ed, cv2.width - 3 - 0, cv2.height - 3 - ed); g.fillStyle = P.slabSide; g.fillRect(3, cv2.height - 3 - ed - 0, cv2.width - 3, ed);
+    if (!P.flat) { g.fillStyle = P.slab; g.fillRect(3, 3 + ed, cv2.width - 3 - 0, cv2.height - 3 - ed); g.fillStyle = P.slabSide; g.fillRect(3, cv2.height - 3 - ed - 0, cv2.width - 3, ed); }
     g.save(); g.beginPath(); g.rect(2, 2, cv2.width - 2 - ed - 1, cv2.height - 2 - ed - 1); g.clip(); g.translate(2, 2); g.scale((cv2.width - 4 - ed - 1)/(W*k)*k, (cv2.height - 4 - ed - 1)/(H*k)*k);
     if (t.fn) {
       g.fillStyle = P.land; g.fillRect(0, 0, W, H);
       const fh = analyticField(2, t.fn), fw = analyticField(1, t.fn);
-      g.save(); g.translate(0.2, 0.4); contour(g, fh, 0.5, P.hillSide); g.restore(); contour(g, fh, 0.5, P.hill);
-      contour(g, fw, 0.38, P.waterEdge); contour(g, fw, 0.5, P.water);
+      if (!P.flat) { g.save(); g.translate(0.2, 0.4); contour(g, fh, 0.5, P.hillSide); g.restore(); } contour(g, fh, 0.5, P.hill);
+      if (!P.flat) contour(g, fw, 0.38, P.waterEdge); contour(g, fw, 0.5, P.water);
       g.fillStyle = P.mark; for (const m of (c.marks||[])) { g.beginPath(); g.arc(m.x+.5, m.y+.5, .45, 0, 7); g.fill(); }
     } else for (let i=0;i<N;i++) { g.fillStyle = t[i]===1 ? P.water : t[i]===2 ? P.hill : t[i]===3 ? P.mark : P.land; g.fillRect(i%W, Math.floor(i/W), 1, 1); }
     g.restore();
-    g.strokeStyle = P.slabLine; g.lineWidth = 1; g.strokeRect(2, 2, cv2.width - 4 - ed, cv2.height - 4 - ed);
+    if (!P.flat) { g.strokeStyle = P.slabLine; g.lineWidth = 1; g.strokeRect(2, 2, cv2.width - 4 - ed, cv2.height - 4 - ed); }
     return THUMBS[key] = cv2.toDataURL();
   } catch (e) { return ''; }
 }
@@ -3522,13 +3827,18 @@ function showCity(c, paused){
 // the whole month's puzzles are fixed in advance (they come from the date), so show them as a calendar
 function monthPlan(){
   const t = new Date(), y = t.getFullYear(), m = t.getMonth(), days = new Date(y, m+1, 0).getDate(), today = todayKey();
-  const cells = []; for (let d=1; d<=days; d++) { const key = y*10000 + (m+1)*100 + d, ch = challengeFor('daily', key), rec = store.daily[key];
-    cells.push(`<div class="cal${key === today ? ' today' : key < today ? ' past' : ''}"><b>${d}</b><span>${ch.city.name}</span><span class="hint">${ch.mods.map(x => x.name).join(' + ')}</span>${rec && rec.first !== null ? `<span class="tag">${rec.first}</span>` : key > today ? '<span class="hint">coming</span>' : ''}</div>`); }
+  const short = k => dateOfKey(k).toLocaleDateString(undefined, {month:'short', day:'numeric'});
+  const lock = (cls, k, wide) => `<div class="cal locked${cls}${wide ? ' wide' : ''}" aria-label="Locked until ${short(k)}"><b>🔒 ${short(k)}</b></div>`;
+  const cells = []; for (let d=1; d<=days; d++) { const key = y*10000 + (m+1)*100 + d;
+    if (challengeLocked('daily', key)) { cells.push(`<div class="cal locked" aria-label="Locked until ${short(key)}"><b>🔒 ${short(key)}</b></div>`); continue; }
+    const ch = challengeFor('daily', key), rec = store.daily[key];
+    const medal = rec && rec.first !== null ? MILESTONES.filter(x => rec.first >= x.n).pop() : null;
+    cells.push(`<div class="cal${key === today ? ' today' : ' past'}"><b>${d}${challengeEnded('daily', key) ? ' <span class="hint">Ended</span>' : ''}</b>${ch.name ? `<span class="chname">${ch.name}</span>` : ''}<span>${ch.city.name}</span><span class="hint">${ch.mods.map(x => x.name).join(' + ')}</span>${rec && rec.first !== null ? `<span class="tag">${rec.first}${medal ? ' · ' + medal.name : ''}</span>` : ''}</div>`); }
   const weeks = new Map(); for (let d=1; d<=days; d++) { const k = weekKey(new Date(y, m, d)); if (!weeks.has(k)) weeks.set(k, d); }
   const wk = weekKey();
-  return `<div class="small">${t.toLocaleDateString(undefined, {month:'long', year:'numeric'})} · daily puzzles</div><div class="calgrid">${cells.join('')}</div>
-    <div class="small">Weekly challenges this month</div><div class="stack" style="gap:6px">${[...weeks].map(([k, d]) => { const ch = challengeFor('weekly', k), rec = store.weekly[k]; return `<div class="cal wide${k === wk ? ' today' : k < wk ? ' past' : ''}"><b>From ${new Date(y, m, d).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</b><span>${ch.city.name}</span><span class="hint">${ch.mods.map(x => x.name).join(' + ')}</span>${rec ? `<span class="tag">best ${rec.best}</span>` : ''}</div>`; }).join('')}</div>
-    <p class="hint">Only today's puzzle and this week's challenge can be played. New ones unlock on their own as the days go by.</p>`;
+  return `<div class="small">${t.toLocaleDateString(undefined, {month:'long'})} · ${monthTheme(m).theme}</div><div class="calgrid">${cells.join('')}</div>
+    <div class="small">Weekly challenges this month</div><div class="stack" style="gap:6px">${[...weeks].map(([k, d]) => { if (challengeLocked('weekly', k)) return lock('', weekStartKey(k), true); const ch = challengeFor('weekly', k), rec = store.weekly[k]; return `<div class="cal wide${k === wk ? ' today' : ' past'}"><b>From ${new Date(y, m, d).toLocaleDateString(undefined, {month:'short', day:'numeric'})}${challengeEnded('weekly', k) ? ' <span class="hint">Ended</span>' : ''}</b>${ch.name ? `<span class="chname">${ch.name}</span>` : ''}<span>${ch.city.name}</span><span class="hint">${ch.mods.map(x => x.name).join(' + ')}</span>${rec ? `<span class="tag">best ${rec.best}</span>` : ''}</div>`; }).join('')}</div>
+    <p class="hint">Only today's puzzle and this week's challenge can be played. Past ones have ended, and later ones stay locked until their day.</p>`;
 }
 function showMenu(paused){
   showSheet.menu = {paused};
@@ -3548,7 +3858,7 @@ function showMenu(paused){
     </button>`; }).join('');
   const chCard = (ch, rec, label) => `<button class="opt" data-ch="${ch.kind}">
       <div class="row"><h3>${label}</h3><span class="tag">${ch.city.name}</span></div>
-      <p>${ch.mods.map(m=>`<b>${m.name}</b>: ${m.desc}`).join('<br>')}</p>
+      ${ch.name ? `<p><b>${ch.name}</b></p>` : ''}<p>${ch.mods.map(m=>`<b>${m.name}</b>: ${m.desc}`).join('<br>')}</p>
       <span class="hint">${ch.kind==='daily' ? (rec ? `Official score: ${rec.first} · best ${rec.best}` : 'First run counts as your official score') : (rec ? `Best ${rec.best} · top ${rec.top.join(', ')}` : 'Play as often as you like; best run counts')}</span>
     </button>`;
   showSheet(`<div class="stack">
@@ -3607,7 +3917,7 @@ function frame(ts){
       const real = Math.max(0, Math.min(180, now - G.wallT)); G.wallT = now;
       if (G.speed > 0) G.debt = Math.min(180, (G.debt || 0) + real * G.speed);
       for (let n = 0; n < 12 && G.debt >= 0.025 && !G.over && !G.pending; n++) { update(0.025); G.debt -= 0.025; }
-    } else if (G && !G.over && (!G.modal || (isDuel() && !G.pending)) && G.speed > 0) { G.acc = Math.min(1, (G.acc || 0) + rdt*G.speed); while (G.acc >= 0.025 && !G.over && !G.pending && (!G.modal || isDuel())) { update(0.025); G.acc -= 0.025; } }
+    } else if (G && !G.over && (!G.modal || (isDuel() && !G.pending)) && G.speed > 0) { G.acc = Math.min(1, (G.acc || 0) + rdt*G.speed*(G.tray ? TRAY_SLOW : 1)); while (G.acc >= 0.025 && !G.over && (!G.pending || G.tray) && (!G.modal || isDuel())) { update(0.025); G.acc -= 0.025; } }
     if (G && !G.over && !G.modal && G.speed > 0 && now - lastSave > 8) saveGame();
     render(); updateHud();
   } catch (err) { if (!frame.warned) { frame.warned = true; console.error(err); } }

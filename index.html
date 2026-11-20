@@ -450,7 +450,7 @@ p{margin:0;line-height:1.5;color:var(--muted)}
 </div>
 
 <script>
-var APP_VERSION = 'v3.24';
+var APP_VERSION = 'v3.25';
 (() => {
 'use strict';
 const cv = document.getElementById('cv');
@@ -1538,41 +1538,69 @@ function airportDispatch(d, dist, prev){
   }
 }
 // ---------- smart traffic lights ----------
-// Each light serves two groups of approaches (axis 0: left/right, axis 1: up/down; diagonals join the closer group).
-// Green lasts at least 3 s; it switches only when the other side has cars waiting and this side is empty
-// for a moment, or after 9 s at most. Every switch goes green -> yellow (1.2 s) -> all red (0.6 s) -> other side green.
-const L_MIN = 3, L_MAX = 9, L_YEL = 1.2, L_RED = 0.6, L_GAP = 1.0;
-function lightGo(node, c, from){ const L = lightState(node); if (L.axis !== approachAxis(from, node)) return false; if (L.state === 'g') return true;
-  // amber: carry on only if the car is too close to stop comfortably
-  return L.state === 'y' && L.t < 0.7 && (c.v||0)*(c.v||0) / (2*BRK) > edgeLen(from, node) - c.s - 0.55 + 0.03; }
-function approachAxis(from, node){ const dx = ix(node)-ix(from), dy = iy(node)-iy(from); if (dx && dy) return dx*dy > 0 ? 0 : 1; return dy ? 1 : 0; }
-function lightState(t){ G.lightSt = G.lightSt || new Map(); let L = G.lightSt.get(t); if (!L) { L = {axis: 0, state: 'g', t: 0, empty: 0, next: 1}; G.lightSt.set(t, L); } return L; }
+// A light has one signal per road that actually enters the junction. Approaches are grouped into phases from the real
+// geometry: two exactly opposite approaches (incl. a diagonal pair) share a phase, any other approach gets its own (so a T is
+// "through road, then the side road", a corner light alternates). Demand-actuated: phases with no waiting cars are skipped,
+// green lasts L_MIN..L_MAX and is extended while cars keep arriving; every change goes green -> amber -> all red -> next.
+// Turning cars on green still give way through the crossing bookings (swept-path conflicts).
+const L_MIN = 2.6, L_MAX = 8, L_YEL = 1.4, L_RED = 0.7, L_GAP = 0.9;
+function lightPhases(t){
+  const adj = [...(G.adj.get(t) || [])].filter(m => hasEdge(m, t)), key = adj.join(',');
+  const L = lightState(t); if (L.key === key) return L.ph;
+  const ang = m => Math.atan2(iy(m)-iy(t), ix(m)-ix(t));
+  adj.sort((a, b) => ang(a) - ang(b) || a - b);
+  const ph = [], used = new Set();
+  for (const a of adj) { if (used.has(a)) continue; used.add(a); const g = [a];
+    const o = adj.find(b => !used.has(b) && ix(b)-ix(t) === ix(t)-ix(a) && iy(b)-iy(t) === iy(t)-iy(a)); if (o !== undefined) { used.add(o); g.push(o); }
+    ph.push(g); }
+  ph.sort((x, y) => y.length - x.length); // the through pair (if any) first
+  L.key = key; L.ph = ph; if (L.p >= ph.length) { L.p = 0; L.state = 'g'; L.t = 0; }
+  return ph;
+}
+function lightGo(node, c, from){ const L = lightState(node), ph = lightPhases(node); if (!ph[L.p] || !ph[L.p].includes(from)) return false; if (L.state === 'g') return true;
+  // amber: carry on only if the car can't stop comfortably before the line
+  return L.state === 'y' && L.t < 0.6 && (c.v||0)*(c.v||0) / (2*BRK) > edgeLen(from, node) - c.s - stopDist(node, edgeLen(from, node)) + 0.03; }
+function lightPhaseOf(t, from){ const ph = lightPhases(t); for (let k = 0; k < ph.length; k++) if (ph[k].includes(from)) return k; return -1; }
+function lightState(t){ G.lightSt = G.lightSt || new Map(); let L = G.lightSt.get(t); if (!L) { L = {p: 0, state: 'g', t: 0, empty: 0}; G.lightSt.set(t, L); } return L; }
+// cars waiting or arriving per approach (a car one short link back, booking through, counts for the link it will use)
 function lightDemand(t){
-  const d = [0, 0];
-  for (const c of G.cars) { if (c.state === 'unload' || c.seg >= c.path.length-1) continue; const a = c.path[c.seg], b = c.path[c.seg+1]; if (b === t && c.s > edgeLen(a,b) - 1.6) d[approachAxis(a, t)]++; }
+  const d = new Map();
+  for (const c of G.cars) { if (c.state === 'unload' || c.seg >= c.path.length-1) continue; const a = c.path[c.seg], b = c.path[c.seg+1];
+    if (b === t && c.s > edgeLen(a,b) - 1.6) d.set(a, (d.get(a)||0) + 1);
+    else if (c.seg + 2 < c.path.length && c.path[c.seg+2] === t && edgeLen(b, t) < 1.25 && c.s > edgeLen(a,b) - 0.9) d.set(b, (d.get(b)||0) + 1); }
   return d;
 }
 function stepLights(dt){
   for (const t of G.lights) {
-    const L = lightState(t); L.t += dt;
+    const L = lightState(t), ph = lightPhases(t); L.t += dt; if (!ph.length) continue;
+    const d = lightDemand(t), dem = k => ph[k].reduce((s, a) => s + (d.get(a)||0), 0);
     if (L.state === 'g') {
-      const d = lightDemand(t), mine = d[L.axis], other = d[1-L.axis];
+      const mine = dem(L.p); let other = 0; for (let k = 0; k < ph.length; k++) if (k !== L.p) other += dem(k);
       L.empty = mine ? 0 : L.empty + dt;
       if (other > 0 && L.t >= L_MIN && (L.empty >= L_GAP || L.t >= L_MAX)) { L.state = 'y'; L.t = 0; }
     } else if (L.state === 'y') { if (L.t >= L_YEL) { L.state = 'r'; L.t = 0; } }
-    else if (L.state === 'r') { if (L.t >= L_RED) { L.state = 'g'; L.axis = 1 - L.axis; L.t = 0; L.empty = 0; } }
+    else if (L.state === 'r') { if (L.t >= L_RED) { let n = (L.p + 1) % ph.length; for (let k = 1; k <= ph.length; k++) { const q = (L.p + k) % ph.length; if (dem(q) > 0) { n = q; break; } } L.p = n; L.state = 'g'; L.t = 0; L.empty = 0; } }
   }
 }
 // Each car crossing a junction books its movement (where it came from, where it's going).
 // Two movements can share the crossing if their lanes don't cross: opposite cars going straight,
 // or both turning to the near side. Turning across oncoming traffic has to wait for a gap.
+// Two movements conflict when the strips their bodies sweep through the box touch: each movement is sampled with the same
+// pose the renderer draws (stop line -> clear of the box) and every pair of body rectangles (a little oversized) is tested.
+function moveSweep(n, f, t){
+  const k = n+':'+f+':'+t, cache = G.mvSw || (G.mvSw = new Map()); let r = cache.get(k); if (r) return r;
+  r = []; const fake = {path: [f, n, t], seg: 0, s: 0, v: 0, state: 'go'}, l1 = edgeLen(f, n), l2 = edgeLen(n, t), st = l1 > 1.2 ? 0.61 : 0.55;
+  for (let s = Math.max(0, l1 - st); s < l1 - 1e-3; s += 0.06) { fake.seg = 0; fake.s = s; const P = carPose(fake, 0); r.push({x: P[0], y: P[1], a: P[2], hl: 0.235, hw: 0.121}); }
+  for (let s = 0; s <= Math.min(0.5, l2 - 0.01); s += 0.06) { fake.seg = 1; fake.s = s; const P = carPose(fake, 0); r.push({x: P[0], y: P[1], a: P[2], hl: 0.235, hw: 0.121}); }
+  cache.set(k, r); return r;
+}
 function moveConflict(n, f1, t1, f2, t2){
-  if (f1 === f2 || t1 === t2 || f1 < 0 || f2 < 0 || t1 === undefined || t2 === undefined) return true;
-  // a turning car shares the corner with any car using the same arm the other way: their drawn arcs touch
-  const d = 0.3*G.drive, P = Math.PI*2, ang = (o, sh) => ((Math.atan2(iy(o)-iy(n), ix(o)-ix(n)) + sh) % P + P) % P;
-  const a1 = ang(f1, -d), b1 = ang(t1, d), a2 = ang(f2, -d), b2 = ang(t2, d);
-  const lo = Math.min(a1, b1), hi = Math.max(a1, b1), inside = x => x > lo && x < hi;
-  return inside(a2) !== inside(b2);
+  if (f1 === f2 || t1 === t2 || f1 < 0 || f2 < 0 || t1 === undefined || t2 === undefined || t1 < 0 || t2 < 0) return true;
+  if (G.mvGv !== G.gv || G.mvDr !== G.drive) { G.mvGv = G.gv; G.mvDr = G.drive; G.mvC = new Map(); G.mvSw = new Map(); }
+  const key = n+':'+f1+':'+t1+':'+f2+':'+t2; let r = G.mvC.get(key); if (r !== undefined) return r;
+  const A = moveSweep(n, f1, t1), B = moveSweep(n, f2, t2); r = false;
+  outer: for (const p of A) for (const q of B) if (Math.abs(p.x - q.x) < 0.6 && Math.abs(p.y - q.y) < 0.6 && obbPen(p, q) > 0) { r = true; break outer; }
+  G.mvC.set(key, r); return r;
 }
 // ---- driving model: speeds, corners and roundabout geometry (all deterministic, shared by the simulation and drawing) ----
 const ACC = 2.2*SPEED, BRK = 3.0*SPEED, BRK_MAX = 7*SPEED, HEADWAY = 0.35, RING_R = 0.69, RA_IN = 0.4, RA_OUT = 0.6;
@@ -1617,8 +1645,9 @@ const boxClr = (o, node) => G.round.has(node) ? 0.62 : o.kind === 'truck' ? 0.5 
 function boxEta(o, node){
   if (!o || o.state === 'unload' || o.seg >= o.path.length-1) return Infinity;
   if (o.path[o.seg] === node) return o.s < boxClr(o, node) ? 0 : Infinity;
-  if (o.path[o.seg+1] !== node) return Infinity;
-  return Math.max(0, edgeLen(o.path[o.seg], node) - o.s) / Math.max(0.15, o.v||0);
+  if (o.path[o.seg+1] !== node) return o.hx && o.hx.includes(node) ? 0.5 : Infinity;
+  const L = edgeLen(o.path[o.seg], node); if (o.held === node && L - o.s < stopDist(node, L) + (o.v > 0.3 ? -0.02 : 0.12)) return 0; // booked and at (or past) its line: it goes now // past its line: in the box
+  return Math.max(0, L - o.s) / Math.max(0.15, o.v||0);
 }
 const RING_CAP = Math.max(3, Math.floor(2*Math.PI*RING_R / 0.95));
 // gap acceptance instead of an empty box: a crossing move may go when the conflicting traffic is still more than ~1.5 s
@@ -1640,29 +1669,75 @@ function reserve(node, c, from, to){
   if (G.blocked.has(node) && c.kind !== 'amb') return false;
   if (degree(node) <= 2) return true;
   // a car that already crossed its stop line on green/amber is committed: it doesn't stop again inside the junction
-  if (G.lights.has(node) && from >= 0 && c.held !== node && !lightGo(node, c, from)) return false;
+  if (G.lights.has(node) && from >= 0 && c.held !== node && !(c.hx && c.hx.includes(node)) && !lightGo(node, c, from)) return false;
   if (!junctionFree(node, c, from, to)) return false;
+  if (!G.round.has(node) && !(G.res.get(node) && G.res.get(node).has(c.id)) && !sweepClear(node, c, from, to)) return false;
   let m = G.res.get(node); if (!m) { m = new Map(); G.res.set(node, m); }
-  if (c.held >= 0 && c.held !== node) release(c.held, c);
-  m.set(c.id, [from, to]); c.held = node; return true;
+  // the crossing the car is still leaving stays booked (hold0) until its tail is out, even on a one-tile link
+  if (c.held >= 0 && c.held !== node) { if (c.hold0 >= 0 && c.hold0 !== c.held) release(c.hold0, c); c.hold0 = c.held; }
+  m.set(c.id, [from, to]); c.held = node; if (c.hx) { const k = c.hx.indexOf(node); if (k >= 0) c.hx.splice(k, 1); } return true;
 }
+// "don't block the box": when the link after a crossing is too short to stop on with the tail clear of that crossing,
+// the next crossing(s) are booked together with it, all or nothing, so a car never waits inside a box it holds
+const stopDist = (n, L) => G.round.has(n) ? 1 - RA_IN : 0.55 * (L > 1.2 ? 1.1 : 1);
+// the strip this movement sweeps must be clear of other bodies right now (cars ahead in my own lane / exit lane excepted:
+// the following logic handles them)
+function sweepClear(node, c, from, to){
+  if (!G.pg || to === undefined || to < 0 || from < 0) return true;
+  const sw = moveSweep(node, from, to), l1 = edgeLen(from, node), st = l1 > 1.2 ? 0.61 : 0.55;
+  const k0 = c.path[c.seg] === from ? Math.max(0, Math.floor((c.s + 0.15 - (l1 - st)) / 0.06)) : 0; // the part I already stand on is mine
+  for (let k = k0; k < sw.length; k++) { const P = sw[k], gx = Math.floor(P.x), gy = Math.floor(P.y);
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { const l = G.pg.get((gx+dx)*4096 + gy+dy); if (!l) continue;
+      for (const o of l) { if (o === c || !o._P) continue; const oa = o.path[o.seg], ob = o.path[o.seg+1];
+        if ((oa === from && ob === node) || (oa === node && ob === to)) continue;
+        if (obbPen(P, o._P) > 0) return false; } } }
+  return true;
+}
+function chainOf(c){
+  const r = []; let k = c.seg + 1;
+  while (k + 1 < c.path.length - 1 && r.length < 4) { const n = c.path[k], nx = c.path[k+1];
+    if (degree(nx) < 3 && !G.round.has(nx)) break; if (degree(n) < 3 && !G.round.has(n)) break;
+    const L = edgeLen(n, nx); if (L - stopDist(nx, L) > boxClr(c, n) + 0.02) break;
+    r.push(k + 1); k++; }
+  return r;
+}
+function chainFree(c, ks){
+  for (const k of ks) { const n = c.path[k], f = c.path[k-1], t = k + 1 < c.path.length ? c.path[k+1] : -1;
+    if (G.blocked.has(n) && c.kind !== 'amb') return false;
+    if (c.hx && c.hx.includes(n)) continue;
+    // a light one short link on works with the first as one cluster: the inner link flows on, crossing traffic is held by the bookings
+    if (!G.round.has(n) && !sweepClear(n, c, f, t)) return false;
+    const m = G.res.get(n); if (m) { if (G.round.has(n) ? !junctionFree(n, c, f, t) : [...m].some(([id, mv]) => id !== c.id && moveConflict(n, f, t, mv[0], mv[1]))) return false; }
+    for (const o of carsOn(n, t)) if (o !== c && o.state !== 'unload' && o.path[o.seg] === n && o.s < boxClr(o, n) + 0.25) return false; }
+  return true;
+}
+function bookChain(c, ks){
+  for (const k of ks) { const n = c.path[k]; if (c.hx && c.hx.includes(n)) continue; let m = G.res.get(n); if (!m) { m = new Map(); G.res.set(n, m); }
+    m.set(c.id, [c.path[k-1], k + 1 < c.path.length ? c.path[k+1] : -1]); (c.hx || (c.hx = [])).push(n); }
+}
+function relAll(c){
+  if (c.held >= 0) { release(c.held, c); c.held = -1; } if (c.hold0 >= 0) { release(c.hold0, c); c.hold0 = -1; }
+  if (c.hx) { for (const n of c.hx) release(n, c); c.hx = null; }
+}
+
 // a booking whose car is gone or has moved on is stale; clear it so a crossing can never lock up for good
 function sweepRes(){
-  const held = new Map(); for (const c of G.cars) if (c.held >= 0) held.set(c.id, c.held);
-  for (const [n, m] of G.res) { for (const id of [...m.keys()]) if (held.get(id) !== n) m.delete(id); if (!m.size) G.res.delete(n); }
+  const held = new Map(), h0 = new Map(); for (const c of G.cars) { if (c.held >= 0) held.set(c.id, c.held); if (c.hold0 >= 0) h0.set(c.id, c.hold0); if (c.hx) for (const n of c.hx) h0.set(c.id + ':' + n, 1); }
+  for (const [n, m] of G.res) { for (const id of [...m.keys()]) if (held.get(id) !== n && h0.get(id) !== n && !h0.has(id + ':' + n)) m.delete(id); if (!m.size) G.res.delete(n); }
 }
 function peekFree(node, c, from, nxt){
   if (G.blocked.has(node)) return false;
   if (degree(node) <= 2) return true;
   if (G.lights.has(node) && from >= 0 && !lightGo(node, c, from)) return false;
   if (!junctionFree(node, c, from, nxt)) return false;
+  if (c.held !== node && !G.round.has(node) && c.path[c.seg+1] === node) { const ch = chainOf(c); if (ch.length && !chainFree(c, ch)) return false; }
   for (const o of carsOn(node, nxt)) if (o!==c && o.state!=='unload' && o.path[o.seg]===node && o.path[o.seg+1]===nxt && o.s < boxClr(o, node)) return false;
   return true;
 }
 function release(node, c){ const m = G.res.get(node); if (m) m.delete(c.id); }
 const dropCar = c => { const k = G.cars.indexOf(c); if (k >= 0) G.cars.splice(k, 1); };
 function loseCar(c){
-  if (c.held >= 0) release(c.held, c);
+  relAll(c);
   if (c.kind === 'amb') { dropCar(c); return; }
   if (c.kind === 'truck') { dropCar(c); G.returning.push({h: c.home, t: 3}); return; }
   if (c.state === 'go') { c.dest.claimed = Math.max(0, c.dest.claimed - 1); if (c.dest.pq) c.dest.cby[c.color] = Math.max(0, (c.dest.cby[c.color]||0) - 1); }
@@ -1685,7 +1760,7 @@ function poseOf(c, mover){
   if (G.occ[a] !== 1 && c.s < (mover ? 0.2 : 0.3)) return null; // backing out of a driveway / lot
   if (G.occ[b] !== 1 && c.seg+1 === c.path.length-1 && c.s > len - 0.25) return null; // pulling in
   const P = carPose(c, 0), tr = c.kind === 'truck';
-  return {x: P[0], y: P[1], a: P[2], hl: tr ? 0.27 : 0.205, hw: tr ? 0.115 : 0.105};
+  return {x: P[0], y: P[1], a: P[2], hl: tr ? 0.262 : 0.2015, hw: tr ? 0.121 : 0.1105};
 }
 function obbPen(A, B){
   let m = 1e9;
@@ -1703,19 +1778,37 @@ function setPose(c){
   if (c._P) { const k = poseCell(c._P); let l = G.pg.get(k); if (!l) G.pg.set(k, l = []); l.push(c); c._pk = k; }
 }
 function buildPoses(){ G.pg = new Map(); for (const c of G.cars) { c._pk = undefined; setPose(c); } }
+// pose of car c if it were at distance s along its current segment, following on into the next segment when s runs past it
+function poseAtS(c, s){
+  const sg = c.seg, s0 = c.s; let len = edgeLen(c.path[c.seg], c.path[c.seg+1]);
+  while (s >= len && c.seg + 2 < c.path.length) { s -= len; c.seg++; len = edgeLen(c.path[c.seg], c.path[c.seg+1]); }
+  c.s = Math.min(s, len - 1e-4); const P = poseOf(c, true); c.seg = sg; c.s = s0; return P;
+}
+// a car never moves into another car's body: no exceptions (ambulances wait too). The only allowance is a pair that already
+// touches (e.g. after the road was rebuilt under them) moving apart.
 function guardMove(c, ns){
   if (!G.pg) return ns;
-  const s0 = c.s; c.s = ns + (ns - s0); const P1 = poseOf(c, true); c.s = s0; if (!P1) return ns; // one step ahead: covers the drawing's in-between frames
-  const P0 = c._P, gx = Math.floor(P1.x), gy = Math.floor(P1.y);
-  for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { const l = G.pg.get((gx+dx)*4096 + gy+dy); if (!l) continue;
-    for (const o of l) { if (o === c || !o._P) continue;
-      const p1 = obbPen(P1, o._P); if (p1 <= 0) continue;
-      if (P0 && obbPen(P0, o._P) > 0 && (p1 <= obbPen(P0, o._P) + 1e-5 || Math.hypot(P1.x - o._P.x, P1.y - o._P.y) > Math.hypot(P0.x - o._P.x, P0.y - o._P.y))) continue; // already touching and moving apart
-      if (c.held >= 0 && c.held === c.path[c.seg] && o.held < 0 && !(o.v > 0.05) && c.stuck > 2) continue; // a car stuck inside a crossing it booked must clear it: squeeze past a car waiting at a line
-      if (c.id < o.id && ((o.blk === c.id && !(o.v > 0) && c.stuck > 3 && o.stuck > 3) || (c.stuck > 8 && o.stuck > 8))) continue;
-      if (c.stuck > 1 && !(o.v > 0.05)) continue; // gridlock valve: inch past a car that is stuck too // deadlock valve: let one of them squeeze through
-      c.v = 0; c.blk = o.id; return s0; } }
+  const s0 = c.s, P0 = c._P, step = ns - s0;
+  for (const P1 of [poseAtS(c, ns), poseAtS(c, ns + Math.max(step, 0.004)), poseAtS(c, ns + 2*Math.max(step, 0.004))]) { if (!P1) continue;
+    const gx = Math.floor(P1.x), gy = Math.floor(P1.y);
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { const l = G.pg.get((gx+dx)*4096 + gy+dy); if (!l) continue;
+      for (const o of l) { if (o === c || !o._P) continue;
+        const p1 = obbPen(P1, o._P); if (p1 <= 0) continue;
+        if (P0 && obbPen(P0, o._P) > 0 && p1 <= obbPen(P0, o._P) - 1e-6) continue; // already touching and moving apart
+        c.v = 0; c.blk = o.id; return s0; } } }
+  // nor into the strip a booked car is about to sweep through a crossing ahead that I haven't booked myself
+  { const a = c.path[c.seg], b = c.path[c.seg+1], m = G.res.get(b);
+    if (m && !m.has(c.id) && degree(b) >= 3 && !G.round.has(b)) { const P1 = poseAtS(c, ns + Math.max(step, 0.004));
+      if (P1) for (const [id, mv] of m) { if (id === c.id || mv[0] === a || mv[0] < 0 || !(mv[1] >= 0)) continue;
+        let hit = false, was = false; for (const q of moveSweep(b, mv[0], mv[1])) { if (!hit && obbPen(P1, q) > 0) hit = true; if (P0 && !was && obbPen(P0, q) > 0) was = true; }
+        if (hit && !was) { c.v = 0; c.blk = 0; return s0; } } } }
   c.blk = 0; return ns;
+}
+function guardBack(c, bs){
+  const P1 = poseAtS(c, bs); if (!P1) return true; const gx = Math.floor(P1.x), gy = Math.floor(P1.y);
+  for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { const l = G.pg.get((gx+dx)*4096 + gy+dy); if (!l) continue;
+    for (const o of l) if (o !== c && o._P && obbPen(P1, o._P) > 0) return false; }
+  return true;
 }
 // bumper-to-bumper spacing: trucks are longer, so the car behind keeps more room
 const vehGap = (o, c) => (o.kind === 'truck' || c.kind === 'truck') ? 0.8 : 0.62;
@@ -1759,7 +1852,7 @@ function stepCar0(c, dt){
     vRoad = SPEED*kf*(onArc ? Math.min(1.25, 0.85*(RA_IN + 1 - RA_OUT) / (RING_R*rg.d)) : rOut ? 0.62 + 0.3*Math.min(1, rg.d/(1.5*Math.PI)) : 0.8); }
   let mv = vRoad*dt;
   // stop line: roundabouts give way at the ring, lights a touch further back, long (diagonal) approaches a bit more room
-  const stopD = G.round.has(b) ? 1 - RA_IN : 0.53 * (len > 1.2 ? 1.1 : 1); // nose stays out of the crossing lanes
+  const stopD = G.round.has(b) ? 1 - RA_IN : 0.55 * (len > 1.2 ? 1.1 : 1); // nose stays out of the crossing lanes
   let lim = len, lead = null, leadGap = 1e9;
   if (!amb) for (const o of carsOn(a, b)) if (o!==c && o.state!=='unload' && o.path[o.seg]===a && o.path[o.seg+1]===b && o.s > c.s) { const gl = vehGap(o, c); if (o.s - gl < lim) lim = o.s - gl; if (o.s - c.s - gl < leadGap) { leadGap = o.s - c.s - gl; lead = o; } }
   if (!amb && G.ambOut && G.cars.some(o => o.kind==='amb' && o.state!=='unload' && o.path[o.seg+1]===b && o!==c && o.path[o.seg]!==a)) lim = Math.min(lim, len - 0.4);
@@ -1767,7 +1860,11 @@ function stepCar0(c, dt){
   // look ahead: start braking early if the crossing ahead is busy, instead of slamming to a stop at the line
   if (!last && !amb && c.s + mv <= len - stopD && c.s > len - stopD - 0.8 && !peekFree(b, c, a, c2)) stopAt = len - stopD;
   if (!last && !amb && c.s + mv > len - stopD) {
-    let ok = reserve(b, c, a, c2);
+    const ch = degree(b) >= 3 && !G.round.has(b) && c.held !== b ? chainOf(c) : null;
+    let ok = (c.held === b && c.s > len - stopD + 0.02) || ((!ch || !ch.length || chainFree(c, ch)) && reserve(b, c, a, c2)); // past the line with a booking: committed
+    // already past the line (e.g. the junction was built under it): it is physically in the box, so it holds it
+    if (!ok && c.held !== b && degree(b) >= 3 && !G.round.has(b) && c.s > len - stopD + 0.05) { let m = G.res.get(b); if (!m) { m = new Map(); G.res.set(b, m); } if (c.held >= 0) { if (c.hold0 >= 0 && c.hold0 !== c.held) release(c.hold0, c); c.hold0 = c.held; } m.set(c.id, [a, c2]); c.held = b; }
+    if (ok && ch && ch.length) bookChain(c, ch);
     if (ok && (degree(b) >= 3 || G.round.has(b))) for (const o of carsOn(b, c2)) if (o!==c && o.state!=='unload' && o.path[o.seg]===b && o.path[o.seg+1]===c2 && o.s < boxClr(o, b)) { ok=false; break; }
     if (!ok) stopAt = len - stopD;
   }
@@ -1791,9 +1888,7 @@ function stepCar0(c, dt){
   // gridlock valve: after a long wait, cars inch forward instead of the jam freezing solid
   // (into a crossing only when its box is truly empty, and then it books the crossing so nobody else drives in)
   if (c.stuck > 6) { let go = true;
-    if (stopAt < len && !last && degree(b) >= 3 && c.held !== b) {
-      go = !G.blocked.has(b) && !G.cars.some(o => o !== c && boxEta(o, b) === 0) && !carsOn(b, c2).some(o => o !== c && o.path[o.seg] === b && o.s < boxClr(o, b));
-      if (go) { let m = G.res.get(b); if (!m) { m = new Map(); G.res.set(b, m); } if (c.held >= 0) release(c.held, c); m.set(c.id, [a, c2]); c.held = b; } }
+    if (stopAt < len && !last && degree(b) >= 3 && c.held !== b) go = false; // never into a crossing it hasn't booked }
     if (go) { lim = Math.max(lim, Math.min(len, c.s + mv*0.3 + 0.02)); vWant = Math.max(vWant, 0.3*vRoad); c.rx = 0; } }
   const room = Math.max(0, lim - c.s);
   if (c.v === undefined) c.v = 0;
@@ -1803,23 +1898,46 @@ function stepCar0(c, dt){
   if (vWant < c.v) { const nv = Math.max(vWant, c.v - BRK_MAX*dt); c.brk = c.v - nv > 0.6*dt || vWant < 0.05 ? 1 : 0; c.v = nv; }
   else { c.brk = 0; c.v = Math.min(vWant, c.v + ACC*Math.max(0.3, 1 - Math.pow(c.v / Math.max(vRoad, 0.01), 4))*dt); }
   let ns = c.s + Math.min(c.v*dt, room);
-  if (ns > c.s && !amb) ns = guardMove(c, ns);
+  // deadlock between two bodies (each blocks the other) for a while: the one that doesn't hold its crossing (else the
+  // higher id) backs up a little, if the space behind it is clear, so the other can get through. Never overlaps.
+  // body deadlock: follow "who blocks whom" from this car; if it comes back round (a pair or a longer cycle), the car in
+  // the cycle best placed to give way (can reverse, isn't inside a crossing it holds, most room behind; then higher id)
+  // backs up a little. A car waiting for a crossing I hold that sits in my way backs off too. Never overlaps.
+  if (c.blk && c.stuck > 3 && !amb) { const get = id => G.byId ? G.byId.get(id) : G.cars.find(x => x.id === id), o = get(c.blk);
+    const cyc = [c]; let x = o; while (x && x !== c && cyc.length < 8 && x.blk && x.stuck > 3) { cyc.push(x); x = get(x.blk); }
+    if (x === c && cyc.length >= 2) {
+      const canB = y => y.kind !== 'amb' && (y.s > 0.05 || (y.seg > 0 && !G.round.has(y.path[y.seg-1]) && G.occ[y.path[y.seg-1]] === 1)) && !G.round.has(y.path[y.seg]) && !G.round.has(y.path[y.seg+1]) && G.time - (y.backT ?? -99) > 4;
+      const score = y => (canB(y) ? 4 : 0) + ((y.held === y.path[y.seg] || y.hold0 === y.path[y.seg]) ? 0 : 2) + (guardBack(y, Math.max(0.01, y.s - 0.15)) ? 1 : 0);
+      let best = null; for (const y of cyc) if (canB(y) && (!best || score(y) > score(best) || (score(y) === score(best) && y.id > best.id))) best = y;
+      if (best) { best.back = 0.3; best.backT = G.time; } }
+    else if (o && !o.blk && o.stuck > 3 && o.kind !== 'amb' && (o.path[o.seg+1] === c.held || o.path[o.seg+1] === c.hold0) && G.time - (o.backT ?? -99) > 4) { o.back = 0.3; o.backT = G.time; } }
+  if (c.back > 0 && !G.round.has(a) && !G.round.has(b)) {
+    if (c.s > 0.02) { const bs = Math.max(0.01, c.s - 0.012); if (guardBack(c, bs)) { c.back -= c.s - bs; c.s = bs; c.v = 0; c.rx = 0.5; setPose(c); return; } else c.back = 0; }
+    else if (c.seg > 0 && !G.round.has(c.path[c.seg-1]) && G.occ[c.path[c.seg-1]] === 1) { // reverse onto the previous link
+      const pa = c.path[c.seg-1], pl = edgeLen(pa, a), sg = c.seg, s0 = c.s; c.seg--; c.s = pl - 0.012 + s0; const P = poseOf(c, true); let ok = !!P;
+      if (P) { const gx = Math.floor(P.x), gy = Math.floor(P.y); for (let dx = -1; dx <= 1 && ok; dx++) for (let dy = -1; dy <= 1 && ok; dy++) for (const o of (G.pg.get((gx+dx)*4096 + gy+dy) || [])) if (o !== c && o._P && obbPen(P, o._P) > 0) { ok = false; break; } }
+      if (ok) { if (c.held === a) { release(a, c); c.held = -1; } if (c.hold0 === a) { release(a, c); c.hold0 = -1; } c.back -= 0.012; c.v = 0; c.rx = 0.5; G.onEdgeDirty = true; setPose(c); return; }
+      c.seg = sg; c.s = s0; c.back = 0; }
+    else c.back = 0; }
+  if (ns > c.s) ns = guardMove(c, ns);
   if (c.v*dt > room + 1e-6) c.v = Math.min(c.v, room / dt);
   if (ns - c.s < mv*0.2) { c.stuck += dt; if (c.stuck > 1.8 && !c.honked && now - (G.lastHonk||0) > 0.9) { c.honked = true; G.lastHonk = now; honk(); } } else if (ns - c.s > mv*0.5) { c.stuck = Math.max(0, c.stuck - dt*3); if (c.stuck < 0.2) c.honked = false; }
   c.s = ns;
   if (c.held >= 0 && c.held === a && c.s > boxClr(c, a)) { release(c.held, c); c.held = -1; }
+  if (c.hx && c.hx.length) for (const n of [...c.hx]) { let ahead = false; for (let k = c.seg+1; k < Math.min(c.path.length, c.seg+6); k++) if (c.path[k] === n) ahead = true; if (!ahead) { release(n, c); c.hx.splice(c.hx.indexOf(n), 1); } }
+  if (c.hold0 >= 0 && c.path[c.seg+1] !== c.hold0 && !(c.path[c.seg] === c.hold0 && c.s <= boxClr(c, c.hold0))) { release(c.hold0, c); c.hold0 = -1; }
   if (c.s >= len) {
     c.s -= len; c.seg++;
     if (degree(b) >= 3) G.stats.pass.set(b, (G.stats.pass.get(b)||0) + 1);
     if (c.seg >= c.path.length-1) {
       c.s = 0;
-      if (c.held >= 0) { release(c.held, c); c.held = -1; }
+      relAll(c);
       if (c.state === 'go') { c.state = 'unload'; c.waitT = c.kind ? 0.9 : PARK_TIME; const taken = parkedAt(b, c).map(o => o.stall); c.stall = [0,1,2,3].find(k => !taken.includes(k)) ?? 0; c.parkT = now; }
       else { dropCar(c); if (c.kind) c.home.idle++; else { c.home.rest = (c.home.rest||0) + 1; (G.resting = G.resting || []).push({h: c.home, t: HOME_REST}); growHouse(c.home); } }
     }
   }
 }
-function loseCarSilent(c){ if (c.held>=0) release(c.held,c); dropCar(c); G.returning.push({h:c.home, t:3}); }
+function loseCarSilent(c){ relAll(c); dropCar(c); G.returning.push({h:c.home, t:3}); }
 
 // ---------- simulation ----------
 const isRush = () => PLUS() && G.week >= 3 && ((G.weekT > 10 && G.weekT < 17) || (G.weekT > 29 && G.weekT < 36));
@@ -2370,7 +2488,7 @@ function stepTo(a, n){
     const p = iy(a)*W + ix(n), q = iy(n)*W + ix(a);
     if (hasEdge(p, q)) { fail("Diagonal roads can't cross without an intersection"); return false; }
   }
-  if (o === 0) { if (G.terrain[n]===1 && diag) return false; if (!placeRoad(a, n)) return false; }
+  if (o === 0) { if (!placeRoad(a, n)) return false; }
   if (o === 2 || o === 4) { if (G.occ[a] !== 1 || !buildable(n)) return false; }
   if (o === 2) { const h = G.houseAt.get(n); if (h && faceTile(h) !== a) turnHouse(h, a); }
   if (G.occ[a] === 2) { const h = G.houseAt.get(a); if (h && faceTile(h) !== n) turnHouse(h, n); }
@@ -2417,8 +2535,8 @@ function drawToward(px, py){
     const k = Math.round(Math.atan2(dy, dx) / (Math.PI/4));
     let sx = Math.round(Math.cos(k*Math.PI/4)), sy = Math.round(Math.sin(k*Math.PI/4));
     // water and hills are crossed as one planned span (bridge or tunnel) that is built only once it reaches land
-    { const ax0 = Math.abs(dx) >= Math.abs(dy), ox = sx && sy ? (ax0 ? sx : 0) : sx, oy = sx && sy ? (ax0 ? 0 : sy) : sy, tn = cur + oy*W + ox;
-      if (ix(cur)+ox >= 0 && ix(cur)+ox < W && iy(cur)+oy >= 0 && iy(cur)+oy < H && spanTile(tn)) {
+    { const ox = sx, oy = sy, tn = cur + oy*W + ox;
+      if (ix(cur)+ox >= 0 && ix(cur)+ox < W && iy(cur)+oy >= 0 && iy(cur)+oy < H && spanTile(tn) && !(sx && sy && hasEdge(iy(cur)*W+ix(cur)+sx, (iy(cur)+sy)*W+ix(cur)))) {
         if (G.occ[cur] !== 1) { fail(G.terrain[tn] === 1 ? 'Bridges must start from a road on land' : 'Tunnels must start from a road outside the hill'); return; }
         stroke.span = {from: cur};
         if (updateSpan(px, py)) { if (stroke.span) return; continue; }
@@ -2581,7 +2699,7 @@ function crossesWater(a, b){
   return total > 0 && water/total >= 0.6;
 }
 // ---------- build previews: bridge/tunnel spans, motorway/ferry/metro links, road budget ----------
-const MAX_SPAN = 8, MW_MAX = 40, BP_OK = '#2fbf71', BP_BAD = '#e5484d';
+const MAX_SPAN = 12, MW_MAX = 40, BP_OK = '#2fbf71', BP_BAD = '#e5484d';
 const isTouchPtr = e => e.pointerType === 'touch' || e.pointerType === 'pen';
 const ptrWorld = (px, py) => { const c = cam(); return [(px - c.ox)/c.s, (py - c.oy)/c.s]; };
 // the road tile under the pointer; fingers are fat, so on touch the nearest road within a larger radius counts too
@@ -2598,44 +2716,58 @@ function snapRoad(px, py, touch, R){
   return best >= 0 ? best : t;
 }
 const spanTile = n => n >= 0 && (G.terrain[n] === 1 || G.terrain[n] === 2) && G.occ[n] === 0;
-// a straight bridge (water) or tunnel (hill) from a road on land: ends at the first land tile, and only then is it built
+// a bridge (water) or tunnel (hill) from a road on land, drawn like a road: any direction, diagonals and turns allowed.
+// It follows the pointer tile by tile over the water or hill and is only built once it reaches land.
+function spanStep(cur, px, py, K){
+  const dx = px - ix(cur) - .5, dy = py - iy(cur) - .5;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < 0.78) return -1;
+  const k = Math.round(Math.atan2(dy, dx) / (Math.PI/4)), sx = Math.round(Math.cos(k*Math.PI/4)), sy = Math.round(Math.sin(k*Math.PI/4));
+  const x = ix(cur)+sx, y = iy(cur)+sy; if (x < 0 || y < 0 || x >= W || y >= H) return -2;
+  return y*W + x;
+}
 function planSpan(from, fx, fy){
-  const cx = ix(from)+.5, cy = iy(from)+.5, dx = fx - cx, dy = fy - cy, horiz = Math.abs(dx) >= Math.abs(dy);
-  const sx = horiz ? (dx < 0 ? -1 : 1) : 0, sy = horiz ? 0 : (dy < 0 ? -1 : 1);
-  const want = Math.max(1, horiz ? Math.abs(Math.floor(fx) - ix(from)) : Math.abs(Math.floor(fy) - iy(from)));
-  const x1 = ix(from)+sx, y1 = iy(from)+sy; if (x1 < 0 || y1 < 0 || x1 >= W || y1 >= H) return null;
-  const K = G.terrain[y1*W+x1]; if ((K !== 1 && K !== 2) || G.occ[y1*W+x1] !== 0) return null;
-  const word = K === 1 ? 'Bridge' : 'Tunnel', tiles = []; let landing = -1, reason = '', endTile = -1;
-  for (let k = 1; k <= MAX_SPAN + 1; k++) {
-    const x = ix(from)+sx*k, y = iy(from)+sy*k;
-    if (x < 0 || y < 0 || x >= W || y >= H) { reason = 'Runs off the map'; break; }
-    const n = y*W+x, T = G.terrain[n];
+  const sp = stroke.span || {from};
+  if (!sp.path) {
+    const n0 = spanStep(from, fx, fy); if (n0 < 0 || !spanTile(n0)) return null;
+    sp.path = [n0]; sp.K = G.terrain[n0];
+  }
+  const K = sp.K, word = K === 1 ? 'Bridge' : 'Tunnel', path = sp.path;
+  let reason = '', landing = -1;
+  // follow the pointer: step forward, or step back when the pointer returns to the previous tile
+  for (let g = 0; g < 30; g++) {
+    const tail = path[path.length-1], fxT = Math.floor(fx), fyT = Math.floor(fy), here = fyT*W + fxT;
+    if (path.length >= 2 && here === path[path.length-2]) { path.pop(); continue; }
+    if (path.length === 1 && here === from) break;
+    const n = spanStep(tail, fx, fy); if (n === -1) break;
+    if (n === -2) { reason = 'Runs off the map'; break; }
+    if (n === from || path.includes(n)) break;
+    const T = G.terrain[n], diag = ix(n) !== ix(tail) && iy(n) !== iy(tail);
+    if (diag) { const p = iy(tail)*W + ix(n), q = iy(n)*W + ix(tail); if (hasEdge(p, q)) { reason = word + "s can't cross another road"; break; } }
     if (T === K) {
-      tiles.push(n);
       if (G.occ[n] !== 0) { reason = K === 1 ? 'Crosses another bridge' : 'Crosses another tunnel'; break; }
       if (!buildable(n)) { reason = 'Outside the build area'; break; }
-      if (tiles.length > MAX_SPAN) { reason = `Too long: ${word.toLowerCase()}s span ${MAX_SPAN} tiles at most`; break; }
+      path.push(n);
+      if (path.length > MAX_SPAN) { reason = `Too long: ${word.toLowerCase()}s span ${MAX_SPAN} tiles at most`; break; }
       continue;
     }
-    endTile = n;
     if (T === 0) { if (!buildable(n)) reason = 'Outside the build area'; else if (G.occ[n] === 0 || G.occ[n] === 1) landing = n; else reason = `A ${word.toLowerCase()} can't end on a building`; }
     else if (T === 3) reason = 'A landmark is in the way';
     else reason = K === 1 ? 'Bridge must end on land, not a hill' : 'Tunnel must end on open land';
     break;
   }
-  const len = tiles.length, need = (G.terrain[from] === K && G.occ[from] === 1) ? 0 : 1, have = K === 1 ? G.bridges : G.tunnels, roadsNeeded = len + (landing >= 0 && G.occ[landing] === 0 ? 1 : 0);
-  if (!reason && landing < 0) reason = 'Runs out of room';
+  const tiles = path.slice(), len = tiles.length, need = 1, have = K === 1 ? G.bridges : G.tunnels, roadsNeeded = len + (landing >= 0 && G.occ[landing] === 0 ? 1 : 0);
   if (!reason && need > have) reason = K === 1 ? 'No bridges left' : 'No tunnels left';
   if (!reason && roadsNeeded > G.roads) reason = `Needs ${roadsNeeded} road tiles, you have ${G.roads}`;
-  const pending = landing >= 0 && landing !== -1 && (len + 1) > want && !reason; // pointer is still over the water or hill: look-ahead only
-  const ok = !reason, pts = [from, ...tiles]; if (landing >= 0) pts.push(landing); else if (endTile >= 0 && !tiles.includes(endTile)) pts.push(endTile);
+  const pending = landing < 0 && !reason;
+  const ok = !reason, pts = [from, ...tiles]; if (landing >= 0) pts.push(landing);
   const left = have - need, unit = K === 1 ? 'bridge' : 'tunnel';
-  const label = ok ? [`${word} · ${len} tile${len === 1 ? '' : 's'}${pending ? ' · keep going to land' : ''}`, `${need ? '1 ' + unit : 'extends existing ' + unit} (${left} left) · ${roadsNeeded} road tiles`] : [reason];
-  return {K, tiles, landing, ok, reason, pending, pts, label, need, len, commit: ok && !pending};
+  const label = ok ? [`${word} · ${len} tile${len === 1 ? '' : 's'}${pending ? ' · keep going to land' : ''}`, `1 ${unit} (${left} left) · ${roadsNeeded} road tiles`] : [reason];
+  stroke.span = sp;
+  return {K, tiles, landing, ok, reason, pending, pts, label, need, len, commit: ok && landing >= 0};
 }
 function updateSpan(fx, fy){
   const sp = stroke.span, dx = fx - (ix(sp.from)+.5), dy = fy - (iy(sp.from)+.5);
-  if (Math.max(Math.abs(dx), Math.abs(dy)) < 0.78) { stroke.span = null; G.bp = null; return false; }
+  if ((!sp.path || sp.path.length <= 1) && Math.max(Math.abs(dx), Math.abs(dy)) < 0.78) { stroke.span = null; G.bp = null; return false; }
   const pl = planSpan(sp.from, fx, fy);
   if (!pl) { stroke.span = null; G.bp = null; return false; }
   sp.kind = pl.K;
@@ -3251,10 +3383,10 @@ function toyCar(col, L, Wd, rad, roof){
   ctx.fillStyle = shade(col, -.1); rr(-L*0.36, -Wd*0.5, L*0.52, Wd, 0.025); ctx.fill();                    // roof panel
 }
 function drawParked(col, n){
-  const spots = [[-0.085, 0.26], [0.085, 0.26], [-0.085, 0.26 + 0.27], [0.085, 0.26 + 0.27]];
+  const spots = [[-0.1, 0.22], [0.1, 0.22], [-0.1, 0.52], [0.1, 0.52]];
   for (let p=0; p<n; p++) {
     const [cx2, cy2] = spots[p];
-    ctx.save(); ctx.translate(cx2, cy2); ctx.rotate(Math.PI/2); toyCar(col, 0.11, 0.065, 0.035); ctx.restore();
+    ctx.save(); ctx.translate(cx2, cy2); ctx.rotate(Math.PI/2); toyCar(col, 0.16, 0.095, 0.05); ctx.restore();
   }
 }
 // where a moving car is drawn (world units) between two simulation steps; also used by the overlap test hook
@@ -3279,7 +3411,7 @@ function carPose(car, frIn){
           return [a0*P0[0] + a1*P1[0] + a2*P2[0] + a3*P3[0], a0*P0[1] + a1*P1[1] + a2*P2[1] + a3*P3[1], Math.atan2(dy, dx)]; };
         let q;
         if (rIn && sD < RA_IN) { const [fx, fy] = nodePos(from), hx = g.cx - fx, hy = g.cy - fy, E = R(g.p1), tE = T(g.p1), P0 = [fx - hy*LO*D, fy + hx*LO*D]; q = bez3(P0, [P0[0] + hx*0.25, P0[1] + hy*0.25], [E[0] - tE[0]*0.22, E[1] - tE[1]*0.22], E, sD / RA_IN); }
-        else if (rOut && sD >= RA_OUT) { const [tx, ty] = nodePos(to), hx = tx - g.cx, hy = ty - g.cy, X = R(g.p2), tX = T(g.p2), P3 = [tx - hy*LO*D, ty + hx*LO*D]; q = bez3(X, [X[0] + tX[0]*0.22, X[1] + tX[1]*0.22], [P3[0] - hx*0.25, P3[1] - hy*0.25], P3, (sD - RA_OUT) / (1 - RA_OUT)); }
+        else if (rOut && sD >= RA_OUT) { const [tx, ty] = nodePos(to), hx = tx - g.cx, hy = ty - g.cy, X = R(g.p2), tX = T(g.p2), P3 = [tx - hy*LO*D, ty + hx*LO*D]; q = bez3(X, [X[0] + tX[0]*0.3, X[1] + tX[1]*0.3], [P3[0] - hx*0.42, P3[1] - hy*0.42], P3, (sD - RA_OUT) / (1 - RA_OUT)); } // leaves the ring early and runs straight in its own lane well before the arm tile centre
         else { const u = rIn ? (sD - RA_IN) / (1 - RA_IN + RA_OUT) : (1 - RA_IN + sD) / (1 - RA_IN + RA_OUT), p = g.p1 - g.D*g.d*u, P = R(p), tt = T(p); q = [P[0], P[1], Math.atan2(tt[1], tt[0])]; if (g.d*(1-u) < 1.4) car.ind = D; }
         [px, py, ang] = q;
       } else {
@@ -3300,6 +3432,7 @@ function carPose(car, frIn){
             px = m*m*sx + 2*u*m*cx_ + u*u*ex; py = m*m*sy + 2*u*m*cy_ + u*u*ey;
             ang = Math.atan2(2*m*(cy_-sy) + 2*u*(ey-cy_), 2*m*(cx_-sx) + 2*u*(ex-cx_));
             px -= -Math.sin(ang)*LO*D; py -= Math.cos(ang)*LO*D; // undo: the lane offset is already in the curve
+            { const sp = 0.055*Math.sin(Math.PI*u)*Math.min(1, (1 - (e1x*e2x + e1y*e2y))*1.5); px += -Math.sin(ang)*sp*D; py += Math.cos(ang)*sp*D; } // lanes spread apart round a bend so opposing bodies (which cut the corner) keep clear
           }
         }
         px += -Math.sin(ang)*LO*D; py += Math.cos(ang)*LO*D;
@@ -3531,17 +3664,21 @@ function render(){
   for (const t of G.lights) {
     const L = lightState(t), x = ix(t)+.5, y = iy(t)+.5;
     const GO = '#2fbf71', YEL = '#f2b311', STOP = '#e5484d';
-    for (const m of (G.adj.get(t) || [])) {
-      const ax = approachAxis(m, t), col = (L.axis === ax) ? (L.state === 'g' ? GO : L.state === 'y' ? YEL : STOP) : STOP;
+    const ph = lightPhases(t);
+    for (const m of (G.adj.get(t) || [])) { if (!hasEdge(m, t)) continue;
+      const col = ph[L.p] && ph[L.p].includes(m) ? (L.state === 'g' ? GO : L.state === 'y' ? YEL : STOP) : STOP;
       const dx = ix(m)-ix(t), dy = iy(m)-iy(t), len = Math.hypot(dx, dy), ux = dx/len, uy = dy/len;
-      // stop bar across the approach lane
-      const sx = x + ux*0.42, sy = y + uy*0.42;
-      ctx.strokeStyle = col; ctx.lineWidth = 0.07; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(sx - uy*0.2, sy + ux*0.2); ctx.lineTo(sx + uy*0.2, sy - ux*0.2); ctx.stroke();
-      // signal head: dark pill with three lamps, the live one lit
-      const hx = x + ux*0.5 + uy*0.36*G.drive, hy = y + uy*0.5 - ux*0.36*G.drive;
-      ctx.fillStyle = '#20262c'; rr(hx-0.09, hy-0.2, 0.18, 0.4, 0.07); ctx.fill();
+      // stop bar across the incoming lane only, at the line where the first car waits
+      const D = G.drive < 0 ? -1 : 1, lx = uy*0.13*D, ly = -ux*0.13*D, sl = len > 1.2 ? 0.4 : 0.37, sx = x + ux*sl + lx, sy = y + uy*sl + ly;
+      ctx.strokeStyle = col; ctx.lineWidth = 0.075; ctx.lineCap = 'butt'; ctx.beginPath(); ctx.moveTo(sx - uy*0.12, sy + ux*0.12); ctx.lineTo(sx + uy*0.12, sy - ux*0.12); ctx.stroke();
+      // signal head on the kerb beside that lane, turned to face the incoming cars: three lamps in a row, the live one lit with a glow
+      const hx = x + ux*(sl + 0.08) + uy*0.4*D, hy = y + uy*(sl + 0.08) - ux*0.4*D;
+      ctx.save(); ctx.translate(hx, hy); ctx.rotate(Math.atan2(uy, ux));
+      ctx.fillStyle = '#20262c'; ctx.strokeStyle = P.roadOl; ctx.lineWidth = 0.025; rr(-0.21, -0.075, 0.42, 0.15, 0.06); ctx.fill(); ctx.stroke();
       const lit = col === GO ? 2 : col === YEL ? 1 : 0;
-      for (let k=0;k<3;k++) { ctx.fillStyle = k === lit ? [STOP, YEL, GO][k] : 'rgba(255,255,255,.12)'; ctx.beginPath(); ctx.arc(hx, hy - 0.12 + k*0.12, 0.045, 0, 7); ctx.fill(); }
+      for (let k=0;k<3;k++) { ctx.fillStyle = k === lit ? [STOP, YEL, GO][k] : 'rgba(255,255,255,.13)'; ctx.beginPath(); ctx.arc(0.13 - k*0.13, 0, 0.05, 0, 7); ctx.fill(); }
+      if (lit) { ctx.globalAlpha = 0.28; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(0.13 - lit*0.13, 0, 0.1, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
+      ctx.restore();
     }
     ctx.fillStyle = P.roadOl; ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.arc(x, y, 0.16, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
   }
@@ -4079,7 +4216,7 @@ function showHome(){
     <div class="stack" style="gap:6px"><h1>Little Lanes</h1><p>Draw roads so every car gets to a building of its own color. Keep the city moving as it grows.</p></div>
     <div class="modes">
       ${card('classic', 'Classic', '<span class="tag">Simple</span>', 'The pure road puzzle. Roads, bridges, tunnels, roundabouts, lights, and motorways.', ['18 real cities', 'Daily and weekly challenges', 'Replays and photo mode'])}
-      ${card('plus', 'Plus', '<span class="tag">Free for now</span>', 'Everything in Classic, plus weather, events, ferries, metros, and smarter traffic.', ['Map maker and sandbox', 'World tour and achievements', 'Cars route around traffic'])}
+      ${card('plus', 'Plus', '<span class="tag">Free for now</span>', 'Everything in Classic, plus weather, events, ferries and metros.', ['Map maker and sandbox', 'World tour and achievements', 'Ferries, metros and weather'])}
     </div>
     ${PLUS_ACCESS() ? `<button class="mode" data-online="1" style="grid-template-columns:auto 1fr"><span style="width:64px;height:64px;border-radius:18px;display:grid;place-items:center;font-size:34px;background:var(--accent,#e5622b)">🌐</span><span class="mode-body"><span class="mode-row"><span class="mode-title">Online</span><span class="tag">Plus</span></span><span class="mode-desc">Friends, quick messages, live duels, and leaderboards.</span></span></button>` : ''}
     <p class="hint">Classic and Plus keep separate progress. Version ${APP_VERSION.slice(1)}. <button class="btn" id="chkUpd" type="button" style="padding:4px 10px;font-size:13px">Check for updates</button></p>
@@ -4229,7 +4366,7 @@ function frame(ts){
     render(); updateHud();
   } catch (err) { if (!frame.warned) { frame.warned = true; console.error(err); } }
 }
-if (/llsimtest/.test(location.search)) window.__LL = { get G(){ return G; }, over: d => gameOver(d || G.dests[0]), start: (seed, id) => newGame({kind:"classic", city: ALL_CITIES().find(c => c.id === (id || "seattle")), mods:[], seed}), step: (n, dt) => { for (let k=0;k<n;k++) update(dt || 0.025); }, frame: (t) => { if (t !== undefined) now = t; render(); updateHud(); }, cam: () => cam(), W, H, expand: () => expandStage(), paths: t => paths(t), upgradeDest: d => upgradeDest(d), chain: (v, p) => chain(v, p), stepLights: dt => stepLights(dt), lightState: t => lightState(t), mc: (...a) => moveConflict(...a), update, stepTo, inRect, roundOf, placeRoundabout, graphChanged, carPose };
+if (/llsimtest/.test(location.search)) window.__LL = { get G(){ return G; }, bt: { drawToward: (x,y) => drawToward(x,y), setStroke: s => { stroke = s; }, buildable: n => buildable(n), hasEdge: (a,b) => hasEdge(a,b) }, over: d => gameOver(d || G.dests[0]), start: (seed, id) => newGame({kind:"classic", city: ALL_CITIES().find(c => c.id === (id || "seattle")), mods:[], seed}), step: (n, dt) => { for (let k=0;k<n;k++) update(dt || 0.025); }, frame: (t) => { if (t !== undefined) now = t; render(); updateHud(); }, cam: () => cam(), W, H, expand: () => expandStage(), paths: t => paths(t), upgradeDest: d => upgradeDest(d), chain: (v, p) => chain(v, p), stepLights: dt => stepLights(dt), lightState: t => lightState(t), mc: (...a) => moveConflict(...a), update, stepTo, inRect, roundOf, placeRoundabout, graphChanged, carPose, dbg: {peekFree, junctionFree, chainOf, chainFree, lightGo, degree, lightPhases} };
 resize(); now = performance.now()/1000;
 window.claude?.hot?.snapshot?.(() => ({ save: serialize() }));
 const boot = data => {

@@ -11,7 +11,8 @@ const COLORS = ['#e5484d', '#3e7bfa', '#eea300', '#2fa36b', '#8e5cd9', '#12a5b8'
 const RULES = {S: 'Survival', W: 'Sprint'};
 const WAIT_DONE_MS = 60000, LEFT_MS = 60000, ABSENT_MS = 60000; // a player who switches apps gets 60 s to come back
 const MAX_MSG = 2048, MAX_MAP = 100000, LAG_WARN_S = 15, LAG_LEFT_S = 45;
-const MIN_GAP = {state: 400, map: 1500, away: 300, back: 300, lost: 100, done: 300, emote: 0, start: 0}; // per-sender throttle (ms)
+const MIN_GAP = {state: 400, map: 1500, away: 300, back: 300, lost: 100, done: 300, picked: 300, emote: 0, start: 0};
+const PICK_WAIT_MS = 30000; // after my week-end pick, wait at most 30 s for the opponent's (the game itself caps the pause at 45 s) // per-sender throttle (ms)
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const num = (v, lo, hi, d) => { v = +v; return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : (d || 0); };
@@ -142,7 +143,7 @@ function join(room, host, city, rule) {
     S.ch = ch;
     const on = (ev, f, cap) => ch.on('broadcast', {event: ev}, safe(m => { if (S === mine && S.ch === ch) { const p = (m && m.payload) || {}; if (gate(ev, p, cap)) f(p); } }));
     on('away', () => { S.oppAway = Date.now(); renderStrip(); }); on('back', () => { S.oppAway = 0; S.oppStateAt = Date.now(); renderStrip(); HK.toast(S.oppNick + ' is back', 1800); });
-    on('start', p => { if (!S.host && p.id === S.hostId) onStart(p); }); on('state', onState); on('map', onMap, MAX_MAP); on('emote', onEmote); on('lost', onLost); on('done', onDone);
+    on('start', p => { if (!S.host && p.id === S.hostId) onStart(p); }); on('state', onState); on('map', onMap, MAX_MAP); on('emote', onEmote); on('lost', onLost); on('done', onDone); on('picked', onPicked);
     ch.on('presence', {event: 'sync'}, safe(() => { if (S === mine && S.ch === ch) onSync(); }));
     ch.on('presence', {event: 'leave'}, safe(() => { if (S === mine && S.ch === ch) onSync(); }));
     ch.subscribe(safe((status, err) => {
@@ -227,7 +228,7 @@ function go() {
   S.phase = 'playing'; S.countText = '';
   let ok = false; try { ok = HK.startLiveDuel({cityId: S.city, seed: S.seed, rule: S.rule, room: S.room}); } catch (_) {}
   if (!ok) { toast('Could not start the duel'); S.phase = 'lobby'; refresh(); return; }
-  S.oppStateAt = Date.now(); S.startWall = Date.now(); S.oppGT = 0; S.gtSeen = false; S.lag = 0; S.thr = {}; S.absentSince = 0; S.ticks = 0; S.tallied = false; S.warned = false; S.oppAway = 0; S.oppState = null; S.mm = null; S.oppLost = false; S.oppDone = null; S.myDone = null; S.myLost = false; S.ui = null;
+  S.oppStateAt = Date.now(); S.startWall = Date.now(); S.oppGT = 0; S.gtSeen = false; S.lag = 0; S.thr = {}; S.absentSince = 0; S.ticks = 0; S.tallied = false; S.warned = false; S.oppAway = 0; S.oppState = null; S.mm = null; S.oppLost = false; S.oppDone = null; S.myDone = null; S.myLost = false; S.ui = null; S.oppPicks = {}; S.myPick = null;
   buildStrip(); const mine = S;
   S.tickT = setInterval(safe(() => { if (S === mine) tick(); }), 1000);
   tick();
@@ -238,7 +239,8 @@ function tick() {
   try { const strip = HK.oppStrip(); if (strip && HK.inLiveDuel()) { if (strip.hidden && !(typeof document !== 'undefined' && document.querySelector('#sheet:not([hidden])'))) strip.hidden = false; if (!strip.querySelector('.ldC')) buildStrip(); } } catch (_) {}
   try { const u = S.ui; if (u && u.dot) { const age = Date.now() - S.oppStateAt; u.dot.style.background = S.oppAway ? '#f2b311' : age < 3500 ? '#2f9e5b' : age < 12000 ? '#f2b311' : '#d63c3c'; u.dot.title = age < 3500 && !S.oppAway ? 'Connected' : 'Away or reconnecting'; }
     if (u && u.lead && !S.oppAway && S.lag > LAG_WARN_S && Date.now() - S.oppStateAt <= 4000) { u.lead.textContent = 'catching up…'; u.lead.style.color = '#b7791f'; }
-    else if (u && u.lead && (S.oppAway || Date.now() - S.oppStateAt > 4000)) { const since = S.oppAway || S.oppStateAt, left = Math.max(0, Math.ceil((LEFT_MS - (Date.now() - since)) / 1000)); u.lead.textContent = 'away · ' + left + 's'; u.lead.style.color = '#b7791f'; } } catch (_) {}
+    else if (u && u.lead && (S.oppAway || Date.now() - S.oppStateAt > 4000)) { const since = S.oppAway || S.oppStateAt, left = Math.max(0, Math.ceil((LEFT_MS - (Date.now() - since)) / 1000)); u.lead.textContent = 'away · ' + left + 's'; u.lead.style.color = '#b7791f'; }
+    else { const pl = pickLabel(); if (u && u.lead && pl) { u.lead.textContent = pl; u.lead.style.color = pl === 'picked ✓' ? '#2f9e5b' : '#b7791f'; } } } catch (_) {}
   S.ticks++;
   let st = null; try { st = HK.duelState(); } catch (_) {}
   if (st) send('state', {gt: Number.isFinite(+st.t) && st.t != null ? Math.round(num(st.t, 0, 1e6, 0) * 10) / 10 : undefined, score: st.score | 0, week: st.week | 0, danger: Math.round(num(st.danger, 0, 1, 0) * 100) / 100, over: !!st.over, lost: !!st.lost});
@@ -249,10 +251,42 @@ function tick() {
   if (S.myDone) send('done', {score: S.myDone.score});
   const now = Date.now();
   // the game runs on the wall clock: an opponent whose simulation falls far behind it is stalling (slow, throttled or frozen)
-  S.lag = S.oppAway || !S.gtSeen ? 0 : (now - S.startWall) / 1000 - S.oppGT;
+  // compared with MY game time (not the wall clock), so the shared week-end pauses never count as lag
+  const myT = st && Number.isFinite(+st.t) ? +st.t : null;
+  S.lag = S.oppAway || !S.gtSeen || myT == null ? 0 : myT - S.oppGT;
+  syncCheck(true);
   if (S.lag > LAG_LEFT_S) { oppLeft(); return; }
   if (S.absentSince && now - S.absentSince > ABSENT_MS) { oppLeft(); return; }
   if (now - S.oppStateAt > LEFT_MS) oppLeft();
+}
+
+// ---------- week-end pick sync ----------
+function pickState() { try { return HK.pickState ? HK.pickState() : null; } catch (_) { return null; } }
+function syncCheck(fromTick) {
+  if (S.phase !== 'playing') return;
+  const ps = pickState();
+  if (fromTick && S.myPick && S.myPick.doneAt && Date.now() - S.myPick.doneAt < 5000) send('picked', {week: S.myPick.week, k: S.myPick.k}); // a few repeats after resuming, in case one was dropped
+  if (!ps || !ps.waiting) return;
+  const w = ps.week, mine = S.myPick && S.myPick.week === w ? S.myPick : (S.myPick = {week: w, at: Date.now()});
+  if (fromTick) send('picked', {week: w, k: mine.k}); // repeat until we both resume (throttled on the other side)
+  const left = PICK_WAIT_MS - (Date.now() - mine.at);
+  if (S.oppPicks[w] || left <= 0) { mine.doneAt = Date.now(); try { HK.resumeSync(w); } catch (_) {} renderStrip(); return; }
+  try { HK.syncMsg('Waiting for ' + S.oppNick + ' to pick… ' + Math.max(1, Math.ceil(left / 1000)) + 's'); } catch (_) {}
+}
+function pickLabel() {
+  const ps = pickState(); if (!ps || !(ps.picking || ps.waiting)) return null;
+  return S.oppPicks[ps.week] ? 'picked ✓' : 'picking…';
+}
+HK.on('picked', safe(d => {
+  if (S.phase !== 'playing' || !d) return;
+  const w = Math.floor(num(d.week, 0, 999, 0)); S.myPick = {week: w, at: Date.now(), k: typeof d.k === 'string' ? d.k.slice(0, 20) : undefined};
+  send('picked', {week: w, k: S.myPick.k}); syncCheck(); renderStrip();
+}));
+HK.on('weekpause', safe(() => renderStrip()));
+function onPicked(p) {
+  if (S.phase !== 'playing') return;
+  const w = Math.floor(num(p.week, 0, 999, -1)); if (w < 1) return;
+  S.oppPicks[w] = true; syncCheck(); renderStrip();
 }
 
 // ---------- incoming ----------
@@ -401,6 +435,7 @@ function renderStrip() {
   if (u.n) u.n.textContent = S.oppNick;
   const st = S.oppState; if (st) { if (u.s) u.s.textContent = String(st.score); if (u.w) u.w.textContent = S.rule === 'W' ? 'wk ' + Math.min(st.week, 10) + '/10' : 'wk ' + st.week; if (u.d) u.d.style.width = Math.round(st.danger * 100) + '%';
     const me = myScore(); if (u.lead && me != null && !S.oppAway) { const d = me - st.score; u.lead.textContent = d > 0 ? 'you +' + d : d < 0 ? 'you −' + (-d) : 'tied'; u.lead.style.color = d > 0 ? '#2f9e5b' : d < 0 ? '#d63c3c' : ''; }
+    { const pl = pickLabel(); if (u.lead && pl && !S.oppAway) { u.lead.textContent = pl; u.lead.style.color = pl === 'picked ✓' ? '#2f9e5b' : '#b7791f'; } }
     if (u.strip) u.strip.style.boxShadow = st.danger > 0.7 ? '0 0 0 2px #d63c3c' : '';
     if (st.danger > 0.7 && !S.warned) { S.warned = true; HK.toast(S.oppNick + ' is close to overflowing!', 2500); } else if (st.danger < 0.3) S.warned = false; }
   drawMap();

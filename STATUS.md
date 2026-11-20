@@ -2,6 +2,14 @@
 
 Single-file game: `index.html` (HTML + vanilla JS + Canvas 2D, no libraries). Plan and design decisions live in the "Little Lanes — Game Design & Build Plan" doc.
 
+## Version 3.24 (Nov 20)
+- Upgrades pause the game: solo fully paused until you pick; duels/co-op pause for everyone with "Waiting for X to pick…", resume together (auto-pick 25 s, resume by 45 s); lag measured in game time.
+- Cars no longer drive through each other (most cases): body check before every move, stop line moved back, safer junction clearing, stricter jam escape, no rerouting inside roundabouts, cleaner roundabout entry/exit curves. Overlaps down ~85-99%; some corner overlaps remain. Roundabouts: no wrong-way movement found.
+- Building: bridges/tunnels must start and end on land (max span 8), live green/red previews with reasons for bridges, tunnels, motorways (max 40), ferries and metro; road budget counts down while dragging; easier touch snapping.
+- Roomier maps: gap around every building, free tile at every driveway, house cap follows land area, watery maps expand earlier (Mumbai has far fewer houses).
+- Game over: Home button on every end screen; a finished game never shows Resume.
+- Dark mode: menu pictures and board previews are dark from the first load.
+
 ## Version 3.23 (Nov 19)
 - More pressure: extra workplaces when a colour has >6 houses per workplace (from week 3), gentler weeks 1-2, new colours ramp up (~1 workplace per 4-5 houses).
 - Jam highlights on the main map: pulsing ring + queue badge on jammed tiles, "…" bubble over cars stuck > 6 s.

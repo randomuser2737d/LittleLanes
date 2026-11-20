@@ -411,8 +411,8 @@ p{margin:0;line-height:1.5;color:var(--muted)}
     <button class="tool" id="nightBtn" aria-label="Day and night" title="Day and night cycle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><span class="lbl">night</span></button>
     <button class="tool" id="undoBtn" aria-label="Undo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg><span class="lbl">undo</span></button>
     <div class="sep"></div>
-    <div class="tool" aria-label="Bridges left" title="Bridges left: drag a road across water"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 10h18M5 10v8M19 10v8M5 14c3-4 11-4 14 0"/></svg><span class="lbl">bridge</span><span class="cnt" id="nBridge">0</span></div>
-    <div class="tool" aria-label="Tunnels left" title="Tunnels: drag a road through hills"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20 L9 7 L13 13 L16 9 L22 20Z"/><path d="M9 20v-3a3 3 0 0 1 6 0v3"/></svg><span class="lbl">tunnel</span><span class="cnt" id="nTunnel">0</span></div>
+    <div class="tool" aria-label="Bridges left" title="Bridges left: drag a road from the shore across water to the far shore"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 10h18M5 10v8M19 10v8M5 14c3-4 11-4 14 0"/></svg><span class="lbl">bridge</span><span class="cnt" id="nBridge">0</span></div>
+    <div class="tool" aria-label="Tunnels left" title="Tunnels: drag a road from open land through a hill and out the other side"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20 L9 7 L13 13 L16 9 L22 20Z"/><path d="M9 20v-3a3 3 0 0 1 6 0v3"/></svg><span class="lbl">tunnel</span><span class="cnt" id="nTunnel">0</span></div>
   </div>
   </div>
 </div>
@@ -425,6 +425,7 @@ p{margin:0;line-height:1.5;color:var(--muted)}
 <button id="emoteBtn" class="chip" hidden aria-label="Send an emote" style="position:fixed;left:12px;top:calc(env(safe-area-inset-top,0px) + 72px);font-size:20px;padding:6px 10px;cursor:pointer">😀</button>
 <div id="emoteRing" hidden role="menu" aria-label="Emotes"></div>
 <div id="emoteBubble" hidden></div>
+<div id="syncWait" class="chip" hidden role="status" aria-live="polite" style="position:fixed;left:50%;top:42%;transform:translate(-50%,-50%);z-index:11;font-size:17px;font-weight:600;padding:14px 20px;box-shadow:0 10px 30px rgba(0,0,0,.25)"></div>
 <div id="oppStrip" class="chip" hidden style="position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 66px);z-index:4;gap:10px;font-size:13px"></div>
 <div id="sheet" class="sheet"><div class="card" id="sheetCard"></div></div>
 <div id="editor" hidden>
@@ -449,7 +450,7 @@ p{margin:0;line-height:1.5;color:var(--muted)}
 </div>
 
 <script>
-var APP_VERSION = 'v3.23';
+var APP_VERSION = 'v3.24';
 (() => {
 'use strict';
 const cv = document.getElementById('cv');
@@ -778,10 +779,15 @@ window.LLHooks = (() => {
       return {W, H, rect: {...G.rect}, roads, houses: G.houses.map(h => [h.i, h.color]), dests: G.dests.map(d => [d.x, d.y, d.color])}; },
     showEmote(text){ const b = el('emoteBubble'); b.textContent = text; b.hidden = false; b.style.animation = 'none'; void b.offsetWidth; b.style.animation = ''; clearTimeout(H._et); H._et = setTimeout(() => { b.hidden = true; }, 2500); sfx('bubble', {lo: 1}); },
     // the duel is decided from outside (opponent overflowed, left, or time ran out): stop the game and show a card
-    endDuel(title, html){ if (!G) return; const was = G.over; G.over = true; clearSave(); el('bottom').hidden = true; showEmoteUI(false);
-      showSheet(`<div class="stack"><div><div class="small">Duel over · week ${G.week}</div><h2>${title}</h2></div><div><div class="big">${G.score}</div><p>trips completed</p></div>${statsLine()}${html || ''}<div class="btnrow"><button class="btn primary" id="toMenu">Back to menu</button></div></div>`, true);
+    endDuel(title, html){ if (!G) return; const was = G.over; G.over = true; G.syncWait = null; el('syncWait').hidden = true; clearSave(); el('bottom').hidden = true; showEmoteUI(false);
+      showSheet(`<div class="stack"><div><div class="small">Duel over · week ${G.week}</div><h2>${title}</h2></div><div><div class="big">${G.score}</div><p>trips completed</p></div>${statsLine()}${html || ''}<div class="btnrow"><button class="btn primary" id="toMenu">Back to menu</button><button class="btn" id="toHome">🏠 Home</button></div></div>`, true);
+      sheetCard.querySelector('#toHome').onclick = () => showHome();
       sheetCard.querySelector('#toMenu').onclick = () => (G && G.cfg.duel && G.cfg.duel.live ? showOnline() : showMenu()); if (!was) sfx('result'); },
     oppStrip: () => el('oppStrip'),
+    // week-end sync for live duels / co-op: who is waiting, the wait text over the paused city, and the resume
+    pickState: () => (G && isLive() && !G.over ? {week: G.week, picking: !!G.pending, waiting: !!G.syncWait, since: (G.syncWait || G.pending || {}).since || 0} : null),
+    syncMsg(text){ if (G && G.syncWait) { G.syncWait.msg = String(text || '').slice(0, 160); syncTick(); } },
+    resumeSync: week => resumeSync(week),
     // red banner at the top for mistakes (bad code, empty box, no connection)
     ok(msg, ms = 2600){ const b = el('errBar'); el('errMsg').textContent = '✓ ' + msg; b.classList.add('good'); b.hidden = false; b.style.animation = 'none'; void b.offsetWidth; b.style.animation = ''; clearTimeout(H._errT); H._errT = setTimeout(() => { b.hidden = true; }, ms); sfx('ok'); },
     error(msg, ms = 3800){ const b = el('errBar'); el('errMsg').textContent = msg; b.classList.remove('good'); b.hidden = false; b.style.animation = 'none'; void b.offsetWidth; b.style.animation = ''; clearTimeout(H._errT); H._errT = setTimeout(() => { b.hidden = true; }, ms); sfx('nope'); },
@@ -825,8 +831,8 @@ function finishSprint(){
   LLHooks.emit('gameover', {city: G.city.id, edition: EDITION, kind: 'duel', key: null, score: G.score, week: G.week, live: !!(G.cfg.duel && G.cfg.duel.live), sprintDone: true});
   if (G.cfg.duel && G.cfg.duel.live) return; // duel.js shows the result tone(784,.4,.05,'triangle');
   showSheet(`<div class="stack"><div><div class="small">Duel finished · week 10 done</div><h2>${G.score} trips</h2></div>${statsLine()}${duelEndHtml(false)}
-    <div class="btnrow"><button class="btn primary" id="toMenu">Back to menu</button></div></div>`, true);
-  el('bottom').hidden = true; sheetCard.querySelector('#toMenu').onclick = () => showMenu(); wireDuelEnd(false);
+    <div class="btnrow"><button class="btn primary" id="toMenu">Back to menu</button><button class="btn" id="toHome">🏠 Home</button></div></div>`, true);
+  el('bottom').hidden = true; sheetCard.querySelector('#toMenu').onclick = () => showMenu(); sheetCard.querySelector('#toHome').onclick = () => showHome(); wireDuelEnd(false);
 }
 // ==== DEC2026 BEGIN ==== (hand-made December 2026 puzzles: same on every device, picked by the device date)
 const DEC2026 = {
@@ -921,7 +927,14 @@ function challengeFor(kind, at){
 
 // ---------- theme ----------
 let TH = {};
-function readTheme(){ const cs = getComputedStyle(document.documentElement); for (const k of ['bg','land','water','water-deep','hill','hill-line','road','road-edge','grid','ink','muted','accent','danger']) TH[k] = cs.getPropertyValue('--'+k).trim(); const m = /^#?([0-9a-f]{6})$/i.exec(TH.bg); TH.dark = m ? (parseInt(m[1].slice(0,2),16)+parseInt(m[1].slice(2,4),16)+parseInt(m[1].slice(4,6),16)) < 200 : false; }
+function readTheme(){ const cs = getComputedStyle(document.documentElement); for (const k of ['bg','land','water','water-deep','hill','hill-line','road','road-edge','grid','ink','muted','accent','danger']) TH[k] = cs.getPropertyValue('--'+k).trim(); const m = /^#?([0-9a-f]{6})$/i.exec(TH.bg); TH.dark = m ? (parseInt(m[1].slice(0,2),16)+parseInt(m[1].slice(2,4),16)+parseInt(m[1].slice(4,6),16)) < 200 : false;
+  // the colours can change after the first menu was drawn (page still loading, or light/dark switched): redraw cached art
+  if (readTheme.lastDark !== undefined && readTheme.lastDark !== TH.dark) { try { refreshThemeArt(); } catch (e) {} } readTheme.lastDark = TH.dark; }
+function refreshThemeArt(){
+  if (typeof THUMBS_CLEAR === 'function') THUMBS_CLEAR(); try { HSPR.clear(); HBLK.clear(); } catch (e) {}
+  if (typeof sheet !== 'undefined' && !sheet.hidden) { document.querySelectorAll('img.mode-art').forEach(im => { const ed = im.closest('[data-mode]'); if (ed) im.src = thumb(CITIES.find(c => c.id === (ed.dataset.mode === 'classic' ? 'amsterdam' : 'hongkong'))); }); document.querySelectorAll('.bcard').forEach(b => { const c = b.querySelector('canvas'); if (c) drawBoardPreview(c, b.dataset.board); }); }
+}
+window.addEventListener('load', () => { readTheme(); setTimeout(readTheme, 300); });
 readTheme(); setTimeout(applyTheme, 0);
 try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readTheme); } catch(e) {}
 new MutationObserver(readTheme).observe(document.documentElement, {attributes:true, attributeFilter:['data-theme']});
@@ -1117,6 +1130,7 @@ function newGame(cfg, bare){
   if (G) G.plan = null; el('planBar').hidden = true; el('planBtn').classList.remove('on');
   for (const sel of ['[data-tool=ferry]','[data-tool=metro]','#planBtn','#trafBtn','#statsBtn','#nightBtn']) document.querySelector(sel).hidden = !PLUS();
   setSpeed(1); setTool('draw'); closeSheet();
+  el('syncWait').hidden = true;
   LLHooks.emit('newgame', {kind: cfg.kind, live: !!(cfg.duel && cfg.duel.live)}); el('oppStrip').hidden = !(cfg.duel && cfg.duel.live);
   Object.assign(EMO, {last: -99, sent: 0, streak: 0, prev: -1, coolUntil: -99}); showEmoteUI(cfg.kind === 'duel');
   document.querySelector('[data-speed="0"]').hidden = cfg.kind === 'duel'; if (cfg.kind === 'duel') el('planBtn').hidden = true;
@@ -1134,11 +1148,25 @@ function stageRect(k){
   const x = clamp(Math.round(cx - w/2), 0, W-w), y = clamp(Math.round(cy - h/2), 0, H-h);
   return {x, y, w, h};
 }
+// a stage that is mostly water or hills has little room to build on, so the city opens up a week (or two, on the very wettest maps) sooner
+function stageWeek(k){
+  const R = stageRect(k); let l = 0; for (let y=R.y;y<R.y+R.h;y++) for (let x=R.x;x<R.x+R.w;x++) if (G.terrain[y*W+x] === 0) l++;
+  const f = l / (R.w*R.h), early = f < 0.3 ? 2 : f < 0.6 ? 1 : 0;
+  return Math.max(STAGES[k].week - early, k > 0 ? STAGES[k-1].week + 2 : 1);
+}
 const inRect = (r,i) => { const x=ix(i), y=iy(i); return x>=r.x && x<r.x+r.w && y>=r.y && y<r.y+r.h; };
 const buildable = i => inRect(G.rect, i) && G.revealAt[i] <= now;
 
 // ---------- spawning ----------
 function countColor(c){ let h=0,d=0; for (const o of G.houses) if (o.color===c) h++; for (const o of G.dests) if (o.color===c) d++; return {h,d}; }
+// room for roads: land inside the city that no house or workplace stands on. Roads count as room, so where a spawn lands depends on
+// the map and the buildings only, not on how the player built (keeps two duel players' cities alike)
+const roomTile = t => t>=0 && t<N && G.terrain[t]===0 && inRect(G.rect,t) && G.occ[t]!==2 && G.occ[t]!==3 && G.occ[t]!==4 && !(PLUS() && iy(t) === G.city.rail);
+function ringOf(tiles, eight){ const own = new Set(tiles), out = new Set();
+  for (const t of tiles) for (const n of (eight ? neighbors8(t) : neighbors4(t))) if (!own.has(n)) out.add(n);
+  return [...out]; }
+// a spot is cramped if another building touches it (even diagonally), or it has too little room around it to lay a road
+const buildingAt = t => G.occ[t]===2 || G.occ[t]===3 || G.occ[t]===4;
 function freeLand(i){ return i>=0 && i<N && G.occ[i]===0 && G.terrain[i]===0 && (!PLUS() || iy(i) !== G.city.rail) && inRect(G.rect,i) ; }
 function neighbors8(i){ const x=ix(i), y=iy(i), r=[]; for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) { if (!dx && !dy) continue; const X=x+dx, Y=y+dy; if (X>=0&&Y>=0&&X<W&&Y<H) r.push(Y*W+X); } return r; }
 function diagFree(a, b){ if (!isDiag(a,b)) return true; const p = iy(a)*W + ix(b), q = iy(b)*W + ix(a); return !hasEdge(p, q); }
@@ -1148,7 +1176,7 @@ function neighbors4(i){ const x=ix(i), y=iy(i), r=[]; if(x>0)r.push(i-1); if(x<W
 // doesn't depend on how the player built their roads; two duel players get the same city as long as possible
 function spawnRng(fn){ const keep = rng; G.spawnN = (G.spawnN || 0) + 1; rng = mulberry32(((G.cfg.seed|0) * 31 + G.spawnN * 7919) | 0); try { return fn(); } finally { rng = keep; } }
 function spawnHouse(color, near){ return spawnRng(() => spawnHouse0(color, near)); }
-function spawnDest(color, start, at){ return spawnRng(() => spawnDest0(color, start, at)); }
+function spawnDest(color, start, at, loose){ return spawnRng(() => spawnDest0(color, start, at, loose)); }
 function spawnHouse0(color, near){
   if (color === undefined) {
     let best=0, bs=Infinity;
@@ -1166,6 +1194,14 @@ function spawnHouse0(color, near){
     if (!freeLand(cand)) continue;
     if (t < 50) { const R = G.rect, cx = ix(cand), cy = iy(cand); if (cx===R.x || cy===R.y || cx===R.x+R.w-1 || cy===R.y+R.h-1) continue; }
     if (neighbors4(cand).some(n => G.occ[n]===3 || G.occ[n]===4)) continue;
+    // keep a gap tile around every home (and clear of workplace lots), a driveway that is not blocked, and room to run a road
+    if (G.houses.length >= 3) {
+      const n8 = neighbors8(cand), n4 = neighbors4(cand), strict = t < 36;
+      if (reservedFace(cand)) continue;
+      if (n8.some(n => G.occ[n]===3 || G.occ[n]===4)) continue;
+      if (n4.some(n => G.occ[n]===2) || (strict && n8.some(n => G.occ[n]===2))) continue;
+      if (n4.filter(roomTile).length < (strict ? 3 : 2) || n8.filter(roomTile).length < (strict ? 5 : 3)) continue;
+    }
     if (anchors.length && Math.min(...anchors.map(a=>Math.hypot(ix(a)-ix(cand), iy(a)-iy(cand)))) < 2) continue;
     // homes sit a little way out from their workplace, so one house can't do all the work
     if (t < 50 && G.dests.some(d => d.color === color && Math.hypot(d.x + 0.5 - ix(cand), d.y + 0.5 - iy(cand)) < 5.5)) continue;
@@ -1178,8 +1214,9 @@ function spawnHouse0(color, near){
   return h;
 }
 
-function spawnDest0(color, start, at){
+function spawnDest0(color, start, at, loose){
   const r = G.rect;
+  const tidy = !start && (loose|0) < 2 && color !== -1, snug = (loose|0) >= 1; // the airport sits where the map puts it; after waiting a while, settle for snug ground
   let best = null;
   for (let t=0; t<120; t++){
     let x, y;
@@ -1198,6 +1235,19 @@ function spawnDest0(color, start, at){
           return x+2<W && freeLand(e); }).map(e => [e])
       : freeLotSides(x, y);
     if (!ents.length) continue;
+    if (tidy) {
+      // a workplace keeps a gap tile to every other building (houses, workplaces, their lots), a driveway tile that is not boxed in,
+      // and enough open land around it for roads to reach it
+      const bodyRing = ringOf(body, true);
+      if (bodyRing.some(buildingAt) || bodyRing.filter(roomTile).length < (snug ? 5 : 7)) continue;
+      const ok = ents.filter(tiles => {
+        if (ringOf([...body, ...tiles], true).some(t => buildingAt(t) && !tiles.includes(t))) return false;
+        return lotOptions(body, tiles).some(o => freeLand(o.f) && !reservedFace(o.f) && !buildingAt(o.f) && !ringOf([o.f], true).some(t => G.occ[t]===2 || ((G.occ[t]===3 || G.occ[t]===4) && !tiles.includes(t) && !body.includes(t)))
+          && ringOf([o.f], false).filter(t => !tiles.includes(t) && !body.includes(t) && roomTile(t)).length >= (snug ? 1 : 2));
+      });
+      if (!ok.length) continue;
+      ents.length = 0; ents.push(...ok);
+    }
     const others = G.dests.map(d => Math.hypot(d.x-x, d.y-y));
     const minD = others.length ? Math.min(...others) : 99;
     if (minD < 4) continue;
@@ -1328,6 +1378,8 @@ function rerouteCars(){
     if (G.time - (c.rerAt ?? -99) < 3) continue; // no flip-flopping between two routes
     const a = c.path[c.seg], b = c.path[c.seg+1], end = c.path[c.path.length-1];
     if (!hasEdge(a,b)) continue;
+    // never swap routes mid-roundabout or with a crossing already booked: the ring arc / booked move would jump
+    if (G.round.has(a) || G.round.has(b) || c.held === b || c.held === a) continue;
     // a car heading to work may switch to the workplace's other parking lot if this one is full
     const goingToWork = c.state === 'go' && !c.kind && c.dest && G.dests.includes(c.dest);
     const targets = goingToWork ? entsOf(c.dest).filter(e => G.occ[e] === 4) : [end];
@@ -1335,7 +1387,7 @@ function rerouteCars(){
     const cur = pathCost(c.path, c.seg+1) + (goingToWork ? lotCrowd(end, c, counts)*CROWD_COST : 0);
     let best = null, bc = Infinity;
     for (const t of targets) { const {dist, prev} = paths(t); if (dist[b] === Infinity) continue; const cost = dist[b] + (goingToWork ? lotCrowd(t, c, counts)*CROWD_COST : 0); if (cost < bc) { bc = cost; best = prev; } }
-    if (best && bc < cur * 0.82 - 0.3) { c.path = [a, ...chain(b, best)]; c.seg = 0; c.rerouted = (c.rerouted||0) + 1; c.rerAt = G.time; G.stats.reroutes = (G.stats.reroutes||0) + 1; }
+    if (best && bc < cur * 0.82 - 0.3) { c.path = c.seg > 0 ? [c.path[c.seg-1], a, ...chain(b, best)] : [a, ...chain(b, best)]; c.seg = c.seg > 0 ? 1 : 0; c.rerouted = (c.rerouted||0) + 1; c.rerAt = G.time; G.stats.reroutes = (G.stats.reroutes||0) + 1; }
   }
 }
 function heapPush(h, v){ h.push(v); let i=h.length-1; while(i>0){ const p=(i-1)>>1; if(h[p][0]<=h[i][0]) break; [h[p],h[i]]=[h[i],h[p]]; i=p; } }
@@ -1459,6 +1511,9 @@ function upgradeDest(d){
   d.level++;
   if (d.level === 2) {
     const sides = d.color >= 0 ? freeLotSides(d.x, d.y).filter(sd => sd.every(t => inRect(G.rect, t))) : [];
+    // the second lot goes on the side with the most elbow room (fewest buildings touching it, then the roomiest driveway)
+    const crowd = sd => ringOf([...d.body, ...d.lots.flatMap(l => l.t), ...sd], true).filter(t => buildingAt(t) && !sd.includes(t)).length;
+    sides.sort((a, b) => crowd(a) - crowd(b));
     const add = sides.length ? sides[0] : free.length ? [free[0]] : [];
     if (add.length) addLot(d, add);
   }
@@ -1489,7 +1544,7 @@ function airportDispatch(d, dist, prev){
 const L_MIN = 3, L_MAX = 9, L_YEL = 1.2, L_RED = 0.6, L_GAP = 1.0;
 function lightGo(node, c, from){ const L = lightState(node); if (L.axis !== approachAxis(from, node)) return false; if (L.state === 'g') return true;
   // amber: carry on only if the car is too close to stop comfortably
-  return L.state === 'y' && L.t < 0.7 && (c.v||0)*(c.v||0) / (2*BRK) > edgeLen(from, node) - c.s - 0.32 + 0.03; }
+  return L.state === 'y' && L.t < 0.7 && (c.v||0)*(c.v||0) / (2*BRK) > edgeLen(from, node) - c.s - 0.55 + 0.03; }
 function approachAxis(from, node){ const dx = ix(node)-ix(from), dy = iy(node)-iy(from); if (dx && dy) return dx*dy > 0 ? 0 : 1; return dy ? 1 : 0; }
 function lightState(t){ G.lightSt = G.lightSt || new Map(); let L = G.lightSt.get(t); if (!L) { L = {axis: 0, state: 'g', t: 0, empty: 0, next: 1}; G.lightSt.set(t, L); } return L; }
 function lightDemand(t){
@@ -1513,6 +1568,7 @@ function stepLights(dt){
 // or both turning to the near side. Turning across oncoming traffic has to wait for a gap.
 function moveConflict(n, f1, t1, f2, t2){
   if (f1 === f2 || t1 === t2 || f1 < 0 || f2 < 0 || t1 === undefined || t2 === undefined) return true;
+  // a turning car shares the corner with any car using the same arm the other way: their drawn arcs touch
   const d = 0.3*G.drive, P = Math.PI*2, ang = (o, sh) => ((Math.atan2(iy(o)-iy(n), ix(o)-ix(n)) + sh) % P + P) % P;
   const a1 = ang(f1, -d), b1 = ang(t1, d), a2 = ang(f2, -d), b2 = ang(t2, d);
   const lo = Math.min(a1, b1), hi = Math.max(a1, b1), inside = x => x > lo && x < hi;
@@ -1555,10 +1611,12 @@ function ringYield(n, c, from, to, m){
     if (rem > up - 0.15 && up*RING_R / Math.max(0.25, o.v||0) < 1.2) return false; }
   return true;
 }
+// how far past `node` a car must be before its tail is out of the crossing lanes (roundabout: off the ring)
+const boxClr = (o, node) => G.round.has(node) ? 0.62 : o.kind === 'truck' ? 0.5 : 0.45;
 // how soon a car reaches the box of `node` (0 = already inside, Infinity = not heading there)
 function boxEta(o, node){
   if (!o || o.state === 'unload' || o.seg >= o.path.length-1) return Infinity;
-  if (o.path[o.seg] === node) return o.s < 0.62 ? 0 : Infinity;
+  if (o.path[o.seg] === node) return o.s < boxClr(o, node) ? 0 : Infinity;
   if (o.path[o.seg+1] !== node) return Infinity;
   return Math.max(0, edgeLen(o.path[o.seg], node) - o.s) / Math.max(0.15, o.v||0);
 }
@@ -1581,7 +1639,8 @@ function junctionFree(node, c, from, to){
 function reserve(node, c, from, to){
   if (G.blocked.has(node) && c.kind !== 'amb') return false;
   if (degree(node) <= 2) return true;
-  if (G.lights.has(node) && from >= 0 && !lightGo(node, c, from)) return false;
+  // a car that already crossed its stop line on green/amber is committed: it doesn't stop again inside the junction
+  if (G.lights.has(node) && from >= 0 && c.held !== node && !lightGo(node, c, from)) return false;
   if (!junctionFree(node, c, from, to)) return false;
   let m = G.res.get(node); if (!m) { m = new Map(); G.res.set(node, m); }
   if (c.held >= 0 && c.held !== node) release(c.held, c);
@@ -1597,7 +1656,7 @@ function peekFree(node, c, from, nxt){
   if (degree(node) <= 2) return true;
   if (G.lights.has(node) && from >= 0 && !lightGo(node, c, from)) return false;
   if (!junctionFree(node, c, from, nxt)) return false;
-  for (const o of carsOn(node, nxt)) if (o!==c && o.state!=='unload' && o.path[o.seg]===node && o.path[o.seg+1]===nxt && o.s < 0.62) return false;
+  for (const o of carsOn(node, nxt)) if (o!==c && o.state!=='unload' && o.path[o.seg]===node && o.path[o.seg+1]===nxt && o.s < boxClr(o, node)) return false;
   return true;
 }
 function release(node, c){ const m = G.res.get(node); if (m) m.delete(c.id); }
@@ -1615,7 +1674,49 @@ function carsOn(a, b){
   if (G.onEdgeDirty || !G.onEdge) { const m = new Map(); for (const o of G.cars) { const k = carKey(o); if (k < 0) continue; let l = m.get(k); if (!l) m.set(k, l = []); l.push(o); } G.onEdge = m; G.onEdgeDirty = false; }
   return G.onEdge.get(a*N + b) || [];
 }
-function stepCar(c, dt){ const k0 = carKey(c), n0 = G.cars.length; stepCar0(c, dt); if (G.cars.length !== n0 || carKey(c) !== k0) G.onEdgeDirty = true; }
+function stepCar(c, dt){ const k0 = carKey(c), n0 = G.cars.length; stepCar0(c, dt); setPose(c); if (G.cars.length !== n0 || carKey(c) !== k0) G.onEdgeDirty = true; }
+// ---- body clearance: every car's drawn rectangle (same pose the renderer uses) lives in a coarse grid; a car never
+// moves into another car's body, whatever the booking/gap rules said. Only the deadlock valve may squeeze past, and
+// only the lower id of two cars that have both waited a long time.
+function poseOf(c, mover){
+  if (c.state === 'unload' || c.seg >= c.path.length-1) return null;
+  const a = c.path[c.seg], b = c.path[c.seg+1], len = edgeLen(a, b);
+  if (isMetro(a, b) || isFerry(a, b)) return null;
+  if (G.occ[a] !== 1 && c.s < (mover ? 0.2 : 0.3)) return null; // backing out of a driveway / lot
+  if (G.occ[b] !== 1 && c.seg+1 === c.path.length-1 && c.s > len - 0.25) return null; // pulling in
+  const P = carPose(c, 0), tr = c.kind === 'truck';
+  return {x: P[0], y: P[1], a: P[2], hl: tr ? 0.27 : 0.205, hw: tr ? 0.115 : 0.105};
+}
+function obbPen(A, B){
+  let m = 1e9;
+  for (const ax of [A.a, A.a + Math.PI/2, B.a, B.a + Math.PI/2]) { const ux = Math.cos(ax), uy = Math.sin(ax);
+    const ea = A.hl*Math.abs(Math.cos(A.a)*ux + Math.sin(A.a)*uy) + A.hw*Math.abs(-Math.sin(A.a)*ux + Math.cos(A.a)*uy);
+    const eb = B.hl*Math.abs(Math.cos(B.a)*ux + Math.sin(B.a)*uy) + B.hw*Math.abs(-Math.sin(B.a)*ux + Math.cos(B.a)*uy);
+    const d = Math.abs((A.x - B.x)*ux + (A.y - B.y)*uy), pen = ea + eb - d; if (pen <= 0) return 0; if (pen < m) m = pen; }
+  return m;
+}
+const poseCell = P => Math.floor(P.x)*4096 + Math.floor(P.y);
+function setPose(c){
+  if (!G.pg) return;
+  if (c._pk !== undefined) { const l = G.pg.get(c._pk); if (l) { const k = l.indexOf(c); if (k >= 0) l.splice(k, 1); } c._pk = undefined; }
+  c._P = G.cars.indexOf(c) >= 0 ? poseOf(c) : null;
+  if (c._P) { const k = poseCell(c._P); let l = G.pg.get(k); if (!l) G.pg.set(k, l = []); l.push(c); c._pk = k; }
+}
+function buildPoses(){ G.pg = new Map(); for (const c of G.cars) { c._pk = undefined; setPose(c); } }
+function guardMove(c, ns){
+  if (!G.pg) return ns;
+  const s0 = c.s; c.s = ns + (ns - s0); const P1 = poseOf(c, true); c.s = s0; if (!P1) return ns; // one step ahead: covers the drawing's in-between frames
+  const P0 = c._P, gx = Math.floor(P1.x), gy = Math.floor(P1.y);
+  for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { const l = G.pg.get((gx+dx)*4096 + gy+dy); if (!l) continue;
+    for (const o of l) { if (o === c || !o._P) continue;
+      const p1 = obbPen(P1, o._P); if (p1 <= 0) continue;
+      if (P0 && obbPen(P0, o._P) > 0 && (p1 <= obbPen(P0, o._P) + 1e-5 || Math.hypot(P1.x - o._P.x, P1.y - o._P.y) > Math.hypot(P0.x - o._P.x, P0.y - o._P.y))) continue; // already touching and moving apart
+      if (c.held >= 0 && c.held === c.path[c.seg] && o.held < 0 && !(o.v > 0.05) && c.stuck > 2) continue; // a car stuck inside a crossing it booked must clear it: squeeze past a car waiting at a line
+      if (c.id < o.id && ((o.blk === c.id && !(o.v > 0) && c.stuck > 3 && o.stuck > 3) || (c.stuck > 8 && o.stuck > 8))) continue;
+      if (c.stuck > 1 && !(o.v > 0.05)) continue; // gridlock valve: inch past a car that is stuck too // deadlock valve: let one of them squeeze through
+      c.v = 0; c.blk = o.id; return s0; } }
+  c.blk = 0; return ns;
+}
 // bumper-to-bumper spacing: trucks are longer, so the car behind keeps more room
 const vehGap = (o, c) => (o.kind === 'truck' || c.kind === 'truck') ? 0.8 : 0.62;
 function stepCar0(c, dt){
@@ -1658,7 +1759,7 @@ function stepCar0(c, dt){
     vRoad = SPEED*kf*(onArc ? Math.min(1.25, 0.85*(RA_IN + 1 - RA_OUT) / (RING_R*rg.d)) : rOut ? 0.62 + 0.3*Math.min(1, rg.d/(1.5*Math.PI)) : 0.8); }
   let mv = vRoad*dt;
   // stop line: roundabouts give way at the ring, lights a touch further back, long (diagonal) approaches a bit more room
-  const stopD = G.round.has(b) ? 1 - RA_IN : (G.lights.has(b) ? 0.36 : 0.32) * (len > 1.2 ? 1.15 : 1);
+  const stopD = G.round.has(b) ? 1 - RA_IN : 0.53 * (len > 1.2 ? 1.1 : 1); // nose stays out of the crossing lanes
   let lim = len, lead = null, leadGap = 1e9;
   if (!amb) for (const o of carsOn(a, b)) if (o!==c && o.state!=='unload' && o.path[o.seg]===a && o.path[o.seg+1]===b && o.s > c.s) { const gl = vehGap(o, c); if (o.s - gl < lim) lim = o.s - gl; if (o.s - c.s - gl < leadGap) { leadGap = o.s - c.s - gl; lead = o; } }
   if (!amb && G.ambOut && G.cars.some(o => o.kind==='amb' && o.state!=='unload' && o.path[o.seg+1]===b && o!==c && o.path[o.seg]!==a)) lim = Math.min(lim, len - 0.4);
@@ -1667,7 +1768,7 @@ function stepCar0(c, dt){
   if (!last && !amb && c.s + mv <= len - stopD && c.s > len - stopD - 0.8 && !peekFree(b, c, a, c2)) stopAt = len - stopD;
   if (!last && !amb && c.s + mv > len - stopD) {
     let ok = reserve(b, c, a, c2);
-    if (ok) for (const o of carsOn(b, c2)) if (o!==c && o.state!=='unload' && o.path[o.seg]===b && o.path[o.seg+1]===c2 && o.s < 0.62) { ok=false; break; }
+    if (ok && (degree(b) >= 3 || G.round.has(b))) for (const o of carsOn(b, c2)) if (o!==c && o.state!=='unload' && o.path[o.seg]===b && o.path[o.seg+1]===c2 && o.s < boxClr(o, b)) { ok=false; break; }
     if (!ok) stopAt = len - stopD;
   }
   if (last && c.state === 'go' && G.occ[b] === 4 && parkedAt(b, c).length >= stallsAt(b)) stopAt = Math.min(stopAt, len - 0.5);
@@ -1688,7 +1789,12 @@ function stepCar0(c, dt){
     // at a give-way (not a red light) creep up to the line at about a third of road speed instead of stopping short
     if (!G.lights.has(b) && stopAt - c.s > 0.12 && (!lead || leadGap > 0.25)) vWant = Math.max(vWant, Math.min(0.3*vRoad, Math.sqrt(2*BRK*Math.max(0, stopAt - c.s - 0.02)) + 0.1)); }
   // gridlock valve: after a long wait, cars inch forward instead of the jam freezing solid
-  if (c.stuck > 6) { lim = Math.max(lim, Math.min(len, c.s + mv*0.3 + 0.02)); vWant = Math.max(vWant, 0.3*vRoad); c.rx = 0; }
+  // (into a crossing only when its box is truly empty, and then it books the crossing so nobody else drives in)
+  if (c.stuck > 6) { let go = true;
+    if (stopAt < len && !last && degree(b) >= 3 && c.held !== b) {
+      go = !G.blocked.has(b) && !G.cars.some(o => o !== c && boxEta(o, b) === 0) && !carsOn(b, c2).some(o => o !== c && o.path[o.seg] === b && o.s < boxClr(o, b));
+      if (go) { let m = G.res.get(b); if (!m) { m = new Map(); G.res.set(b, m); } if (c.held >= 0) release(c.held, c); m.set(c.id, [a, c2]); c.held = b; } }
+    if (go) { lim = Math.max(lim, Math.min(len, c.s + mv*0.3 + 0.02)); vWant = Math.max(vWant, 0.3*vRoad); c.rx = 0; } }
   const room = Math.max(0, lim - c.s);
   if (c.v === undefined) c.v = 0;
   // a stopped car pulls away a moment after the way clears, so a queue starts one car after another
@@ -1697,10 +1803,11 @@ function stepCar0(c, dt){
   if (vWant < c.v) { const nv = Math.max(vWant, c.v - BRK_MAX*dt); c.brk = c.v - nv > 0.6*dt || vWant < 0.05 ? 1 : 0; c.v = nv; }
   else { c.brk = 0; c.v = Math.min(vWant, c.v + ACC*Math.max(0.3, 1 - Math.pow(c.v / Math.max(vRoad, 0.01), 4))*dt); }
   let ns = c.s + Math.min(c.v*dt, room);
+  if (ns > c.s && !amb) ns = guardMove(c, ns);
   if (c.v*dt > room + 1e-6) c.v = Math.min(c.v, room / dt);
   if (ns - c.s < mv*0.2) { c.stuck += dt; if (c.stuck > 1.8 && !c.honked && now - (G.lastHonk||0) > 0.9) { c.honked = true; G.lastHonk = now; honk(); } } else if (ns - c.s > mv*0.5) { c.stuck = Math.max(0, c.stuck - dt*3); if (c.stuck < 0.2) c.honked = false; }
   c.s = ns;
-  if (c.held >= 0 && c.held === a && c.s > 0.62) { release(c.held, c); c.held = -1; }
+  if (c.held >= 0 && c.held === a && c.s > boxClr(c, a)) { release(c.held, c); c.held = -1; }
   if (c.s >= len) {
     c.s -= len; c.seg++;
     if (degree(b) >= 3) G.stats.pass.set(b, (G.stats.pass.get(b)||0) + 1);
@@ -1721,7 +1828,9 @@ const isRush = () => PLUS() && G.week >= 3 && ((G.weekT > 10 && G.weekT < 17) ||
 const supplyF = d => { if (!d || d.color < 0) return 1; let h = 0, n = 0; for (const o of G.houses) if (o.color === d.color) h++; for (const o of G.dests) if (o.color === d.color) n++; return Math.min(1.6, Math.max(1, 4.5 / Math.max(1, h / Math.max(1, n)))); };
 const pinInterval = d => (G.week <= 2 ? 1.2 : 1) * supplyF(d) * (1 - 0.12*(((d && d.level)||1)-1)) * (G.city.practice ? 1.4 : 1) * Math.max(2.6, 5 - G.week*0.18) * (G.mods.has('rush') ? 0.67 : 1) * (isRush() ? 0.65 : 1) * (G.gameDay === d ? 0.45 : 1);
 // at most about one house per 11 open tiles of the current city area (about 110 on the full map)
-const houseCap = () => Math.max(12, Math.round(G.rect.w * G.rect.h / 11));
+// lakes, sea and hills take up room too: on a watery map the cap follows the land, so houses don't end up packed onto it
+const houseCap = () => { const R = G.rect; if (G.landKey !== R.x+','+R.y+','+R.w+','+R.h || G.landT !== G.terrain) { let l = 0; for (let y=R.y;y<R.y+R.h;y++) for (let x=R.x;x<R.x+R.w;x++) if (G.terrain[y*W+x] === 0) l++; G.landN = l; G.landKey = R.x+','+R.y+','+R.w+','+R.h; G.landT = G.terrain; }
+  return Math.max(12, Math.round(Math.min(R.w * R.h / 11, G.landN / 6.2))); };
 const houseInterval = () => (G.city.practice ? 1.5 : 1) * Math.max(2.2, 7 - G.week*0.4) * (G.mods.has('busy') ? 0.5 : 1);
 function update(dt){
   G.time += dt; G.weekT += dt;
@@ -1753,7 +1862,7 @@ function update(dt){
   if (G.week >= 3 && !G.city.practice) { G.wpT = (G.wpT||0) + dt; if (G.wpT >= 8) { G.wpT = 0; if (!(G.incoming && G.incoming.length)) {
     let best = -1, br = 6; for (let c=0;c<G.colors;c++){ const {h,d} = countColor(c); const r = h / Math.max(1, d); if (d && r > br) { br = r; best = c; } }
     if (best >= 0) announceDest(best, false); } } }
-  G.houseT += dt; if (G.houseT >= houseInterval()) { G.houseT = 0; if (G.houses.length < houseCap()) spawnHouse(); }
+  G.houseT += dt; if (G.houseT >= houseInterval()) { G.houseT = 0; if (G.houses.length < houseCap() && !spawnHouse()) G.houseT = houseInterval() * 0.6; }
   landIncoming();
   if (G.airportAt !== undefined && G.time >= G.airportAt) { G.airportAt = undefined; const ap = G.city.airport; if (!G.dests.some(d => d.color === -1) && spawnDest(-1, false, ap)) toast(`The ${G.city.name} airport opened. It takes cars of every color.`, 3500); }
   if (G.endless && !G.city.practice && G.cfg.kind !== 'sandbox' && !G.city.custom) { store.endless = store.endless || {}; if (G.score > (store.endless[G.city.id]||0)) { store.endless[G.city.id] = G.score; G.endDirty = true; } }
@@ -1764,6 +1873,7 @@ function update(dt){
   G.dispT += dt; if (G.dispT >= 0.2) { G.dispT = 0; dispatch(); }
   G.onEdgeDirty = true; G.ambOut = G.cars.some(o => o.kind === 'amb');
   G.byId = new Map(); for (const c of G.cars) G.byId.set(c.id, c);
+  buildPoses();
   for (const c of [...G.cars]) if (c.path && G.cars.indexOf(c) >= 0) stepCar(c, dt);
   let reopened = false;
   for (const [t, until] of G.closed) if (G.time >= until) { G.closed.delete(t); if (G.flooded) G.flooded.delete(t); reopened = true; }
@@ -1892,11 +2002,11 @@ const ICON = {
 const rd = n => G.mods.has('tight') ? Math.round(n/2) : n;
 const UPG = {
   roads:  {name:'Road tiles', n:() => rd((G.pending && G.pending.bundle) || G.lastBundle || 30), unit:'road tiles', desc:'Skip the tool and take a big bundle of road.', have: () => G.roads, apply: () => { G.lastBundle = (G.pending && G.pending.bundle) || 30; G.roads += rd(G.lastBundle); }, roads: () => 0},
-  bridge: {name:'Bridges', n:() => 2, unit:'bridges', desc:'Drag a road across water to use one.', have: () => G.bridges, apply: () => { G.bridges += 2; G.roads += rd(20); }, roads: () => rd(20)},
-  tunnel: {name:'Tunnels', n:() => 2, unit:'tunnels', desc:'Drag a road through a hill to use one.', have: () => G.tunnels, apply: () => { G.tunnels += 2; G.roads += rd(20); }, roads: () => rd(20)},
+  bridge: {name:'Bridges', n:() => 2, unit:'bridges', desc:'Drag a road from the shore across the water to land on the far side. A green preview shows the span; it only builds when it reaches land.', have: () => G.bridges, apply: () => { G.bridges += 2; G.roads += rd(20); }, roads: () => rd(20)},
+  tunnel: {name:'Tunnels', n:() => 2, unit:'tunnels', desc:'Drag a road from open land through a hill and out the other side. A green preview shows the tunnel; it only builds when it reaches open land.', have: () => G.tunnels, apply: () => { G.tunnels += 2; G.roads += rd(20); }, roads: () => rd(20)},
   round:  {name:'Roundabout', n:() => 1, unit:'roundabout', desc:'Tap a road or open ground: it fills a plus shape of 5 tiles, with an entrance on each side. Cars merge without stopping.', have: () => G.rounds, apply: () => { G.rounds += 1; G.roads += rd(20); }, roads: () => rd(20)},
   light:  {name:'Traffic lights', n:() => 3, unit:'traffic lights', desc:'Tap a crossing. Each direction takes turns.', have: () => G.lightsN, apply: () => { G.lightsN += 3; G.roads += rd(20); }, roads: () => rd(20)},
-  mway:   {name:'Motorway', n:() => 1, unit:'motorway', desc:'Drag from one road to another. A fast, straight link over water and roads, but not over mountains, and it can’t end at a roundabout or traffic light.', have: () => G.mwN, apply: () => { G.mwN += 1; G.roads += rd(10); }, roads: () => rd(10)},
+  mway:   {name:'Motorway', n:() => 1, unit:'motorway', desc:'Drag from one road to another. A live preview shows the straight, fast link: green means it will build when you let go, red tells you why not. It crosses water and roads, but not mountains, and it can’t end at a roundabout or traffic light.', have: () => G.mwN, apply: () => { G.mwN += 1; G.roads += rd(10); }, roads: () => rd(10)},
   ferry:  {name:'Ferry route', n:() => 1, unit:'ferry', desc:'Drag between two shore roads. Slow, but crosses wide water.', have: () => G.ferryN, apply: () => { G.ferryN += 1; G.roads += rd(10); }, roads: () => rd(10)},
   metro:  {name:'Metro line', n:() => 1, unit:'metro line', desc:'Drag between two roads anywhere. Cars ride underground, super fast.', have: () => G.metroN, apply: () => { G.metroN += 1; G.roads += rd(10); }, roads: () => rd(10)},
 };
@@ -1915,7 +2025,7 @@ function weekEnd(){
   if (G.cfg.kind === 'duel' && G.cfg.duel && G.cfg.duel.rule === 'W' && G.week >= 10) { finishSprint(); return; }
   (G.weekly = G.weekly || []).push(G.score); G.week++; if (G.week === 10) unlockAch('w10'); if (G.week === 20) unlockAch('w20'); if (G.week === 12 && !G.usedRound) unlockAch('noround');
   const nextStage = STAGES[G.stage+1];
-  const willExpand = nextStage && G.week >= nextStage.week;
+  const willExpand = nextStage && G.week >= stageWeek(G.stage+1);
   const futureRect = willExpand ? stageRect(G.stage+1) : G.rect;
   const saved = G.rect; G.rect = futureRect;
   const water = rectHas(1), hills = rectHas(2);
@@ -1931,7 +2041,8 @@ function weekEnd(){
     if (pool.every(p=>p[1]===0) && picks.length<want) picks.push('roads');
   }
   if (want === 2 && !picks.some(k => k === 'roads' || k === 'bridge' || k === 'tunnel')) picks[1] = 'roads';
-  G.pending = {picks, willExpand, bundle: rng() < 0.3 ? 40 : 30};
+  G.pending = {picks, willExpand, bundle: rng() < 0.3 ? 40 : 30, since: performance.now()};
+  if (isLive()) LLHooks.emit('weekpause', {week: G.week});
   showUpgrade(); sfx('arp');
   saveGame();
 }
@@ -1947,39 +2058,47 @@ function showReveal(k){
   duelAutoPick();
   sheetCard.querySelector('#gotIt').onclick = () => { G.seen.add(k); showUpgrade(); };
 }
+const DUEL_PICK_MS = 25000, SYNC_MAX_MS = 45000;
+function isLive(){ return !!(G && G.cfg && G.cfg.duel && G.cfg.duel.live); }
+// live duels / co-op: after my pick the city stays paused (G.syncWait) until duel.js / coop.js calls LLHooks.resumeSync(week)
+// once everyone has picked for that week; never longer than 45 s after the week ended
+function syncTick(){
+  const w = G.syncWait; if (!w) return;
+  if (performance.now() - w.since > SYNC_MAX_MS) { resumeSync(w.week); return; }
+  const box = el('syncWait'); if (box) { box.hidden = !sheet.hidden; box.textContent = w.msg || 'Waiting for the other players to pick…'; }
+}
+function resumeSync(week){
+  if (!G || !G.syncWait || (week != null && week !== G.syncWait.week)) return false;
+  G.syncWait = null; G.debt = 0; G.wallT = null; G.acc = 0; // restart the wall clock from now: nobody jumps ahead
+  const box = el('syncWait'); if (box) box.hidden = true; return true;
+}
 function duelAutoPick(){
   if (!isDuel()) return; const pend = G.pending, card = sheetCard;
-  const h = document.createElement('p'); h.className = 'hint'; h.textContent = `Duel: picks the first card for you in ${Math.max(1, Math.round(((pend.dl || performance.now()+20000) - performance.now())/1000))} seconds.`; card.querySelector('.stack')?.appendChild(h);
-  pend.dl = pend.dl || performance.now() + 20000; // one 20 s limit for the reveal card and the choice together
+  const h = document.createElement('p'); h.className = 'hint'; h.textContent = `Duel: picks the first card for you in ${Math.max(1, Math.round(((pend.dl || performance.now()+DUEL_PICK_MS) - performance.now())/1000))} seconds.`; card.querySelector('.stack')?.appendChild(h);
+  pend.dl = pend.dl || performance.now() + DUEL_PICK_MS; // one 25 s limit for the reveal card and the choice together
   const tick = () => { if (!G || G.pending !== pend || G.over) return; if (performance.now() < pend.dl) { setTimeout(tick, 250); return; } const b = sheetCard.querySelector('#gotIt') || sheetCard.querySelector('[data-upg]'); if (b) b.click(); };
   clearTimeout(duelAutoPick.t); duelAutoPick.t = setTimeout(tick, 250);
 }
-// solo games: a slide-in tray, the city keeps running (slowed); live and saved duels keep the old blocking sheet and its 20 s limit
-const TRAY_SLOW = 0.25, TRAY_SECS = 15;
+// solo games: a slide-in tray; the city is fully paused until you pick (no time limit).
+// duels keep the blocking sheet; live duels then wait until the opponent / teammates have picked for the same week
 function showUpgrade(){ if (isDuel()) showUpgradeSheet(); else showTray(); }
 function showTray(){
   const pend = G.pending, {picks, willExpand} = pend, tray = el('tray');
   G.seen = G.seen || new Set(['roads']); G.tray = true; G.modal = false;
   tray.innerHTML = `<div class="tr-head"><div><div class="small">Sunday · week ${G.week} begins</div><b>${picks.length > 1 ? 'Choose an upgrade' : 'Your upgrade'}</b></div>
-    <div class="tr-timer" title="The first card is picked for you when the ring runs out"><svg viewBox="0 0 32 32" aria-hidden="true"><circle class="bg" cx="16" cy="16" r="13"/><circle class="fg" id="trRing" cx="16" cy="16" r="13"/></svg><span id="trSecs">${TRAY_SECS}</span></div></div>
+    <div class="small" style="flex:none;font-weight:600" title="The city is paused until you choose">Paused</div></div>
     <div class="tr-cards">${picks.map((k, i) => { const u = UPG[k], fresh = !G.seen.has(k); return `<button class="tcard${fresh ? ' fresh' : ''}" data-tray="${k}" title="${u.desc.replace(/"/g, '&quot;')}">
       ${fresh ? '<span class="t-new">New!</span>' : ''}<span class="t-key" aria-hidden="true">${i+1}</span>
       <span class="t-ico">${ICON[k]}</span>
       <span class="t-txt"><span class="t-main">+${u.n()} ${u.unit}</span>${u.roads() ? `<span class="t-sub">+${u.roads()} road tiles</span>` : ''}<span class="t-name">${u.name} · you have ${u.have()}</span><span class="t-desc">${u.desc}</span></span></button>`; }).join('')}</div>
     ${willExpand ? '<div class="t-foot">The city grows after you choose.</div>' : ''}`;
   tray.hidden = false; tray.classList.remove('in'); void tray.offsetWidth; tray.classList.add('in');
-  let dl = performance.now() + TRAY_SECS*1000, lastT = performance.now();
-  const ring = tray.querySelector('#trRing'), secs = tray.querySelector('#trSecs'), C = 2*Math.PI*13;
-  ring.style.strokeDasharray = C;
   const close = () => { clearInterval(showTray.t); tray.hidden = true; tray.innerHTML = ''; if (G) G.tray = false; };
   tray.querySelectorAll('[data-tray]').forEach(b => b.onclick = () => { if (G.pending !== pend) return; for (const q of picks) G.seen.add(q); close(); applyUpgrade(b.dataset.tray, willExpand, true); });
   clearInterval(showTray.t);
   showTray.t = setInterval(() => {
     if (!G || G.pending !== pend || G.over) { close(); return; }
-    const t = performance.now(); if (!sheet.hidden) dl += t - lastT; lastT = t; // the countdown waits while a menu is open
-    const left = Math.max(0, dl - t); ring.style.strokeDashoffset = C * (1 - left/(TRAY_SECS*1000)); secs.textContent = Math.ceil(left/1000);
-    if (left <= 0) { const b = tray.querySelector('[data-tray]'); if (b) b.click(); }
-  }, 100);
+  }, 250); // no auto-pick in solo games: the city stays paused until you choose
   sfx('arp');
 }
 function showUpgradeSheet(){
@@ -2007,6 +2126,7 @@ function showUpgradeSheet(){
   sheetCard.querySelectorAll('[data-upg]').forEach(b => b.onclick = () => applyUpgrade(b.dataset.upg, willExpand));
 }
 function applyUpgrade(k, willExpand, viaTray){
+    const pw = G.pending; if (isLive() && !G.over) { G.syncWait = {week: G.week, since: (pw && pw.since) || performance.now(), msg: ''}; LLHooks.emit('picked', {week: G.week, k}); }
     UPG[k].apply(); G.undo = []; sheet.style.opacity = ''; G.pending = null; if (!viaTray) closeSheet(); toast(`+${UPG[k].n()} ${UPG[k].unit}`); if (!viaTray) G.modal = false; sfx('pick');
     if (willExpand) expandStage();
     if (PLUS() && G.week >= 7 && !G.wh && !G.city.practice) openWarehouse();
@@ -2024,6 +2144,7 @@ function announceDest(color, withHouses){
   for (let k=0; k<40; k++) {
     const x = R.x + 1 + Math.floor(rng()*Math.max(1, R.w-3)), y = R.y + 1 + Math.floor(rng()*Math.max(1, R.h-3));
     if ([0, 1, W, W+1].some(o => G.terrain[y*W+x+o] !== 0 || G.occ[y*W+x+o] !== 0)) continue;
+    if (k < 30 && ringOf([y*W+x, y*W+x+1, (y+1)*W+x, (y+1)*W+x+1], true).some(buildingAt)) continue;
     const md = Math.min(99, ...G.dests.map(d => Math.hypot(d.x-x, d.y-y)));
     if (md > bs) { bs = md; best = [x, y]; }
   }
@@ -2035,7 +2156,10 @@ function landIncoming(){
   if (!G.incoming || !G.incoming.length) return;
   for (const inc of [...G.incoming]) if (G.time >= inc.t) {
     G.incoming.splice(G.incoming.indexOf(inc), 1);
-    const d = (inc.at && spawnDest(inc.color, false, inc.at)) || spawnDest(inc.color);
+    const loose = (inc.tries || 0) >= 8 ? 2 : (inc.tries || 0) >= 3 ? 1 : 0;
+    const d = (inc.at && spawnDest(inc.color, false, inc.at, loose)) || spawnDest(inc.color, false, undefined, loose);
+    // no roomy spot yet: wait a few seconds for one (more of the city opens up, the map changes) rather than cram it in
+    if (!d) { inc.tries = (inc.tries || 0) + 1; inc.t = G.time + 3; G.incoming.push(inc); continue; }
     if (inc.houses) { spawnHouse(inc.color, true); spawnHouse(inc.color, true); }
   }
 }
@@ -2154,12 +2278,13 @@ function showOver(d, extra){
       <button class="btn" id="endless">Keep building (Endless)</button>
       <button class="btn" id="watch">Watch replay</button>
       <button class="btn" id="toMenu">Cities</button>
+      <button class="btn" id="toHome">🏠 Home</button>
     </div></div>`, true);
   el('bottom').hidden = true; el('hint').hidden = true;
   const cc = sheetCard.querySelector('#copyCode'); if (cc) cc.onclick = () => { const t = sheetCard.querySelector('#codeTxt').textContent; navigator.clipboard?.writeText(t).then(() => toast('Code copied'), () => { const r = document.createRange(); r.selectNodeContents(sheetCard.querySelector('#codeTxt')); getSelection().removeAllRanges(); getSelection().addRange(r); toast('Code selected. Copy it with Ctrl+C.'); }) ?? toast('Select the code to copy it'); };
   sheetCard.querySelector('#again').onclick = () => newGame(G.tourNext || (G.cfg.kind === 'tour' ? {...G.cfg, tourIdx:0, tourTotal:0, city: CITIES.find(c=>c.id===G.cfg.tourIds[0])} : G.cfg));
   if (G.cfg.kind === 'tour') { sheetCard.querySelector('#again').textContent = G.tourNext ? `Next city: ${G.tourNext.city.name}` : 'Start a new tour'; sheetCard.querySelector('#endless').hidden = !!G.tourNext; }
-  sheetCard.querySelector('#toMenu').onclick = showMenu;
+  sheetCard.querySelector('#toMenu').onclick = () => showMenu(); { const h = sheetCard.querySelector('#toHome'); if (h) h.onclick = () => showHome(); }
   const wb = sheetCard.querySelector('#watch'); if (!G.frames || G.frames.length < 3) wb.hidden = true; else wb.onclick = () => { closeSheet(); G.replay = {t0: now, d, extra}; G.view = {z:1, px:0, py:0}; el('top').hidden = true; el('bottom').hidden = true; };
   const sc = sheetCard.querySelector('#second');
   if (sc) sc.onclick = () => { G.usedSecond = true; G.over = false; d.pins = Math.max(0, d.pins - 4); d.claimed = Math.min(d.claimed, d.pins); d.timer = 0; G.view = {z:1, px:0, py:0}; closeSheet(); el('bottom').hidden = false; setSpeed(0); toast('Second chance: 4 crates cleared. Press play when ready. Only once per game.', 3500); };
@@ -2257,6 +2382,8 @@ function drawTo(t){
   if (stroke.cur < 0) {
     const o = G.occ[t];
     if (o === 1 || o === 2 || o === 4 || (o === 3 && lotAt(t))) { stroke.cur = t; return; }
+    if (o === 0 && G.terrain[t] === 1) { stroke.dead = true; fail('Bridges must start on land. Start the road on the shore.'); return; }
+    if (o === 0 && G.terrain[t] === 2) { stroke.dead = true; fail('Tunnels must start outside the hill. Start the road on open land.'); return; }
     if (o === 0 && placeRoad(-1, t)) stroke.cur = t;
     return;
   }
@@ -2289,12 +2416,22 @@ function drawToward(px, py){
     if (Math.max(Math.abs(dx), Math.abs(dy)) < 0.78) return;
     const k = Math.round(Math.atan2(dy, dx) / (Math.PI/4));
     let sx = Math.round(Math.cos(k*Math.PI/4)), sy = Math.round(Math.sin(k*Math.PI/4));
-    const tryStep = (sx, sy) => { const nx = ix(cur)+sx, ny = iy(cur)+sy; if (nx<0||ny<0||nx>=W||ny>=H) return -1; const n = ny*W+nx; return stepTo(cur, n) ? n : -1; };
+    // water and hills are crossed as one planned span (bridge or tunnel) that is built only once it reaches land
+    { const ax0 = Math.abs(dx) >= Math.abs(dy), ox = sx && sy ? (ax0 ? sx : 0) : sx, oy = sx && sy ? (ax0 ? 0 : sy) : sy, tn = cur + oy*W + ox;
+      if (ix(cur)+ox >= 0 && ix(cur)+ox < W && iy(cur)+oy >= 0 && iy(cur)+oy < H && spanTile(tn)) {
+        if (G.occ[cur] !== 1) { fail(G.terrain[tn] === 1 ? 'Bridges must start from a road on land' : 'Tunnels must start from a road outside the hill'); return; }
+        stroke.span = {from: cur};
+        if (updateSpan(px, py)) { if (stroke.span) return; continue; }
+        return;
+      } }
+    let blocked = false;
+    const tryStep = (sx, sy) => { const nx = ix(cur)+sx, ny = iy(cur)+sy; if (nx<0||ny<0||nx>=W||ny>=H) return -1; const n = ny*W+nx; if (spanTile(n)) { blocked = true; return -1; } return stepTo(cur, n) ? n : -1; };
     const canDiag = !G.mods.has('diag') && (G.occ[cur] === 1 || G.occ[cur] === 2);
     let n = -1;
     if (sx && sy && canDiag) n = tryStep(sx, sy);
     if (n < 0 && sx && sy) { const ax = Math.abs(dx) >= Math.abs(dy); n = tryStep(ax ? sx : 0, ax ? 0 : sy); if (n < 0) n = tryStep(ax ? 0 : sx, ax ? sy : 0); }
     else if (n < 0) n = tryStep(sx, sy);
+    if (n < 0 && blocked) return;
     if (n < 0) { stroke.cur = -1; return; }
     stroke.cur = n;
   }
@@ -2369,15 +2506,18 @@ cv.addEventListener('pointerdown', e => {
   ptrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
   if (ptrs.size === 2) {
     if (stroke && stroke.mode !== 'mway' && stroke.mode !== 'ferry' && stroke.mode !== 'metro' && G.undo.length) applyRoadState(G.undo.pop());
-    stroke = null; G.mwPreview = null;
+    stroke = null; G.mwPreview = null; G.bp = null;
     const [p1, p2] = [...ptrs.values()];
     gesture = {d0: Math.hypot(p1.x-p2.x, p1.y-p2.y) || 1, mx: (p1.x+p2.x)/2, my: (p1.y+p2.y)/2, z0: G.view.z, px0: G.view.px, py0: G.view.py};
     return;
   }
   if (ptrs.size > 2) return;
   if (e.button === 1) { gesture = {pan: true, x: e.clientX, y: e.clientY, px0: G.view.px, py0: G.view.py}; return; }
-  const t = tileAt(e.clientX, e.clientY);
+  const touch = isTouchPtr(e);
+  let t = tileAt(e.clientX, e.clientY);
   const mode = (e.button === 2) ? 'erase' : tool;
+  if (touch && (mode === 'metro' || mode === 'mway' || mode === 'ferry')) t = snapRoad(e.clientX, e.clientY, true);
+  else if (touch && mode === 'draw' && t >= 0 && G.occ[t] === 0) { const q = snapRoad(e.clientX, e.clientY, true, 0.75); if (q >= 0 && G.occ[q] === 1) t = q; }
   if (mode === 'round') { if (G.rounds <= 0) fail('No roundabouts left'); else placeRoundabout(t); return; }
   if (mode === 'light') {
     const isR = false, left = G.lightsN;
@@ -2391,7 +2531,7 @@ cv.addEventListener('pointerdown', e => {
   if (mode === 'metro') {
     if (G.metroN <= 0) { fail('No metro lines left'); return; }
     if (t < 0 || G.occ[t] !== 1) { fail('Start a metro line on a road tile'); return; }
-    stroke = {mode, from: t, id: e.pointerId}; G.mwPreview = {from: t, x: e.clientX, y: e.clientY, metro: true};
+    stroke = {mode, from: t, id: e.pointerId, touch}; G.mwPreview = {from: t, x: e.clientX, y: e.clientY, metro: true}; updateLinePreview(e.clientX, e.clientY);
     return;
   }
   if (mode === 'mway' || mode === 'ferry') {
@@ -2399,12 +2539,12 @@ cv.addEventListener('pointerdown', e => {
     if ((isF ? G.ferryN : G.mwN) <= 0) { fail(isF ? 'No ferries left' : 'No motorways left'); return; }
     if (t < 0 || G.occ[t] !== 1) { fail(isF ? 'Start a ferry on a road tile by the water' : 'Start a motorway on a road tile'); return; }
     if (isF && !nearWater(t)) { fail('Ferries start from a road right next to water'); return; }
-    stroke = {mode, from: t, id: e.pointerId}; G.mwPreview = {from: t, x: e.clientX, y: e.clientY};
+    stroke = {mode, from: t, id: e.pointerId, touch}; G.mwPreview = {from: t, x: e.clientX, y: e.clientY}; updateLinePreview(e.clientX, e.clientY);
     return;
   }
   pushUndo();
-  stroke = {mode, cur: -1, id: e.pointerId};
-  if (mode === 'erase') eraseAt(t); else drawTo(t);
+  stroke = {mode, cur: -1, id: e.pointerId, touch, r0: G.roads, px: e.clientX, py: e.clientY};
+  if (mode === 'erase') eraseAt(t); else { drawTo(t); updateDrawPreview(); }
 });
 cv.addEventListener('pointermove', e => {
   if (!G) return;
@@ -2420,10 +2560,17 @@ cv.addEventListener('pointermove', e => {
     return;
   }
   if (!stroke || stroke.id !== e.pointerId) return;
-  if (stroke.mode === 'mway' || stroke.mode === 'ferry' || stroke.mode === 'metro') { G.mwPreview.x = e.clientX; G.mwPreview.y = e.clientY; return; }
+  if (stroke.mode === 'mway' || stroke.mode === 'ferry' || stroke.mode === 'metro') { G.mwPreview.x = e.clientX; G.mwPreview.y = e.clientY; updateLinePreview(e.clientX, e.clientY); return; }
+  if (stroke.dead) return;
   const t = tileAt(e.clientX, e.clientY);
+  stroke.px = e.clientX; stroke.py = e.clientY;
   if (stroke.mode === 'erase') eraseAt(t);
-  else if (t >= 0) { const c = cam(), fx = (e.clientX - c.ox)/c.s, fy = (e.clientY - c.oy)/c.s; if (stroke.cur >= 0) drawToward(fx, fy); else if (t !== stroke.cur) { stroke.fx = fx; stroke.fy = fy; drawTo(t); } }
+  else if (t >= 0) {
+    const c = cam(), fx = (e.clientX - c.ox)/c.s, fy = (e.clientY - c.oy)/c.s;
+    if (stroke.cur >= 0) { if (!(stroke.span && updateSpan(fx, fy) && stroke.span)) { stroke.span = null; drawToward(fx, fy); } }
+    else if (t !== stroke.cur) { stroke.fx = fx; stroke.fy = fy; drawTo(t); }
+  }
+  updateDrawPreview();
 });
 function crossesHill(a, b){ const x1=ix(a)+.5, y1=iy(a)+.5, x2=ix(b)+.5, y2=iy(b)+.5, n = Math.ceil(Math.hypot(x2-x1,y2-y1)*4); for (let k=1;k<n;k++){ const q = Math.floor(y1+(y2-y1)*k/n)*W + Math.floor(x1+(x2-x1)*k/n); if (q !== a && q !== b && G.terrain[q] === 2) return true; } return false; }
 function nearWater(t){ const x=ix(t), y=iy(t); for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){ const X=x+dx, Y=y+dy; if (X>=0&&Y>=0&&X<W&&Y<H&&G.terrain[Y*W+X]===1) return true; } return false; }
@@ -2433,34 +2580,180 @@ function crossesWater(a, b){
   for (let k=1;k<n;k++){ const x = Math.floor(x1+(x2-x1)*k/n), y = Math.floor(y1+(y2-y1)*k/n), t = G.terrain[y*W+x]; if (t===2||t===3) return false; if (y*W+x===a||y*W+x===b) continue; total++; if (t===1) water++; }
   return total > 0 && water/total >= 0.6;
 }
+// ---------- build previews: bridge/tunnel spans, motorway/ferry/metro links, road budget ----------
+const MAX_SPAN = 8, MW_MAX = 40, BP_OK = '#2fbf71', BP_BAD = '#e5484d';
+const isTouchPtr = e => e.pointerType === 'touch' || e.pointerType === 'pen';
+const ptrWorld = (px, py) => { const c = cam(); return [(px - c.ox)/c.s, (py - c.oy)/c.s]; };
+// the road tile under the pointer; fingers are fat, so on touch the nearest road within a larger radius counts too
+function snapRoad(px, py, touch, R){
+  const [fx, fy] = ptrWorld(px, py), tx = Math.floor(fx), ty = Math.floor(fy);
+  const t = tx < 0 || ty < 0 || tx >= W || ty >= H ? -1 : ty*W + tx;
+  if (t >= 0 && G.occ[t] === 1) return t;
+  if (!touch) return t;
+  let best = -1, bd = R || 1.15;
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+    const x = tx+dx, y = ty+dy; if (x < 0 || y < 0 || x >= W || y >= H || G.occ[y*W+x] !== 1) continue;
+    const d = Math.hypot(fx - x - .5, fy - y - .5); if (d < bd) { bd = d; best = y*W+x; }
+  }
+  return best >= 0 ? best : t;
+}
+const spanTile = n => n >= 0 && (G.terrain[n] === 1 || G.terrain[n] === 2) && G.occ[n] === 0;
+// a straight bridge (water) or tunnel (hill) from a road on land: ends at the first land tile, and only then is it built
+function planSpan(from, fx, fy){
+  const cx = ix(from)+.5, cy = iy(from)+.5, dx = fx - cx, dy = fy - cy, horiz = Math.abs(dx) >= Math.abs(dy);
+  const sx = horiz ? (dx < 0 ? -1 : 1) : 0, sy = horiz ? 0 : (dy < 0 ? -1 : 1);
+  const want = Math.max(1, horiz ? Math.abs(Math.floor(fx) - ix(from)) : Math.abs(Math.floor(fy) - iy(from)));
+  const x1 = ix(from)+sx, y1 = iy(from)+sy; if (x1 < 0 || y1 < 0 || x1 >= W || y1 >= H) return null;
+  const K = G.terrain[y1*W+x1]; if ((K !== 1 && K !== 2) || G.occ[y1*W+x1] !== 0) return null;
+  const word = K === 1 ? 'Bridge' : 'Tunnel', tiles = []; let landing = -1, reason = '', endTile = -1;
+  for (let k = 1; k <= MAX_SPAN + 1; k++) {
+    const x = ix(from)+sx*k, y = iy(from)+sy*k;
+    if (x < 0 || y < 0 || x >= W || y >= H) { reason = 'Runs off the map'; break; }
+    const n = y*W+x, T = G.terrain[n];
+    if (T === K) {
+      tiles.push(n);
+      if (G.occ[n] !== 0) { reason = K === 1 ? 'Crosses another bridge' : 'Crosses another tunnel'; break; }
+      if (!buildable(n)) { reason = 'Outside the build area'; break; }
+      if (tiles.length > MAX_SPAN) { reason = `Too long: ${word.toLowerCase()}s span ${MAX_SPAN} tiles at most`; break; }
+      continue;
+    }
+    endTile = n;
+    if (T === 0) { if (!buildable(n)) reason = 'Outside the build area'; else if (G.occ[n] === 0 || G.occ[n] === 1) landing = n; else reason = `A ${word.toLowerCase()} can't end on a building`; }
+    else if (T === 3) reason = 'A landmark is in the way';
+    else reason = K === 1 ? 'Bridge must end on land, not a hill' : 'Tunnel must end on open land';
+    break;
+  }
+  const len = tiles.length, need = (G.terrain[from] === K && G.occ[from] === 1) ? 0 : 1, have = K === 1 ? G.bridges : G.tunnels, roadsNeeded = len + (landing >= 0 && G.occ[landing] === 0 ? 1 : 0);
+  if (!reason && landing < 0) reason = 'Runs out of room';
+  if (!reason && need > have) reason = K === 1 ? 'No bridges left' : 'No tunnels left';
+  if (!reason && roadsNeeded > G.roads) reason = `Needs ${roadsNeeded} road tiles, you have ${G.roads}`;
+  const pending = landing >= 0 && landing !== -1 && (len + 1) > want && !reason; // pointer is still over the water or hill: look-ahead only
+  const ok = !reason, pts = [from, ...tiles]; if (landing >= 0) pts.push(landing); else if (endTile >= 0 && !tiles.includes(endTile)) pts.push(endTile);
+  const left = have - need, unit = K === 1 ? 'bridge' : 'tunnel';
+  const label = ok ? [`${word} · ${len} tile${len === 1 ? '' : 's'}${pending ? ' · keep going to land' : ''}`, `${need ? '1 ' + unit : 'extends existing ' + unit} (${left} left) · ${roadsNeeded} road tiles`] : [reason];
+  return {K, tiles, landing, ok, reason, pending, pts, label, need, len, commit: ok && !pending};
+}
+function updateSpan(fx, fy){
+  const sp = stroke.span, dx = fx - (ix(sp.from)+.5), dy = fy - (iy(sp.from)+.5);
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < 0.78) { stroke.span = null; G.bp = null; return false; }
+  const pl = planSpan(sp.from, fx, fy);
+  if (!pl) { stroke.span = null; G.bp = null; return false; }
+  sp.kind = pl.K;
+  const c = cam();
+  G.bp = {type: 'span', pts: pl.pts, ok: pl.ok, reason: pl.reason, label: pl.label, pending: pl.pending, sx: fx*c.s + c.ox, sy: fy*c.s + c.oy, touch: stroke.touch};
+  if (pl.commit) return commitSpan(pl);
+  return true;
+}
+function commitSpan(pl){
+  const sp = stroke.span, snap = roadState(); let prev = sp.from;
+  for (const n of [...pl.tiles, pl.landing]) {
+    if (!stepTo(prev, n)) { applyRoadState(snap); stroke.span = null; stroke.cur = -1; G.bp = null; fail("Can't connect a " + (pl.K === 1 ? 'bridge' : 'tunnel') + ' there'); return false; }
+    prev = n;
+  }
+  stroke.cur = pl.landing; stroke.span = null; G.bp = null;
+  toast(`${pl.K === 1 ? 'Bridge' : 'Tunnel'} built: ${pl.len} tile${pl.len === 1 ? '' : 's'}, ${(pl.K === 1 ? G.bridges : G.tunnels)} left`, 1600);
+  return true;
+}
+function lineCheck(kind, a, t){
+  const nm = kind === 'mway' ? 'Motorway' : kind === 'ferry' ? 'Ferry' : 'Metro line', dist = t >= 0 ? Math.hypot(ix(a)-ix(t), iy(a)-iy(t)) : 0;
+  const R = reason => ({ok: false, reason, dist, nm}), left = kind === 'mway' ? G.mwN : kind === 'ferry' ? G.ferryN : G.metroN, min = kind === 'mway' ? 3 : kind === 'ferry' ? 2 : 4;
+  if (t < 0 || t === a) return R('Drag to another road');
+  if (G.occ[t] !== 1) return R(`${nm} must end on a road tile`);
+  if (kind === 'mway') {
+    if (roundOf(t) >= 0 || roundOf(a) >= 0 || G.lights.has(t) || G.lights.has(a)) return R('Motorways can’t end at a roundabout or traffic light');
+    if (crossesHill(a, t)) return R('Motorways can’t go over mountains');
+  }
+  if (hasEdge(a, t)) return R('Already linked');
+  if (dist < min) return R(`Too short: needs ${min}+ tiles`);
+  if (kind === 'mway' && dist > MW_MAX) return R(`Too long: ${MW_MAX} tiles at most`);
+  if (kind === 'ferry') { if (!nearWater(t)) return R('A ferry must end on a road by the water'); if (!crossesWater(a, t)) return R('A ferry must cross open water'); }
+  if (left <= 0) return R(`No ${kind === 'mway' ? 'motorways' : kind === 'ferry' ? 'ferries' : 'metro lines'} left`);
+  return {ok: true, dist, nm, left};
+}
+function updateLinePreview(px, py){
+  if (!stroke || !G.mwPreview) return;
+  const a = stroke.from, t = snapRoad(px, py, stroke.touch), chk = lineCheck(stroke.mode, a, t), n = Math.round(chk.dist);
+  const cost = stroke.mode === 'mway' ? `1 motorway (${G.mwN - 1} left) · 0 road tiles` : stroke.mode === 'ferry' ? `1 ferry (${G.ferryN - 1} left) · 0 road tiles` : `1 metro line (${G.metroN - 1} left) · 0 road tiles`;
+  const c = cam();
+  G.bp = {type: 'line', kind: stroke.mode, a, t: t >= 0 && G.occ[t] === 1 ? t : -1, wx: (px - c.ox)/c.s, wy: (py - c.oy)/c.s, ok: chk.ok, reason: chk.reason, label: chk.ok ? [`${chk.nm} · ${n} tiles`, cost] : (t >= 0 && t !== a && G.occ[t] === 1 ? [`${chk.nm} · ${n} tiles`, chk.reason] : [chk.reason]), sx: px, sy: py, touch: stroke.touch};
+  if (!chk.ok) G.bp.bad = true;
+}
+// normal roads are placed as you drag, so the preview shows the tiles still ahead of the finger and the road budget counting down
+function updateDrawPreview(){
+  if (!stroke || stroke.mode !== 'draw' || stroke.dead) { if (stroke && stroke.dead && G.bp) G.bp = null; return; }
+  if (stroke.span) return;
+  const left = G.roads, used = Math.max(0, stroke.r0 - left), ghosts = [];
+  if (stroke.cur >= 0 && stroke.px !== undefined) {
+    const [fx, fy] = ptrWorld(stroke.px, stroke.py); let cur = stroke.cur;
+    for (let k = 0; k < 14; k++) {
+      const dx = fx - ix(cur) - .5, dy = fy - iy(cur) - .5; if (Math.max(Math.abs(dx), Math.abs(dy)) < 0.78) break;
+      const a = Math.round(Math.atan2(dy, dx) / (Math.PI/4)), sx = Math.round(Math.cos(a*Math.PI/4)), sy = Math.round(Math.sin(a*Math.PI/4)), nx = ix(cur)+sx, ny = iy(cur)+sy;
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H) break; const n = ny*W+nx;
+      if (G.terrain[n] !== 0 || G.occ[n] !== 0 || !buildable(n)) break;
+      ghosts.push(n); cur = n;
+    }
+  }
+  const c = cam(); let red = left <= 0;
+  const g = ghosts.map((n, i) => ({n, bad: i >= left}));
+  if (g.some(x => x.bad)) red = true;
+  G.bp = {type: 'draw', ghosts: g, ok: !red, label: [left <= 0 ? 'Out of road tiles' : `${left} road tile${left === 1 ? '' : 's'} left`, used ? `${used} placed this drag` : ''].filter(Boolean), sx: stroke.px ?? 0, sy: stroke.py ?? 0, touch: stroke.touch, plain: !red};
+  if (left <= 0 && stroke.px !== undefined) { const t = tileAt(stroke.px, stroke.py); if (t >= 0 && G.occ[t] === 0 && G.terrain[t] === 0) G.bp.ghosts.push({n: t, bad: true}); }
+}
+function drawBuildGhost(ctx){
+  const b = G.bp; if (!b) return;
+  const col = b.ok ? BP_OK : BP_BAD;
+  if (b.type === 'span') {
+    ctx.save(); ctx.lineCap = 'butt'; ctx.lineJoin = 'round'; ctx.globalAlpha = .38; ctx.strokeStyle = col; ctx.lineWidth = 0.78;
+    ctx.beginPath(); b.pts.forEach((n, i) => { const [x, y] = nodePos(n); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke();
+    ctx.globalAlpha = .95; ctx.lineWidth = 0.09; ctx.setLineDash(b.pending ? [0.2, 0.18] : []); ctx.stroke(); ctx.setLineDash([]);
+    ctx.globalAlpha = 1; ctx.fillStyle = col;
+    b.pts.forEach((n, i) => { if (!i) return; const [x, y] = nodePos(n); ctx.beginPath(); ctx.arc(x, y, i === b.pts.length-1 ? 0.2 : 0.1, 0, 7); ctx.fill(); });
+    ctx.restore();
+  } else if (b.type === 'line') {
+    const [x1, y1] = nodePos(b.a), [x2, y2] = b.t >= 0 ? nodePos(b.t) : [b.wx, b.wy];
+    ctx.save(); ctx.lineCap = 'round'; ctx.strokeStyle = col; ctx.globalAlpha = .28; ctx.lineWidth = b.kind === 'mway' ? 0.62 : 0.4; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.globalAlpha = .95; ctx.lineWidth = 0.1; ctx.setLineDash(b.kind === 'metro' ? [0.12, 0.2] : b.kind === 'ferry' ? [0.3, 0.2] : []); ctx.stroke(); ctx.setLineDash([]);
+    ctx.lineWidth = 0.08; ctx.fillStyle = 'rgba(0,0,0,0)'; ctx.beginPath(); ctx.arc(x1, y1, 0.34, 0, 7); ctx.stroke();
+    if (b.t >= 0) { ctx.beginPath(); ctx.arc(x2, y2, 0.34, 0, 7); ctx.stroke(); }
+    ctx.restore();
+  } else if (b.type === 'draw') {
+    ctx.save();
+    for (const g of b.ghosts) { ctx.globalAlpha = .55; ctx.fillStyle = g.bad ? BP_BAD : BP_OK; ctx.beginPath(); ctx.arc(ix(g.n)+.5, iy(g.n)+.5, 0.26, 0, 7); ctx.fill(); }
+    ctx.restore();
+  }
+}
+function drawBuildPill(){
+  const b = G && G.bp; if (!b || !b.label || !b.label.length || G.over) return;
+  ctx.save(); ctx.setTransform(dpr,0,0,dpr,0,0);
+  const f1 = '700 13px Lexend, system-ui, sans-serif', f2 = '500 12px Lexend, system-ui, sans-serif';
+  const L = b.label, ws = L.map((t, i) => { ctx.font = i ? f2 : f1; return ctx.measureText(t).width; });
+  const w = Math.min(cw - 16, Math.max(...ws) + 22), h = L.length*17 + 10;
+  const x = Math.max(8, Math.min(cw - w - 8, b.sx - w/2));
+  let y = b.sy - (b.touch ? 96 : 54) - h/2; if (y < 8) y = b.sy + (b.touch ? 70 : 34);
+  y = Math.max(8, Math.min(ch - h - 8, y));
+  ctx.fillStyle = b.ok ? 'rgba(18,30,24,.93)' : 'rgba(54,18,20,.94)'; ctx.strokeStyle = b.plain ? 'rgba(255,255,255,.35)' : b.ok ? BP_OK : BP_BAD; ctx.lineWidth = 2;
+  ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y, w, h, 10); else ctx.rect(x, y, w, h); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  L.forEach((t, i) => { ctx.font = i ? f2 : f1; ctx.globalAlpha = i ? .85 : 1; ctx.fillText(t, x + w/2, y + 5 + 8.5 + i*17, w - 8); });
+  ctx.restore();
+}
 function endPtr(e){
   ptrs.delete(e.pointerId);
   if (gesture && (gesture.pan || ptrs.size < 2)) { gesture = null; return; }
-  if (stroke && stroke.mode === 'metro' && stroke.id === e.pointerId && e.type === 'pointerup') {
-    const t = tileAt(e.clientX, e.clientY), a = stroke.from;
-    const dist = t >= 0 ? Math.hypot(ix(a)-ix(t), iy(a)-iy(t)) : 0;
-    if (t >= 0 && G.occ[t] === 1 && dist >= 4 && !hasEdge(a, t)) {
-      pushUndo(); G.metroN--; G.metro.add(mkey(a,t)); G.adj.get(a).add(t); G.adj.get(t).add(a); graphChanged(); sfx('metro'); toast('Metro line opened');
-    } else if (t !== a) fail('End the metro on a road tile at least 4 tiles away');
+  const up = stroke && stroke.id === e.pointerId && e.type === 'pointerup';
+  if (up && (stroke.mode === 'metro' || stroke.mode === 'ferry' || stroke.mode === 'mway')) {
+    const a = stroke.from, t = snapRoad(e.clientX, e.clientY, stroke.touch), chk = lineCheck(stroke.mode, a, t);
+    if (chk.ok) {
+      pushUndo(); G.adj.get(a).add(t); G.adj.get(t).add(a);
+      if (stroke.mode === 'metro') { G.metroN--; G.metro.add(mkey(a,t)); graphChanged(); sfx('metro'); toast('Metro line opened'); }
+      else if (stroke.mode === 'ferry') { G.ferryN--; G.ferry.add(mkey(a,t)); graphChanged(); sfx('ferry'); toast('Ferry route opened'); unlockAch('ferry'); }
+      else { G.mwN--; G.mw.add(mkey(a,t)); graphChanged(); sfx('motorway'); toast('Motorway built'); unlockAch('mw'); }
+    } else if (t !== a) fail(chk.reason);
   }
-  if (stroke && stroke.mode === 'ferry' && stroke.id === e.pointerId && e.type === 'pointerup') {
-    const t = tileAt(e.clientX, e.clientY), a = stroke.from;
-    const dist = t >= 0 ? Math.hypot(ix(a)-ix(t), iy(a)-iy(t)) : 0;
-    if (t >= 0 && G.occ[t] === 1 && dist >= 2 && !hasEdge(a, t) && nearWater(t) && crossesWater(a, t)) {
-      pushUndo(); G.ferryN--; G.ferry.add(mkey(a,t)); G.adj.get(a).add(t); G.adj.get(t).add(a); graphChanged(); sfx('ferry'); toast('Ferry route opened'); unlockAch('ferry');
-    } else if (t !== a) fail('End the ferry on a shore road across the water');
+  if (up && stroke.span) { // let go mid-span: nothing is built into the water or the hill
+    const bp = G.bp; fail(bp && !bp.ok ? bp.reason : (stroke.span.kind === 2 ? 'Tunnels must end outside the hill. Nothing was built.' : 'Bridges must end on land. Nothing was built.'));
   }
-  if (stroke && stroke.mode === 'mway' && stroke.id === e.pointerId && e.type === 'pointerup') {
-    const t = tileAt(e.clientX, e.clientY), a = stroke.from;
-    const dist = t >= 0 ? Math.hypot(ix(a)-ix(t), iy(a)-iy(t)) : 0;
-    const mwBad = t >= 0 && (roundOf(t) >= 0 || roundOf(a) >= 0 || G.lights.has(t) || G.lights.has(a)) ? 'Motorways can’t end at a roundabout or traffic light'
-      : t >= 0 && crossesHill(a, t) ? 'Motorways can’t go over mountains' : '';
-    if (mwBad && t !== a && G.occ[t] === 1) fail(mwBad);
-    else if (t >= 0 && G.occ[t] === 1 && dist >= 3 && !hasEdge(a, t)) {
-      pushUndo(); G.mwN--; G.mw.add(mkey(a,t)); G.adj.get(a).add(t); G.adj.get(t).add(a); graphChanged(); sfx('motorway'); toast('Motorway built'); unlockAch('mw');
-    } else if (t !== a) fail('End the motorway on a road tile at least 3 tiles away');
-  }
-  G && (G.mwPreview = null);
+  G && (G.mwPreview = null, G.bp = null);
   stroke = null;
 }
 cv.addEventListener('pointerup', endPtr); cv.addEventListener('pointercancel', endPtr);
@@ -2483,7 +2776,8 @@ document.addEventListener('visibilitychange', () => {
   if (isDuel()) {
     if (document.hidden) G.hiddenAt = performance.now();
     else if (G.hiddenAt) { let miss = Math.min(180, (performance.now() - G.hiddenAt) / 1000) * (G.speed || 1); G.hiddenAt = 0;
-      while (miss >= 0.025 && !G.over && !G.pending) { update(0.025); miss -= 0.025; }
+      while (miss >= 0.025 && !G.over && !G.pending && !G.syncWait) { update(0.025); miss -= 0.025; }
+      G.debt = 0;
       G.wallT = performance.now() / 1000; // the frame loop's wall-clock debt starts from now (this catch-up already paid it)
       if (!G.over) toast('Your city kept going while you were away'); }
     return;
@@ -2963,6 +3257,59 @@ function drawParked(col, n){
     ctx.save(); ctx.translate(cx2, cy2); ctx.rotate(Math.PI/2); toyCar(col, 0.11, 0.065, 0.035); ctx.restore();
   }
 }
+// where a moving car is drawn (world units) between two simulation steps; also used by the overlap test hook
+function carPose(car, frIn){
+  let px, py, ang;
+      const a = car.path[car.seg], b = car.path[car.seg+1], len = edgeLen(a,b);
+      // draw where the car is right now, between two simulation steps (visual only)
+      const fr = frIn !== undefined ? frIn : clamp((G.debt > 0 && G.debt < 0.025 ? G.debt : G.acc) || 0, 0, 0.025), sD = Math.min(len - 1e-4, car.s + (car.v || 0)*fr*(car.state === 'unload' ? 0 : 1)), t = sD/len;
+      const [x1,y1]=nodePos(a), [x2,y2]=nodePos(b), dx=(x2-x1)/len, dy=(y2-y1)/len;
+      px = x1 + (x2-x1)*t; py = y1 + (y2-y1)*t; ang = Math.atan2(dy, dx);
+      const D = G.drive < 0 ? -1 : 1, LO = 0.13;
+      const rIn = G.round.has(b) && car.seg + 2 < car.path.length, rOut = G.round.has(a) && car.seg > 0;
+      car.ind = 0;
+      if (rIn || rOut) {
+        // roundabout: curve in, follow the circle with the traffic, curve out
+        const n = rIn ? b : a, from = rIn ? a : car.path[car.seg-1], to = rIn ? car.path[car.seg+2] : b, g = ringGeo(n, from, to);
+        const T = p => [g.D*Math.sin(p), -g.D*Math.cos(p)], R = p => [g.cx + RING_R*Math.cos(p), g.cy + RING_R*Math.sin(p)];
+        const bez = (P0, P1, P2, u) => { const m = 1-u; return [m*m*P0[0] + 2*u*m*P1[0] + u*u*P2[0], m*m*P0[1] + 2*u*m*P1[1] + u*u*P2[1], Math.atan2(2*m*(P1[1]-P0[1]) + 2*u*(P2[1]-P1[1]), 2*m*(P1[0]-P0[0]) + 2*u*(P2[0]-P1[0]))]; };
+        // cubic: leaves/joins the arm straight along its lane, so entering and leaving cars stay out of the other lane
+        const bez3 = (P0, P1, P2, P3, u) => { const m = 1-u, a0 = m*m*m, a1 = 3*m*m*u, a2 = 3*m*u*u, a3 = u*u*u;
+          const dx = 3*m*m*(P1[0]-P0[0]) + 6*m*u*(P2[0]-P1[0]) + 3*u*u*(P3[0]-P2[0]), dy = 3*m*m*(P1[1]-P0[1]) + 6*m*u*(P2[1]-P1[1]) + 3*u*u*(P3[1]-P2[1]);
+          return [a0*P0[0] + a1*P1[0] + a2*P2[0] + a3*P3[0], a0*P0[1] + a1*P1[1] + a2*P2[1] + a3*P3[1], Math.atan2(dy, dx)]; };
+        let q;
+        if (rIn && sD < RA_IN) { const [fx, fy] = nodePos(from), hx = g.cx - fx, hy = g.cy - fy, E = R(g.p1), tE = T(g.p1), P0 = [fx - hy*LO*D, fy + hx*LO*D]; q = bez3(P0, [P0[0] + hx*0.25, P0[1] + hy*0.25], [E[0] - tE[0]*0.22, E[1] - tE[1]*0.22], E, sD / RA_IN); }
+        else if (rOut && sD >= RA_OUT) { const [tx, ty] = nodePos(to), hx = tx - g.cx, hy = ty - g.cy, X = R(g.p2), tX = T(g.p2), P3 = [tx - hy*LO*D, ty + hx*LO*D]; q = bez3(X, [X[0] + tX[0]*0.22, X[1] + tX[1]*0.22], [P3[0] - hx*0.25, P3[1] - hy*0.25], P3, (sD - RA_OUT) / (1 - RA_OUT)); }
+        else { const u = rIn ? (sD - RA_IN) / (1 - RA_IN + RA_OUT) : (1 - RA_IN + sD) / (1 - RA_IN + RA_OUT), p = g.p1 - g.D*g.d*u, P = R(p), tt = T(p); q = [P[0], P[1], Math.atan2(tt[1], tt[0])]; if (g.d*(1-u) < 1.4) car.ind = D; }
+        [px, py, ang] = q;
+      } else {
+        // round the corners: near a node, follow a curve from the old direction into the new one
+        const Rr = 0.42; let cn = -1, pn = -1, nn = -1, u = 0;
+        if (car.seg + 2 < car.path.length && len - sD < Math.min(Rr, len/2)) { pn = a; cn = b; nn = car.path[car.seg+2]; }
+        else if (car.seg > 0 && sD < Math.min(Rr, len/2)) { pn = car.path[car.seg-1]; cn = a; nn = b; }
+        if (cn >= 0 && !G.round.has(cn) && !G.round.has(pn) && !G.round.has(nn)) {
+          const [qx, qy] = nodePos(cn), [ax, ay] = nodePos(pn), [bx, by] = nodePos(nn);
+          const l1 = Math.hypot(qx-ax, qy-ay), l2 = Math.hypot(bx-qx, by-qy), r = Math.min(Rr, l1/2, l2/2);
+          const e1x = (qx-ax)/l1, e1y = (qy-ay)/l1, e2x = (bx-qx)/l2, e2y = (by-qy)/l2;
+          if (e1x*e2x + e1y*e2y > -0.5 && r > 0.05) {
+            u = cn === b ? (r - (len - sD)) / (2*r) : 0.5 + sD / (2*r); u = clamp(u, 0, 1);
+            // lane-offset control points so the curve stays in the right-hand lane (inside lane is tighter, outside wider)
+            const n1x = -e1y*LO*D, n1y = e1x*LO*D, n2x = -e2y*LO*D, n2y = e2x*LO*D;
+            const sx = qx - e1x*r + n1x, sy = qy - e1y*r + n1y, ex = qx + e2x*r + n2x, ey = qy + e2y*r + n2y;
+            const cr = e1x*e2y - e1y*e2x, k = Math.abs(cr) > 1e-6 ? ((ex - sx)*e2y - (ey - sy)*e2x) / cr : r, cx_ = sx + e1x*k, cy_ = sy + e1y*k, m = 1-u;
+            px = m*m*sx + 2*u*m*cx_ + u*u*ex; py = m*m*sy + 2*u*m*cy_ + u*u*ey;
+            ang = Math.atan2(2*m*(cy_-sy) + 2*u*(ey-cy_), 2*m*(cx_-sx) + 2*u*(ex-cx_));
+            px -= -Math.sin(ang)*LO*D; py -= Math.cos(ang)*LO*D; // undo: the lane offset is already in the curve
+          }
+        }
+        px += -Math.sin(ang)*LO*D; py += Math.cos(ang)*LO*D;
+        // indicators: blink on the side of the coming turn (or the roundabout exit) about a tile before it
+        if (car.seg + 2 < car.path.length && len - sD < 1.1) { const c2 = car.path[car.seg+2];
+          if (G.round.has(b)) car.ind = 0; else { const d2x = ix(c2)-ix(b), d2y = iy(c2)-iy(b), cr = (ix(b)-ix(a))*d2y - (iy(b)-iy(a))*d2x; car.ind = cr > 0 ? 1 : cr < 0 ? -1 : 0; } }
+        else if (car.seg + 3 < car.path.length && G.round.has(car.path[car.seg+2]) && len - sD < 0.9) { const g = ringGeo(car.path[car.seg+2], b, car.path[car.seg+3]); car.ind = g.d < 1.2 ? D : g.d > 3.2 ? -D : 0; }
+      }
+  return [px, py, ang];
+}
 function drawVehicle(car){
   const P = pal(), col = car.color >= 0 ? CAR_COLORS[car.color] : '#f4f7f8';
   if (car.kind === 'truck') {
@@ -3164,10 +3511,11 @@ function render(){
     ctx.strokeStyle = P.road; ctx.lineWidth = 0.54; ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
     ctx.strokeStyle = P.roadLine; ctx.lineWidth = 0.05; ctx.setLineDash([0.25,0.25]); ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); ctx.setLineDash([]);
   }
-  if (G.mwPreview) {
+  if (G.mwPreview && !G.bp) {
     const [x1,y1] = nodePos(G.mwPreview.from), x2 = (G.mwPreview.x - c.ox)/s, y2 = (G.mwPreview.y - c.oy)/s;
     ctx.strokeStyle = G.mwPreview.metro ? '#8e5cd9' : TH.accent; ctx.globalAlpha = .7; ctx.lineWidth = 0.5; ctx.setLineDash([0.4,0.3]); ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
   }
+  if (G.bp) drawBuildGhost(ctx);
   // roundabouts: a big circle over the plus shape, with a planted island
   for (const t of G.round) { const x=ix(t)+.5, y=iy(t)+.5;
     if (P.flat) { ctx.fillStyle = P.roadOl; ctx.beginPath(); ctx.arc(x, y, 1.06, 0, 7); ctx.fill(); ctx.fillStyle = P.road; ctx.beginPath(); ctx.arc(x, y, 0.98, 0, 7); ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 0.035; ctx.setLineDash([0.12, 0.12]); ctx.beginPath(); ctx.arc(x, y, 0.72, 0, 7); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = P.roadOl; ctx.beginPath(); ctx.arc(x, y, 0.46, 0, 7); ctx.fill(); ctx.fillStyle = P.hill; ctx.beginPath(); ctx.arc(x, y, 0.4, 0, 7); ctx.fill(); continue; }
@@ -3370,52 +3718,7 @@ function render(){
         if (g.bdy) { px = g.x0 + pos; py = g.y0 + g.h/2 + g.bdy*0.15; } else { py = g.y0 + pos; px = g.x0 + g.w/2 + g.bdx*0.15; }
         ang = Math.atan2(g.bdy, g.bdx); car.stallXY = [px, py, ang];
         const f = ease(clamp((now - (car.parkT || 0)) / 0.6, 0, 1)); px = cx0 + (px - cx0)*f; py = cy0 + (py - cy0)*f; if (f < 0.5) ang = Math.atan2(py - cy0, px - cx0) || ang; } } }
-    else {
-      const a = car.path[car.seg], b = car.path[car.seg+1], len = edgeLen(a,b);
-      // draw where the car is right now, between two simulation steps (visual only)
-      const fr = clamp((G.debt > 0 && G.debt < 0.025 ? G.debt : G.acc) || 0, 0, 0.025), sD = Math.min(len - 1e-4, car.s + (car.v || 0)*fr*(car.state === 'unload' ? 0 : 1)), t = sD/len;
-      const [x1,y1]=nodePos(a), [x2,y2]=nodePos(b), dx=(x2-x1)/len, dy=(y2-y1)/len;
-      px = x1 + (x2-x1)*t; py = y1 + (y2-y1)*t; ang = Math.atan2(dy, dx);
-      const D = G.drive < 0 ? -1 : 1, LO = 0.12;
-      const rIn = G.round.has(b) && car.seg + 2 < car.path.length, rOut = G.round.has(a) && car.seg > 0;
-      car.ind = 0;
-      if (rIn || rOut) {
-        // roundabout: curve in, follow the circle with the traffic, curve out
-        const n = rIn ? b : a, from = rIn ? a : car.path[car.seg-1], to = rIn ? car.path[car.seg+2] : b, g = ringGeo(n, from, to);
-        const T = p => [g.D*Math.sin(p), -g.D*Math.cos(p)], R = p => [g.cx + RING_R*Math.cos(p), g.cy + RING_R*Math.sin(p)];
-        const bez = (P0, P1, P2, u) => { const m = 1-u; return [m*m*P0[0] + 2*u*m*P1[0] + u*u*P2[0], m*m*P0[1] + 2*u*m*P1[1] + u*u*P2[1], Math.atan2(2*m*(P1[1]-P0[1]) + 2*u*(P2[1]-P1[1]), 2*m*(P1[0]-P0[0]) + 2*u*(P2[0]-P1[0]))]; };
-        let q;
-        if (rIn && sD < RA_IN) { const [fx, fy] = nodePos(from), hx = g.cx - fx, hy = g.cy - fy, E = R(g.p1), tE = T(g.p1); q = bez([fx - hy*LO*D, fy + hx*LO*D], [E[0] - tE[0]*0.3, E[1] - tE[1]*0.3], E, sD / RA_IN); }
-        else if (rOut && sD >= RA_OUT) { const [tx, ty] = nodePos(to), hx = tx - g.cx, hy = ty - g.cy, X = R(g.p2), tX = T(g.p2); q = bez(X, [X[0] + tX[0]*0.3, X[1] + tX[1]*0.3], [tx - hy*LO*D, ty + hx*LO*D], (sD - RA_OUT) / (1 - RA_OUT)); }
-        else { const u = rIn ? (sD - RA_IN) / (1 - RA_IN + RA_OUT) : (1 - RA_IN + sD) / (1 - RA_IN + RA_OUT), p = g.p1 - g.D*g.d*u, P = R(p), tt = T(p); q = [P[0], P[1], Math.atan2(tt[1], tt[0])]; if (g.d*(1-u) < 1.4) car.ind = D; }
-        [px, py, ang] = q;
-      } else {
-        // round the corners: near a node, follow a curve from the old direction into the new one
-        const Rr = 0.42; let cn = -1, pn = -1, nn = -1, u = 0;
-        if (car.seg + 2 < car.path.length && len - sD < Math.min(Rr, len/2)) { pn = a; cn = b; nn = car.path[car.seg+2]; }
-        else if (car.seg > 0 && sD < Math.min(Rr, len/2)) { pn = car.path[car.seg-1]; cn = a; nn = b; }
-        if (cn >= 0 && !G.round.has(cn) && !G.round.has(pn) && !G.round.has(nn)) {
-          const [qx, qy] = nodePos(cn), [ax, ay] = nodePos(pn), [bx, by] = nodePos(nn);
-          const l1 = Math.hypot(qx-ax, qy-ay), l2 = Math.hypot(bx-qx, by-qy), r = Math.min(Rr, l1/2, l2/2);
-          const e1x = (qx-ax)/l1, e1y = (qy-ay)/l1, e2x = (bx-qx)/l2, e2y = (by-qy)/l2;
-          if (e1x*e2x + e1y*e2y > -0.5 && r > 0.05) {
-            u = cn === b ? (r - (len - sD)) / (2*r) : 0.5 + sD / (2*r); u = clamp(u, 0, 1);
-            // lane-offset control points so the curve stays in the right-hand lane (inside lane is tighter, outside wider)
-            const n1x = -e1y*LO*D, n1y = e1x*LO*D, n2x = -e2y*LO*D, n2y = e2x*LO*D;
-            const sx = qx - e1x*r + n1x, sy = qy - e1y*r + n1y, ex = qx + e2x*r + n2x, ey = qy + e2y*r + n2y;
-            const cr = e1x*e2y - e1y*e2x, k = Math.abs(cr) > 1e-6 ? ((ex - sx)*e2y - (ey - sy)*e2x) / cr : r, cx_ = sx + e1x*k, cy_ = sy + e1y*k, m = 1-u;
-            px = m*m*sx + 2*u*m*cx_ + u*u*ex; py = m*m*sy + 2*u*m*cy_ + u*u*ey;
-            ang = Math.atan2(2*m*(cy_-sy) + 2*u*(ey-cy_), 2*m*(cx_-sx) + 2*u*(ex-cx_));
-            px -= -Math.sin(ang)*LO*D; py -= Math.cos(ang)*LO*D; // undo: the lane offset is already in the curve
-          }
-        }
-        px += -Math.sin(ang)*LO*D; py += Math.cos(ang)*LO*D;
-        // indicators: blink on the side of the coming turn (or the roundabout exit) about a tile before it
-        if (car.seg + 2 < car.path.length && len - sD < 1.1) { const c2 = car.path[car.seg+2];
-          if (G.round.has(b)) car.ind = 0; else { const d2x = ix(c2)-ix(b), d2y = iy(c2)-iy(b), cr = (ix(b)-ix(a))*d2y - (iy(b)-iy(a))*d2x; car.ind = cr > 0 ? 1 : cr < 0 ? -1 : 0; } }
-        else if (car.seg + 3 < car.path.length && G.round.has(car.path[car.seg+2]) && len - sD < 0.9) { const g = ringGeo(car.path[car.seg+2], b, car.path[car.seg+3]); car.ind = g.d < 1.2 ? D : g.d > 3.2 ? -D : 0; }
-      }
-    }
+    else { const q = carPose(car); px = q[0]; py = q[1]; ang = q[2]; }
     if (car.state === 'back' && car.stallXY && now - (car.unparkT || 0) < 0.55) { const f = ease(clamp((now - car.unparkT)/0.55, 0, 1)); px = car.stallXY[0] + (px - car.stallXY[0])*f; py = car.stallXY[1] + (py - car.stallXY[1])*f; }
     if (car.ra === undefined) car.ra = ang; else { let da = ang - car.ra; while (da > Math.PI) da -= 2*Math.PI; while (da < -Math.PI) da += 2*Math.PI; car.ra += da * (1 - Math.exp(-(G.fdt || 0.016) * 16 * Math.max(1, G.speed || 1))); }
     if (car.state !== 'unload') car.parkFrom = [px, py];
@@ -3430,6 +3733,7 @@ function render(){
   }
   drawJams();
   ctx.setTransform(dpr,0,0,dpr,0,0);
+  drawBuildPill();
   drawWeather();
   drawDangerArrows();
 }
@@ -3787,7 +4091,7 @@ function showHome(){
   wireSettings(showHome);
 }
 const INP = 'font:inherit;padding:9px 12px;border-radius:12px;border:1px solid var(--panel-line);background:var(--land);color:var(--ink);min-width:0;flex:1 1 160px';
-const HELP = `Drag to draw roads. Drag at an angle for diagonal roads. Houses and parking lots each have one driveway (lots show a little arrow); drag from a house or lot, or draw a road into it from another side, to turn its driveway. Erase with right-click or the eraser; a road with cars on it turns gray and disappears once they've passed. Ctrl+Z undoes, Space pauses. Every Sunday you pick an upgrade, and every few weeks the city grows.`;
+const HELP = `Drag to draw roads. Drag at an angle for diagonal roads. Houses and parking lots each have one driveway (lots show a little arrow); drag from a house or lot, or draw a road into it from another side, to turn its driveway. Erase with right-click or the eraser; a road with cars on it turns gray and disappears once they've passed. Ctrl+Z undoes, Space pauses. Bridges and tunnels start on land: drag a road from the shore over the water (or into a hill) and a ghost span shows its length and cost, red with a reason if it can't be built; it builds once you reach land on the far side, and letting go early builds nothing. Motorways: pick the motorway tool, drag from one road to another, and a live preview turns green when it can be built. While you draw, the road tiles you have left count down. Every Sunday you pick an upgrade, and every few weeks the city grows.`;
 // a collapsible section; remembers which ones were open
 const OPEN = new Set();
 const drop = (title, body) => `<details class="drop" data-drop="${title}"${OPEN.has(title) ? ' open' : ''}><summary>${title}</summary><div class="stack" style="margin-top:12px">${body}</div></details>`;
@@ -3841,6 +4145,7 @@ function monthPlan(){
     <p class="hint">Only today's puzzle and this week's challenge can be played. Past ones have ended, and later ones stay locked until their day.</p>`;
 }
 function showMenu(paused){
+  paused = !!(paused && G && !G.over && !G.replay); // a finished game can't be resumed
   showSheet.menu = {paused};
   showEmoteUI(false); el('oppStrip').hidden = true;
   const daily = challengeFor('daily'), weekly = challengeFor('weekly');
@@ -3915,14 +4220,16 @@ function frame(ts){
       // so a slow or throttled device keeps up with the clock instead of getting extra thinking time
       if (G.wallT == null) G.wallT = now;
       const real = Math.max(0, Math.min(180, now - G.wallT)); G.wallT = now;
-      if (G.speed > 0) G.debt = Math.min(180, (G.debt || 0) + real * G.speed);
-      for (let n = 0; n < 12 && G.debt >= 0.025 && !G.over && !G.pending; n++) { update(0.025); G.debt -= 0.025; }
-    } else if (G && !G.over && (!G.modal || (isDuel() && !G.pending)) && G.speed > 0) { G.acc = Math.min(1, (G.acc || 0) + rdt*G.speed*(G.tray ? TRAY_SLOW : 1)); while (G.acc >= 0.025 && !G.over && (!G.pending || G.tray) && (!G.modal || isDuel())) { update(0.025); G.acc -= 0.025; } }
+      if (G.pending || G.syncWait) { G.debt = 0; syncTick(); } // week-end pick: paused for both players, the wall clock piles up no debt
+      else if (G.speed > 0) G.debt = Math.min(180, (G.debt || 0) + real * G.speed);
+      for (let n = 0; n < 12 && G.debt >= 0.025 && !G.over && !G.pending && !G.syncWait; n++) { update(0.025); G.debt -= 0.025; }
+      if (G.pending || G.syncWait) G.debt = 0; // a pick that just came up: drop the rest of this frame's debt so both stop at the same game time
+    } else if (G && !G.over && !G.pending && (!G.modal || isDuel()) && G.speed > 0) { G.acc = Math.min(1, (G.acc || 0) + rdt*G.speed); while (G.acc >= 0.025 && !G.over && !G.pending && (!G.modal || isDuel())) { update(0.025); G.acc -= 0.025; } }
     if (G && !G.over && !G.modal && G.speed > 0 && now - lastSave > 8) saveGame();
     render(); updateHud();
   } catch (err) { if (!frame.warned) { frame.warned = true; console.error(err); } }
 }
-if (/llsimtest/.test(location.search)) window.__LL = { get G(){ return G; }, start: (seed, id) => newGame({kind:"classic", city: CITIES.find(c => c.id === (id || "seattle")), mods:[], seed}), step: (n, dt) => { for (let k=0;k<n;k++) update(dt || 0.025); }, frame: (t) => { if (t !== undefined) now = t; render(); updateHud(); }, cam: () => cam(), W, H, expand: () => expandStage(), paths: t => paths(t), upgradeDest: d => upgradeDest(d), chain: (v, p) => chain(v, p), stepLights: dt => stepLights(dt), lightState: t => lightState(t), mc: (...a) => moveConflict(...a), update, stepTo, inRect, roundOf, placeRoundabout, graphChanged };
+if (/llsimtest/.test(location.search)) window.__LL = { get G(){ return G; }, over: d => gameOver(d || G.dests[0]), start: (seed, id) => newGame({kind:"classic", city: ALL_CITIES().find(c => c.id === (id || "seattle")), mods:[], seed}), step: (n, dt) => { for (let k=0;k<n;k++) update(dt || 0.025); }, frame: (t) => { if (t !== undefined) now = t; render(); updateHud(); }, cam: () => cam(), W, H, expand: () => expandStage(), paths: t => paths(t), upgradeDest: d => upgradeDest(d), chain: (v, p) => chain(v, p), stepLights: dt => stepLights(dt), lightState: t => lightState(t), mc: (...a) => moveConflict(...a), update, stepTo, inRect, roundOf, placeRoundabout, graphChanged, carPose };
 resize(); now = performance.now()/1000;
 window.claude?.hot?.snapshot?.(() => ({ save: serialize() }));
 const boot = data => {

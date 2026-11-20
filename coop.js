@@ -6,7 +6,8 @@ const HK = window.LLHooks;
 if (!HK) return;
 const MAX = 4, LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ', LEFT_MS = 60000;
 const MAX_MSG = 2048;
-const MIN_GAP = {state: 500, done: 300, lost: 100, ping: 400, start: 0}; // per-sender throttle (ms)
+const MIN_GAP = {state: 500, done: 300, lost: 100, ping: 400, picked: 300, start: 0};
+const PICK_WAIT_MS = 30000; // after my week-end pick, wait at most 30 s for the teammates (the game caps the pause at 45 s) // per-sender throttle (ms)
 const EM = ['👋 Hi!', '🍀 Good luck!', '🛣️ Nice road!', '🚗💥 Oops…', '😅 That was close!', '🔥 Bring it!', '🤝 GG', '🔁 Rematch?'];
 const PINGS = ['🆘 Help, I\'m close to overflowing!', '👍 Doing fine', '🌉 Get bridges!', '⏸️ Hang on', '🚀 Keep going!', '⭐ Great teamwork!'];
 const MODES = {S: 'Team survival: the team is out when anyone overflows', W: 'Team sprint: highest team total after week 10'};
@@ -36,7 +37,7 @@ function fetchNicks(ids) {
 }
 const cityName = id => { try { const c = HK.cities().find(c => c.id === id); return c ? c.name : id; } catch (_) { return id; } };
 
-const fresh = () => ({ch: null, room: null, host: false, city: null, rule: 'S', phase: 'idle', ready: false, seed: 0, mates: {}, done: {}, out: null, timers: [], ui: null, msg: '', hostId: null, roster: [], warned2: false, thr: {}, priv: true});
+const fresh = () => ({ch: null, room: null, host: false, city: null, rule: 'S', phase: 'idle', ready: false, seed: 0, mates: {}, done: {}, out: null, timers: [], ui: null, msg: '', hostId: null, roster: [], warned2: false, thr: {}, priv: true, picks: {}, myPick: null});
 let S = fresh();
 
 // raw presence, server order (first = joined first); only the keys are trusted
@@ -122,6 +123,7 @@ function join(room, host, city, rule) {
     on('state', p => { const m = S.mates[p.id]; if (S.phase !== 'playing') return; m.score = num(p.score, 0, 1e6, 0) | 0; m.week = num(p.week, 0, 999, 0) | 0; m.danger = num(p.danger, 0, 1, 0); m.at = Date.now(); m.away = p.away === true; drawStrip(); });
     on('lost', p => { if (S.phase === 'playing' && S.rule === 'S') teamOut(nickOf(p.id)); });
     on('done', p => { if (S.phase !== 'playing') return; S.done[p.id] = num(p.score, 0, 1e6, 0) | 0; checkSprint(); });
+    on('picked', p => { if (S.phase !== 'playing') return; const w = Math.floor(num(p.week, 0, 999, -1)); if (w < 1) return; S.picks[p.id] = Math.max(S.picks[p.id] || 0, w); syncCheck(); drawStrip(); });
     on('ping', p => { const k = p.k | 0, t = PINGS[k] || EM[k - 100]; if (t) try { HK.showEmote(nickOf(p.id) + ': ' + t); } catch (_) {} });
     ch.on('presence', {event: 'sync'}, safe(() => { if (S === mine && S.ch === ch) onSync(); }));
     ch.subscribe(safe((st, err) => {
@@ -192,6 +194,7 @@ function go() {
   big('Go!'); S.phase = 'playing';
   let ok = false; try { ok = HK.startLiveDuel({cityId: S.city, seed: S.seed, rule: S.rule, room: 'CO' + S.room}); } catch (_) {}
   if (!ok) { toast('Could not start'); S.phase = 'lobby'; refresh(); return; }
+  S.picks = {}; S.myPick = null;
   buildStrip(); const mine = S;
   S.timers.push(setInterval(safe(() => { if (S === mine) tick(); }), 1000));
 }
@@ -202,8 +205,28 @@ function tick() {
   try { const strip = HK.oppStrip(); if (strip && strip.hidden && HK.inLiveDuel() && !document.querySelector('#sheet:not([hidden])')) strip.hidden = false; if (strip && !strip.querySelector('.cpT')) buildStrip(); } catch (_) {}
   const now = Date.now();
   for (const id of Object.keys(S.mates)) { const m = S.mates[id]; if ((m.goneAt && now - m.goneAt > LEFT_MS) || now - m.at > LEFT_MS) { delete S.mates[id]; HK.toast(m.nick + ' left the party', 3000); } }
+  syncCheck(true);
   drawStrip();
 }
+// ---------- week-end pick sync: everyone pauses at the same game time and resumes when all have picked ----------
+function pickState() { try { return HK.pickState ? HK.pickState() : null; } catch (_) { return null; } }
+function syncCheck(fromTick) {
+  if (S.phase !== 'playing') return;
+  const ps = pickState();
+  if (fromTick && S.myPick && S.myPick.doneAt && Date.now() - S.myPick.doneAt < 5000) send('picked', {week: S.myPick.week, k: S.myPick.k}); // a few repeats after resuming, in case one was dropped
+  if (!ps || !ps.waiting) return;
+  const w = ps.week, mine = S.myPick && S.myPick.week === w ? S.myPick : (S.myPick = {week: w, at: Date.now()});
+  if (fromTick) send('picked', {week: w, k: mine.k});
+  const wait = Object.keys(S.mates).filter(id => (S.picks[id] || 0) < w), left = PICK_WAIT_MS - (Date.now() - mine.at);
+  if (!wait.length || left <= 0) { mine.doneAt = Date.now(); try { HK.resumeSync(w); } catch (_) {} drawStrip(); return; }
+  try { HK.syncMsg('Waiting for ' + wait.map(id => S.mates[id].nick).join(', ') + ' to pick… ' + Math.max(1, Math.ceil(left / 1000)) + 's'); } catch (_) {}
+}
+HK.on('picked', safe(d => {
+  if (S.phase !== 'playing' || !d) return;
+  const w = Math.floor(num(d.week, 0, 999, 0)); S.myPick = {week: w, at: Date.now(), k: typeof d.k === 'string' ? d.k.slice(0, 20) : undefined};
+  send('picked', {week: w, k: S.myPick.k}); syncCheck(); drawStrip();
+}));
+HK.on('weekpause', safe(() => drawStrip()));
 // ---------- team strip ----------
 function buildStrip() {
   const strip = HK.oppStrip(); if (!strip) return;
@@ -217,7 +240,8 @@ function drawStrip() {
   const u = S.ui; if (!u || !u.t) return;
   const ms = Object.values(S.mates), total = myScore() + ms.reduce((a, m) => a + m.score, 0);
   u.t.textContent = 'Team ' + total + (S.rule === 'W' ? ' · wk ' + Math.min(10, (HK.duelState() || {}).week || 1) + '/10' : '');
-  u.l.innerHTML = ms.map(m => `<span title="${esc(m.nick)}" style="display:inline-flex;gap:4px;align-items:center"><i style="width:8px;height:8px;border-radius:50%;background:${m.away || Date.now() - m.at > 4000 ? '#f2b311' : '#2f9e5b'}"></i>${esc(m.nick)} <b>${m.score}</b><i style="width:26px;height:5px;border-radius:3px;background:rgba(128,128,128,.35);overflow:hidden"><i style="display:block;height:100%;width:${Math.round(m.danger * 100)}%;background:#e5484d"></i></i></span>`).join('');
+  const pk0 = pickState(), pk = pk0 && (pk0.picking || pk0.waiting) ? pk0 : null;
+  u.l.innerHTML = Object.keys(S.mates).map(id => [id, S.mates[id]]).map(([id, m]) => `<span title="${esc(m.nick)}" style="display:inline-flex;gap:4px;align-items:center"><i style="width:8px;height:8px;border-radius:50%;background:${m.away || Date.now() - m.at > 4000 ? '#f2b311' : '#2f9e5b'}"></i>${esc(m.nick)} <b>${m.score}</b>${pk ? `<i class="cpPk" style="font-style:normal;font-size:12px;color:${(S.picks[id] || 0) >= pk.week ? '#2f9e5b' : '#b7791f'}">${(S.picks[id] || 0) >= pk.week ? 'picked ✓' : 'picking…'}</i>` : ''}<i style="width:26px;height:5px;border-radius:3px;background:rgba(128,128,128,.35);overflow:hidden"><i style="display:block;height:100%;width:${Math.round(m.danger * 100)}%;background:#e5484d"></i></i></span>`).join('');
   if (ms.some(m => m.danger > 0.7) && !S.warned) { S.warned = true; HK.toast('A teammate is close to overflowing!', 2500); } else if (!ms.some(m => m.danger > 0.5)) S.warned = false;
 }
 function pingMenu() {

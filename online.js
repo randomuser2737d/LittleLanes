@@ -148,9 +148,9 @@
   }
   function pushPresence() {
     try {
-      const ch = S.pres; if (!ch || !S.presOn) return;
-      if (ghost()) { if (S.tracked) { S.tracked = false; if (ch.untrack) ch.untrack(); } return; }
-      S.tracked = true; ch.track(myPresence());
+      const chs = (S.presList || []).filter(c => c && c.__on); if (!chs.length) return;
+      if (ghost()) { if (S.tracked) { S.tracked = false; for (const ch of chs) if (ch.untrack) ch.untrack(); } return; }
+      S.tracked = true; const me = myPresence(); for (const ch of chs) ch.track(me);
     } catch (e) {}
   }
   const trackNow = () => { try { clearTimeout(S.trkT); S.trkT = setTimeout(pushPresence, 800); } catch (e) {} };
@@ -159,8 +159,8 @@
   function computeOn() {
     const m = {};
     try {
-      const ch = S.pres, ids = new Set((S.friends && S.friends.ids) || []);
-      const st = ch && ch.presenceState ? (ch.presenceState() || {}) : {};
+      const ids = new Set((S.friends && S.friends.ids) || []), st = {};
+      for (const ch of (S.presList || [])) { const ps = ch && ch.presenceState ? (ch.presenceState() || {}) : {}; for (const k of Object.keys(ps)) st[k] = (st[k] || []).concat(Array.isArray(ps[k]) ? ps[k] : []); }
       for (const k of Object.keys(st)) {
         if (!ids.has(k)) continue;
         const arr = Array.isArray(st[k]) ? st[k].slice(0, 5) : [];
@@ -174,18 +174,34 @@
     } catch (e) {}
     S.on = m; try { if (document.querySelector('#llFr')) drawFriends(document); } catch (e) {}
   }
+  // Friends whose private join works and friends whose join falls back to public would never see each other on one channel,
+  // so presence is tracked on both (only accepted friends ever count). A dropped channel rejoins by itself.
+  function stopPresence() { for (const ch of (S.presList || [])) { try { sb.removeChannel(ch); } catch (e) {} } S.presList = []; S.pres = null; S.presOn = false; S.tracked = false; }
   function startPresence() {
     try {
-      if (S.pres) { sb.removeChannel(S.pres); S.pres = null; }
-      S.presOn = false; S.tracked = false;
+      stopPresence();
       if (!S.user || !sb.channel) return;
       const gen = S.presGen = (S.presGen || 0) + 1, uid = S.user.id;
+      const retry = () => { if (gen !== S.presGen) return; clearTimeout(S.presRT); S.presRT = setTimeout(() => { if (gen === S.presGen && S.user) startPresence(); }, 5000); };
       rtAuth().then(() => { if (gen !== S.presGen || !S.user || S.user.id !== uid) return;
-        openChan('ll-online', {presence: {key: uid}}, ch => ch.on('presence', {event: 'sync'}, computeOn), ch => { S.presOn = true; pushPresence(); }, ch => { S.pres = ch; S.presOn = false; }); });
+        for (const priv of [true, false]) {
+          const ch = sb.channel(priv ? 'll-online' : 'll-online-pub', {config: Object.assign({presence: {key: uid}}, priv ? {private: true} : {})});
+          ch.on('presence', {event: 'sync'}, computeOn);
+          S.presList.push(ch); if (!S.pres) S.pres = ch;
+          ch.subscribe(st => {
+            if (gen !== S.presGen) return;
+            if (st === 'SUBSCRIBED') { ch.__on = true; S.presOn = true; S.tracked = false; pushPresence(); }
+            else if (st === 'CHANNEL_ERROR' && priv) { ch.__on = false; }   // private presence not allowed: the public one still works
+            else if (st === 'TIMED_OUT' || st === 'CLOSED' || st === 'CHANNEL_ERROR') { ch.__on = false; retry(); }
+          });
+        }
+      });
     } catch (e) {}
   }
+  try { document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.user) { if (!(S.presList || []).some(c => c.__on)) startPresence(); else { S.tracked = false; pushPresence(); computeOn(); } } }); } catch (e) {}
+  try { W.addEventListener('online', () => { if (S.user) startPresence(); }); } catch (e) {}
   try { if (typeof setInterval === 'function') setInterval(pushPresence, 20000); } catch (e) {}
-  listeners.push(u => { if (!u && S.pres) { try { sb.removeChannel(S.pres); } catch (e) {} S.pres = null; S.presOn = false; S.on = {}; } else if (u && !S.pres) startPresence(); });
+  listeners.push(u => { if (!u && S.pres) { stopPresence(); S.presGen = (S.presGen || 0) + 1; S.on = {}; } else if (u && !S.pres) startPresence(); });
   const statusDot = id => { const o = S.on[id]; const c = !o ? '#9aa0a6' : o.st === 'menu' ? '#2f9e5b' : '#e8a317'; let t = !o ? 'Offline' : o.st === 'duel' ? 'In a duel' : o.st === 'playing' ? 'Playing' : 'Online'; if (o && o.city && isCity(o.city)) t += ' ' + cityName(o.city) + (o.wk ? ' · wk ' + o.wk : ''); return {c, t, on: !!o}; };
   API.isOnline = id => !!S.on[id];
   // everything private to an account is dropped when the account signs out or changes (including remote sign-out)
@@ -648,7 +664,7 @@
       else if (!r.mine) out.incoming.push({id: r.other, nickname: nm});
       else out.sent.push({id: r.other, nickname: nm});
     }
-    S.friends = out;
+    S.friends = out; try { computeOn(); } catch (e) {}
     try { const br = await sb.from('blocks').select('blocked').eq('blocker', me); if (!br.error) { const bids = (br.data || []).map(x => x && x.blocked).filter(goodUid); const bn = {}; if (bids.length) { const pr = await sb.from('profiles').select('id,nickname').in('id', bids); for (const x of (pr && pr.data) || []) if (x && typeof x.nickname === 'string') bn[x.id] = x.nickname.slice(0, 16); } S.blocked = bids.map(id => ({id, nickname: bn[id] || 'Player'})); } } catch (e) {}
     // tell the player about requests they haven't seen yet, and mark the menu button
     if (!S.seenReq) { let a = []; try { a = JSON.parse(localStorage.getItem('ll.seenReq') || '[]'); if (!Array.isArray(a)) a = []; } catch (e) { a = []; } S.seenReq = new Set(a); }
@@ -826,7 +842,7 @@
     const fl = f.friends.filter(p => !qf || p.nickname.toLowerCase().includes(qf)).slice().sort((a, b) => (S.on[b.id] ? 1 : 0) - (S.on[a.id] ? 1 : 0) || a.nickname.localeCompare(b.nickname));
     const nOn = fl.filter(p => S.on[p.id]).length;
     h += fl.length ? `<div class="small">Your friends (${f.friends.length}) · ${nOn} online</div><div class="stack" style="gap:6px">` + fl.map(p => { const x = prof(S.pf && S.pf[p.id]), d = statusDot(p.id);
-      return `<button class="btn" type="button" data-fp="${esc(p.id)}" style="display:flex;align-items:center;gap:10px;justify-content:flex-start;text-align:left;width:100%"><span style="position:relative;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:18px;background:${x.color};flex:none">${x.avatar}<i style="position:absolute;right:-2px;bottom:-2px;width:11px;height:11px;border-radius:50%;background:${d.c};border:2px solid var(--panel)"></i></span><span style="display:flex;flex-direction:column"><b>${esc(p.nickname)}</b><span class="hint" style="margin:0">${esc(d.t)}${statusOf(S.pf && S.pf[p.id]) ? ' · ' + esc(statusOf(S.pf[p.id])) : ''}</span></span></button>` + (S.openF === p.id ? '<div class="llFp" style="padding:10px 12px;border:1px solid var(--panel-line);border-radius:14px"><p class="hint">Loading profile...</p></div>' : ''); }).join('') + '</div>' : '<p class="hint">No friends yet. Share your friend code.</p>';
+      return `<button class="btn" type="button" data-fp="${esc(p.id)}" style="display:flex;align-items:center;gap:10px;justify-content:flex-start;text-align:left;width:100%"><span style="position:relative;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:18px;background:${x.color};flex:none">${x.avatar}<i style="position:absolute;right:-2px;bottom:-2px;width:11px;height:11px;border-radius:50%;background:${d.c};border:2px solid var(--panel)"></i></span><span style="display:flex;flex-direction:column"><b>${esc(p.nickname)}</b><span class="hint" style="margin:0">${esc(d.t)}${S.on[p.id] && statusOf(S.pf && S.pf[p.id]) ? ' · ' + esc(statusOf(S.pf[p.id])) : ''}</span></span></button>` + (S.openF === p.id ? '<div class="llFp" style="padding:10px 12px;border:1px solid var(--panel-line);border-radius:14px"><p class="hint">Loading profile...</p></div>' : ''); }).join('') + '</div>' : '<p class="hint">No friends yet. Share your friend code.</p>';
     if (S.blocked && S.blocked.length) h += '<div class="small">Blocked players</div>' + S.blocked.map(p => `<div class="btnrow" style="align-items:center"><span class="tag">${esc(p.nickname)}</span><button class="btn" type="button" data-unblock="${esc(p.id)}">Unblock</button></div>`).join('');
     h += `<label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="llGhost"${ghost() ? ' checked' : ''}> Appear offline to others</label>`;
     box.innerHTML = h;
@@ -1018,7 +1034,7 @@
     if (!el.isConnected) return;
     const day = t => { try { return new Date(t).toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'}); } catch (e) { return ''; } };
     const city = c => cityName(c);
-    el.innerHTML = `<div class="stack" style="gap:6px"><div class="btnrow" style="align-items:center"><span style="width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-size:28px;background:${x.color}">${x.avatar}</span><span style="display:flex;flex-direction:column"><b style="color:${x.color};font-size:17px">${esc(f.nickname || pf.nickname || 'Player')}</b>${x.motto ? `<span class="hint" style="margin:0">“${esc(x.motto)}”</span>` : ''}<span class="small" style="color:${d.c}">● ${esc(d.t)}</span>${statusOf(pf) ? `<span class="small">${esc(statusOf(pf))}</span>` : ''}</span></div>
+    el.innerHTML = `<div class="stack" style="gap:6px"><div class="btnrow" style="align-items:center"><span style="width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-size:28px;background:${x.color}">${x.avatar}</span><span style="display:flex;flex-direction:column"><b style="color:${x.color};font-size:17px">${esc(f.nickname || pf.nickname || 'Player')}</b>${x.motto ? `<span class="hint" style="margin:0">“${esc(x.motto)}”</span>` : ''}<span class="small" style="color:${d.c}">● ${esc(d.t)}</span>${d.on && statusOf(pf) ? `<span class="small">${esc(statusOf(pf))}</span>` : ''}</span></div>
       ${best.length ? '<div class="small">Best scores</div><div class="btnrow">' + best.map(r => `<span class="tag">${esc(city(r.city))} <b>${esc(r.score)}</b></span>`).join('') + '</div>' : '<p class="hint">No online scores yet.</p>'}
       <p class="hint" style="margin:0">${f.since ? 'Friends since ' + esc(day(f.since)) : ''}${pf.created_at ? ' · playing since ' + esc(day(pf.created_at)) : ''}</p>
       <button class="btn primary" type="button" data-chat="1" style="min-height:44px;font-size:15px">💬 Open chat with ${esc(f.nickname || pf.nickname || 'Player')}${(() => { const n = S.inbox.filter(m => m.from === id && !m.read && !m.out).length; return n ? ` <span class="tag" style="background:#d63c3c;color:#fff">${n}</span>` : ''; })()}</button>

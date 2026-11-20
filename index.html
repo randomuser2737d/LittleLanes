@@ -209,6 +209,100 @@ p{margin:0;line-height:1.5;color:var(--muted)}
 .hint{font-size:12px;color:var(--muted)}
 @media (max-width:560px){ .tool{min-width:42px;padding:5px 3px 3px} .tool svg{width:20px;height:20px} .week{min-width:80px} .city{font-size:15px} }
 @media (prefers-reduced-motion: reduce){ #toast{transition:none} }
+/* ===== HUD polish (toy dock, top bar, toasts, cards, results) ===== */
+#top{flex-wrap:nowrap;gap:8px;align-items:flex-start;left:calc(env(safe-area-inset-left,0px) + 10px);right:calc(env(safe-area-inset-right,0px) + 10px)}
+#top .chip,.hud-speed{box-shadow:0 4px 0 var(--panel-line),0 8px 18px rgba(0,0,0,.10);border-radius:18px;min-height:52px;box-sizing:border-box}
+.hud-menu{padding:4px 14px 4px 4px;gap:8px;flex:none}
+#menuBtn{width:44px!important;height:44px;min-width:44px!important;padding:0!important;border-radius:14px;display:grid!important;place-items:center;background:var(--land);flex:none}
+#menuBtn svg{width:22px;height:22px}
+#menuBtn:hover{background:var(--panel-line)}
+.cityTxt{min-width:0}.hud-menu .city{white-space:nowrap}
+.hud-speed{display:flex;gap:2px;padding:4px;background:var(--panel);border:1px solid var(--panel-line);flex:none;align-self:flex-start;pointer-events:auto}
+.hud-speed .tool{width:44px;height:44px;min-width:44px!important;padding:0!important;border-radius:14px;justify-content:center}
+.hud-speed .tool span{display:none!important}
+.hud-speed .tool svg{width:22px;height:22px}
+.hud-speed .tool:hover:not(.on){background:var(--land)}
+.hud-score{flex:0 1 auto;min-width:0;padding:6px 14px 6px 12px;gap:12px}
+.scorebox{position:relative}
+.hud-score .score{font-size:28px;line-height:1;min-width:2ch;transform-origin:left center}
+.score.pop{animation:scorePop .38s cubic-bezier(.2,1.8,.4,1)}
+@keyframes scorePop{from{transform:scale(1.35);color:var(--accent)}to{transform:none}}
+.splus{position:absolute;right:-4px;top:-9px;font:800 13px var(--display);color:var(--accent);opacity:0;pointer-events:none}
+.splus.go{animation:splusGo .8s ease-out}
+@keyframes splusGo{0%{opacity:0;transform:translateY(6px)}20%{opacity:1}100%{opacity:0;transform:translateY(-8px)}}
+.hud-score .week{min-width:0;gap:5px;flex:1}
+.wk-row{display:flex;align-items:baseline;gap:8px;min-width:0}
+.wk-row .city{font-size:15px;flex:none}
+.wk-row .small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:150px}
+.daybar{position:relative;height:7px;border-radius:4px;background:var(--panel-line);overflow:hidden;min-width:80px}
+.daybar i{display:block;height:100%;width:0;background:var(--accent);border-radius:4px}
+.daybar::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent calc(100% - 2px),var(--panel) 0) 0 0/calc(100% / 7) 100% repeat-x}
+/* dock */
+#bottom{bottom:calc(env(safe-area-inset-bottom,0px) + 10px);flex-wrap:nowrap}
+.tools{position:relative;flex-wrap:nowrap;justify-content:flex-start;align-items:center;overflow-x:auto;overflow-y:hidden;max-width:100%;min-width:0;gap:4px;padding:6px;border-radius:24px;box-shadow:0 4px 0 var(--panel-line),0 10px 24px rgba(0,0,0,.14);scrollbar-width:none;overscroll-behavior:contain;touch-action:pan-x;-webkit-overflow-scrolling:touch}
+.tools::-webkit-scrollbar{display:none}
+.tools.fade-r{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 34px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 34px),transparent)}
+.tools.fade-l{-webkit-mask-image:linear-gradient(90deg,transparent,#000 34px);mask-image:linear-gradient(90deg,transparent,#000 34px)}
+.tools.fade-l.fade-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 34px,#000 calc(100% - 34px),transparent);mask-image:linear-gradient(90deg,transparent,#000 34px,#000 calc(100% - 34px),transparent)}
+.tools .tool{flex:none;width:52px;height:54px;min-width:52px!important;min-height:54px!important;padding:0!important;border-radius:16px;justify-content:center;gap:1px;transition:transform .12s,background .12s,box-shadow .12s}
+.tools .tool svg{width:23px;height:23px}
+.tools .tool > span:not(.cnt){font-size:10px;line-height:1.1;letter-spacing:.02em}
+.tools button.tool:hover:not(.on):not(:disabled){background:var(--land)}
+.tools button.tool:active{transform:scale(.94)}
+.tools .tool.on{transform:translateY(-3px);box-shadow:0 4px 0 color-mix(in srgb,var(--accent) 55%,#000)}
+.tools .tool .cnt{top:3px;right:3px;min-width:19px;height:17px;font-size:10.5px;border:1.5px solid var(--panel)}
+.tools .tool.zero:not(.on){opacity:.42;filter:grayscale(.7)}
+.tools .tool:disabled{opacity:.3}
+.tools div.tool{background:var(--land);cursor:help}
+.tools .sep{margin:6px 2px;flex:none;align-self:stretch}
+@media (max-width:480px){
+  .tools .tool{width:46px;min-width:46px!important;height:50px;min-height:50px!important}
+  .tools .tool > span:not(.cnt){display:none}
+  .tools .tool svg,.tools .tool:has(.cnt) svg{width:24px;height:24px}
+  .hud-menu{padding-right:4px}.hud-menu .cityTxt{display:none}
+  #top{gap:6px}.hud-speed .tool{width:44px}
+  .hud-score{padding:6px 10px;gap:8px;flex:1 1 0}
+  .hud-score .score{font-size:24px}
+  .wk-row .small{max-width:none;flex:1}
+  .daybar{min-width:0}
+}
+@media (min-width:481px){ #top{justify-content:space-between} .hud-score{min-width:220px} }
+#planBar{bottom:calc(env(safe-area-inset-bottom,0px) + 92px);box-shadow:0 8px 20px rgba(0,0,0,.14)}
+#tip{position:fixed;z-index:70;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12px;font-weight:500;padding:6px 10px;border-radius:10px;white-space:nowrap;transform:translateX(-50%);opacity:0;transition:opacity .12s}
+#tip.show{opacity:1}#tip kbd{font:600 11px var(--body);margin-left:6px;padding:1px 5px;border-radius:5px;background:color-mix(in srgb,var(--bg) 25%,transparent)}
+/* toasts + banners share one slot under the top HUD */
+#toast,#errBar{top:calc(env(safe-area-inset-top,0px) + 72px);border-radius:14px;box-shadow:0 8px 22px rgba(0,0,0,.22);font-size:14px;line-height:1.35;width:max-content;max-width:min(440px,calc(100% - 32px));box-sizing:border-box}
+#toast{z-index:50;white-space:normal;text-align:center;font-weight:500;padding:10px 16px;transform:translate(-50%,-6px);transition:opacity .22s,transform .22s;border:1px solid color-mix(in srgb,var(--bg) 22%,transparent)}
+#toast.show{transform:translate(-50%,0)}
+#errBar{background:#c73333;border:1px solid rgba(255,255,255,.22)}
+#errBar.good{background:#23804b}
+#errBar::before{content:"!";flex:none;width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.22);display:grid;place-items:center;font-weight:800;font-size:13px}
+#errBar.good::before{content:"\2713"}
+#errBar button{width:32px;height:32px}
+/* upgrade cards */
+.card:has(.upgs){max-width:780px}
+.upgs{gap:14px}
+.upg{position:relative;border-radius:20px;box-shadow:0 4px 0 var(--panel-line);transition:transform .12s,border-color .12s,box-shadow .12s,background .12s}
+.upg:hover,.upg:focus-visible{background:color-mix(in srgb,var(--accent) 7%,var(--land));box-shadow:0 6px 0 color-mix(in srgb,var(--accent) 60%,transparent)}
+.upg:active,.upg.chosen{transform:translateY(2px);border-color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,var(--land));box-shadow:0 1px 0 var(--accent)}
+.upg-ico{border-radius:16px;box-shadow:0 3px 0 color-mix(in srgb,var(--accent) 55%,#000)}
+.upg-key{position:absolute;top:10px;right:10px;width:26px;height:26px;border-radius:8px;border:1.5px solid var(--panel-line);background:var(--panel);display:grid;place-items:center;font:600 12px var(--body);color:var(--muted)}
+@media (hover:none){.upg-key{display:none}}
+@media (max-width:560px){ .upg{padding:14px;gap:4px 12px} .upg-n{font-size:30px} .sheet{padding:12px} .card{padding:18px} }
+/* results */
+@media (max-width:899px){ .sheet.over .card{max-height:82vh} }
+.result{text-align:center;padding:14px 12px 16px;border-radius:18px;background:color-mix(in srgb,var(--accent) 10%,var(--land));border:1px solid var(--panel-line)}
+.result .big{font-size:clamp(64px,14vw,84px);letter-spacing:-.03em;color:var(--accent)}
+.result p{margin-top:4px;font-size:13px;letter-spacing:.06em;text-transform:uppercase}
+.sheet.over .card .stack>p,.sheet.over .card .stack>.medals{text-align:center}
+.sheet.over .card .stack>p b{font-family:var(--display);font-size:1.15em;color:var(--ink)}
+.sheet.over .medals{justify-content:center;gap:8px}
+.sheet.over .medal{width:34px;height:34px;font-size:14px}
+.sheet.over .btnrow{gap:10px}
+.sheet.over .btnrow .btn{min-height:46px;border-radius:14px;box-shadow:0 3px 0 var(--panel-line)}
+.sheet.over .btnrow .btn.primary{flex:1 1 100%;font-size:16px;font-weight:600;box-shadow:0 3px 0 color-mix(in srgb,var(--accent) 55%,#000)}
+.sheet.over .btnrow .btn:active{transform:translateY(2px);box-shadow:none}
+@media (prefers-reduced-motion: reduce){ .score.pop,.splus.go{animation:none} .tools .tool,.upg,#toast{transition:none} }
 </style>
 </head>
 <body>
@@ -216,9 +310,14 @@ p{margin:0;line-height:1.5;color:var(--muted)}
 <canvas id="cv" aria-label="City map"></canvas>
 
 <div id="top" class="strip" hidden>
-  <div class="chip"><button id="menuBtn" class="tool" style="min-width:auto;padding:2px" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button><div><div id="cityName" class="city">Seattle</div><div id="cityMeta" class="small">USA · drives right</div></div></div>
+  <div class="chip hud-menu"><button id="menuBtn" class="tool" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button><div class="cityTxt"><div id="cityName" class="city">Seattle</div><div id="cityMeta" class="small">USA · drives right</div></div></div>
   <div class="chip" id="statsChip" hidden style="position:fixed;right:12px;top:calc(env(safe-area-inset-top,0px) + 72px);flex-direction:column;align-items:flex-start;gap:2px;font-size:12px;min-width:190px;z-index:2"></div>
-  <div class="chip"><div class="score" id="score">0</div><svg class="dial" viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="18" class="dial-track"/><circle cx="22" cy="22" r="18" class="dial-fill" id="dialFill" pathLength="100"/><line x1="22" y1="22" x2="34" y2="22" class="dial-hand" id="dialHand"/><circle cx="22" cy="22" r="2.2" class="dial-hub"/></svg><div class="week"><div class="city" id="dayLbl" style="font-size:15px">Mon</div><div class="small" id="weekLbl">Week 1</div></div></div>
+  <div class="hud-speed" role="group" aria-label="Game speed">
+    <button class="tool" data-speed="0" aria-label="Pause"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg><span>pause</span></button>
+    <button class="tool on" data-speed="1" aria-label="Normal speed"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l11 7-11 7z"/></svg><span>1×</span></button>
+    <button class="tool" data-speed="2" aria-label="Double speed"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5l9 7-9 7zM12 5l9 7-9 7z"/></svg><span>2×</span></button>
+  </div>
+  <div class="chip hud-score"><div class="scorebox"><div class="score" id="score">0</div><span class="splus" id="scorePlus" aria-hidden="true"></span></div><div class="week"><div class="wk-row"><span class="city" id="dayLbl">Mon</span><span class="small" id="weekLbl">Week 1</span></div><div class="daybar" aria-hidden="true"><i id="dayFill"></i></div></div></div>
 </div>
 
 <div id="bottom" class="strip" hidden>
@@ -238,10 +337,6 @@ p{margin:0;line-height:1.5;color:var(--muted)}
     <div class="sep"></div>
     <div class="tool" aria-label="Bridges left" title="Bridges: drag a road across water"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 10h18M5 10v8M19 10v8M5 14c3-4 11-4 14 0"/></svg><span class="cnt" id="nBridge">0</span></div>
     <div class="tool" aria-label="Tunnels left" title="Tunnels: drag a road through hills"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20 L9 7 L13 13 L16 9 L22 20Z"/><path d="M9 20v-3a3 3 0 0 1 6 0v3"/></svg><span class="cnt" id="nTunnel">0</span></div>
-    <div class="sep"></div>
-    <button class="tool" data-speed="0" aria-label="Pause"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg><span>pause</span></button>
-    <button class="tool on" data-speed="1" aria-label="Normal speed"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l11 7-11 7z"/></svg><span>1×</span></button>
-    <button class="tool" data-speed="2" aria-label="Double speed"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5l9 7-9 7zM12 5l9 7-9 7z"/></svg><span>2×</span></button>
   </div>
 </div>
 
@@ -276,7 +371,7 @@ p{margin:0;line-height:1.5;color:var(--muted)}
 </div>
 
 <script>
-var APP_VERSION = 'v3.21';
+var APP_VERSION = 'v3.22';
 (() => {
 'use strict';
 const cv = document.getElementById('cv');
@@ -1224,6 +1319,9 @@ function airportDispatch(d, dist, prev){
 // Green lasts at least 3 s; it switches only when the other side has cars waiting and this side is empty
 // for a moment, or after 9 s at most. Every switch goes green -> yellow (1.2 s) -> all red (0.6 s) -> other side green.
 const L_MIN = 3, L_MAX = 9, L_YEL = 1.2, L_RED = 0.6, L_GAP = 1.0;
+function lightGo(node, c, from){ const L = lightState(node); if (L.axis !== approachAxis(from, node)) return false; if (L.state === 'g') return true;
+  // amber: carry on only if the car is too close to stop comfortably
+  return L.state === 'y' && L.t < 0.7 && (c.v||0)*(c.v||0) / (2*BRK) > edgeLen(from, node) - c.s - 0.32 + 0.03; }
 function approachAxis(from, node){ const dx = ix(node)-ix(from), dy = iy(node)-iy(from); if (dx && dy) return dx*dy > 0 ? 0 : 1; return dy ? 1 : 0; }
 function lightState(t){ G.lightSt = G.lightSt || new Map(); let L = G.lightSt.get(t); if (!L) { L = {axis: 0, state: 'g', t: 0, empty: 0, next: 1}; G.lightSt.set(t, L); } return L; }
 function lightDemand(t){
@@ -1252,16 +1350,52 @@ function moveConflict(n, f1, t1, f2, t2){
   const lo = Math.min(a1, b1), hi = Math.max(a1, b1), inside = x => x > lo && x < hi;
   return inside(a2) !== inside(b2);
 }
+// ---- driving model: speeds, corners and roundabout geometry (all deterministic, shared by the simulation and drawing) ----
+const ACC = 2.2*SPEED, BRK = 3.0*SPEED, BRK_MAX = 7*SPEED, HEADWAY = 0.35, RING_R = 0.69, RA_IN = 0.4, RA_OUT = 0.6;
+// motorways are fast, ferries and bridges slower, metro fastest
+const roadF = (a, b) => isMw(a,b) ? 2.3 : isFerry(a,b) ? 0.6 : isMetro(a,b) ? 3.2 : (G.terrain[a] === 1 && G.terrain[b] === 1) ? 0.9 : 1;
+// how much a driver slows for the turn a -> b -> c: straight on full speed, a right angle about half, a U-turn a crawl
+function turnF(a, b, c){
+  const d1x = ix(b)-ix(a), d1y = iy(b)-iy(a), d2x = ix(c)-ix(b), d2y = iy(c)-iy(b);
+  const cs = (d1x*d2x + d1y*d2y) / (Math.hypot(d1x, d1y) * Math.hypot(d2x, d2y) || 1);
+  return cs > 0.98 ? 1 : 0.32 + 0.68*Math.pow((cs + 1) / 2, 1.6);
+}
+const mod2pi = x => ((x % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI);
+// a roundabout trip from arm `from` to arm `to`: enter the ring just past your arm, go round with the traffic, leave just before the exit arm
+function ringGeo(n, from, to){
+  const D = G.drive < 0 ? -1 : 1, cx = ix(n)+.5, cy = iy(n)+.5;
+  const al = Math.atan2(iy(from)-iy(n), ix(from)-ix(n)), be = to >= 0 ? Math.atan2(iy(to)-iy(n), ix(to)-ix(n)) : al + Math.PI;
+  const p1 = al - 0.45*D, p2 = be + 0.45*D; let d = D > 0 ? mod2pi(p1 - p2) : mod2pi(p2 - p1); if (d < 0.25) d += 2*Math.PI;
+  return {cx, cy, p1, p2, d, D};
+}
+// where a car is on the ring (fraction 0..1 of its arc), or -1 if it is not on the circle itself
+function ringT(o, n){
+  if (o.state === 'unload' || o.seg >= o.path.length-1) return -1;
+  const a = o.path[o.seg], b = o.path[o.seg+1];
+  if (b === n && o.seg+2 < o.path.length && o.s >= RA_IN) return (o.s - RA_IN) / (1 - RA_IN + RA_OUT);
+  if (a === n && o.seg > 0 && o.s < RA_OUT) return (1 - RA_IN + o.s) / (1 - RA_IN + RA_OUT);
+  return -1;
+}
+// yield at the entry to traffic already going round that would reach us before it leaves
+function ringYield(n, c, from, to, m){
+  const me = ringGeo(n, from, to);
+  for (const o of G.cars) { if (o === c || !m.has(o.id)) continue;
+    const t = ringT(o, n); if (t < 0) continue; const mv = m.get(o.id), g = ringGeo(n, mv[0], mv[1]);
+    const po = g.p1 - g.D*g.d*t, up = me.D > 0 ? mod2pi(po - me.p1) : mod2pi(me.p1 - po), rem = g.d*(1 - t);
+    if (up > 2*Math.PI - 0.5) return false; // just passed our entry: let it get clear first
+    if (rem > up - 0.15 && up < 1.9) return false; }
+  return true;
+}
 function junctionFree(node, c, from, to){
   const m = G.res.get(node); if (!m || !m.size || m.has(c.id)) return true;
-  if (G.round.has(node)) return m.size < 3;
+  if (G.round.has(node)) return m.size < 4 && ringYield(node, c, from, to, m);
   for (const mv of m.values()) if (moveConflict(node, from, to, mv[0], mv[1])) return false;
   return m.size < 4;
 }
 function reserve(node, c, from, to){
   if (G.blocked.has(node) && c.kind !== 'amb') return false;
   if (degree(node) <= 2) return true;
-  if (G.lights.has(node) && from >= 0) { const L = lightState(node); if (L.state !== 'g' || L.axis !== approachAxis(from, node)) return false; }
+  if (G.lights.has(node) && from >= 0 && !lightGo(node, c, from)) return false;
   if (!junctionFree(node, c, from, to)) return false;
   let m = G.res.get(node); if (!m) { m = new Map(); G.res.set(node, m); }
   if (c.held >= 0 && c.held !== node) release(c.held, c);
@@ -1275,7 +1409,7 @@ function sweepRes(){
 function peekFree(node, c, from, nxt){
   if (G.blocked.has(node)) return false;
   if (degree(node) <= 2) return true;
-  if (G.lights.has(node) && from >= 0) { const L = lightState(node); if (L.state !== 'g' || L.axis !== approachAxis(from, node)) return false; }
+  if (G.lights.has(node) && from >= 0 && !lightGo(node, c, from)) return false;
   if (!junctionFree(node, c, from, nxt)) return false;
   for (const o of carsOn(node, nxt)) if (o!==c && o.state!=='unload' && o.path[o.seg]===node && o.path[o.seg+1]===nxt && o.s < 0.62) return false;
   return true;
@@ -1326,31 +1460,52 @@ function stepCar0(c, dt){
     }
     return;
   }
-  const a = c.path[c.seg], b = c.path[c.seg+1], len = edgeLen(a,b); let mv = SPEED*dt*(isMw(a,b) ? 2.3 : isFerry(a,b) ? 0.6 : isMetro(a,b) ? 3.2 : 1)*(c.kind==='amb' ? 1.35 : c.kind==='truck' ? 0.75 : 1)*({snow:0.75, rain:0.9, fog:0.85, sand:0.7, storm:0.65}[G.weather] || 1);
-  let lim = len;
-  if (c.kind !== 'amb') for (const o of carsOn(a, b)) if (o!==c && o.state!=='unload' && o.path[o.seg]===a && o.path[o.seg+1]===b && o.s > c.s) lim = Math.min(lim, o.s - 0.62);
-  const last = c.seg+1 === c.path.length-1;
-  const amb = c.kind === 'amb';
+  const a = c.path[c.seg], b = c.path[c.seg+1], len = edgeLen(a,b);
+  const amb = c.kind === 'amb', last = c.seg+1 === c.path.length-1, c2 = last ? -1 : c.path[c.seg+2];
+  const kf = (amb ? 1.35 : c.kind==='truck' ? 0.75 : 1)*({snow:0.75, rain:0.9, fog:0.85, sand:0.7, storm:0.65}[G.weather] || 1);
+  // speed limit of this stretch: motorways fast, bridges a little slower, roundabouts at a steady ring speed
+  let vRoad = SPEED*kf*roadF(a, b);
+  const rIn = G.round.has(b) && !last, rOut = G.round.has(a) && c.seg > 0;
+  if (rIn || rOut) { const rg = ringGeo(rIn ? b : a, rIn ? a : c.path[c.seg-1], rIn ? c2 : b); const onArc = rIn ? c.s >= RA_IN : c.s < RA_OUT;
+    vRoad = SPEED*kf*(onArc ? Math.min(1.25, 0.85*(RA_IN + 1 - RA_OUT) / (RING_R*rg.d)) : 0.8); }
+  let mv = vRoad*dt;
+  const stopD = G.round.has(b) ? 1 - RA_IN : 0.32;
+  let lim = len, lead = null, leadGap = 1e9;
+  if (!amb) for (const o of carsOn(a, b)) if (o!==c && o.state!=='unload' && o.path[o.seg]===a && o.path[o.seg+1]===b && o.s > c.s) { if (o.s - 0.62 < lim) lim = o.s - 0.62; if (o.s - c.s - 0.62 < leadGap) { leadGap = o.s - c.s - 0.62; lead = o; } }
   if (!amb && G.ambOut && G.cars.some(o => o.kind==='amb' && o.state!=='unload' && o.path[o.seg+1]===b && o!==c && o.path[o.seg]!==a)) lim = Math.min(lim, len - 0.4);
+  let stopAt = len; // where the car has to be able to stop (crossing, light, yield line)
   // look ahead: start braking early if the crossing ahead is busy, instead of slamming to a stop at the line
-  if (!last && !amb && c.s + mv <= len - 0.32 && c.s > len - 1.1 && !peekFree(b, c, a, c.path[c.seg+2])) lim = Math.min(lim, len - 0.32);
-  if (!last && !amb && c.s + mv > len - 0.32) {
-    const c2 = c.path[c.seg+2];
+  if (!last && !amb && c.s + mv <= len - stopD && c.s > len - stopD - 0.8 && !peekFree(b, c, a, c2)) stopAt = len - stopD;
+  if (!last && !amb && c.s + mv > len - stopD) {
     let ok = reserve(b, c, a, c2);
     if (ok) for (const o of carsOn(b, c2)) if (o!==c && o.state!=='unload' && o.path[o.seg]===b && o.path[o.seg+1]===c2 && o.s < 0.62) { ok=false; break; }
-    if (!ok) lim = Math.min(lim, len - 0.32);
+    if (!ok) stopAt = len - stopD;
   }
-  if (last && c.state === 'go' && G.occ[b] === 4 && parkedAt(b, c).length >= stallsAt(b)) lim = Math.min(lim, len - 0.5);
-  if (!last && c.s > len - 0.7) { const c2 = c.path[c.seg+2]; const d1x = ix(b)-ix(a), d1y = iy(b)-iy(a), d2x = ix(c2)-ix(b), d2y = iy(c2)-iy(b); if (d1x*d2y - d1y*d2x !== 0 || d1x*d2x + d1y*d2y < 0) mv *= 0.5; }
-  // crossings slow everyone down a little, even going straight
-  if (!last && c.s > len - 0.6 && degree(b) >= 3 && !G.round.has(b)) mv *= 0.72;
+  if (last && c.state === 'go' && G.occ[b] === 4 && parkedAt(b, c).length >= stallsAt(b)) stopAt = Math.min(stopAt, len - 0.5);
+  lim = Math.min(lim, stopAt);
+  // target speed: slow down for the corner ahead depending on how sharp it is, keep a time gap to the car in front,
+  // and brake smoothly for a stop line (v^2 = 2*b*d), like a driver would
+  let vWant = vRoad;
+  if (!last) {
+    let vNode = SPEED*kf*roadF(b, c2);
+    if (!G.round.has(b) && !G.round.has(a)) { vNode *= turnF(a, b, c2); if (degree(b) >= 3) vNode = Math.min(vNode, 0.82*vRoad); }
+    else if (G.round.has(b)) vNode = Math.min(vNode, 0.8*SPEED*kf);
+    vWant = Math.min(vWant, Math.sqrt(vNode*vNode + 2*BRK*Math.max(0, len - c.s)));
+    // the car just past the crossing counts as the car in front
+    if (!amb && !lead) for (const o of carsOn(b, c2)) if (o!==c && o.state!=='unload' && o.path[o.seg]===b && o.path[o.seg+1]===c2) { const g = len - c.s + o.s - 0.62; if (g < leadGap) { leadGap = g; lead = o; } }
+  }
+  if (lead) vWant = Math.min(vWant, Math.sqrt(Math.max(0, (lead.v||0)*(lead.v||0) + 2*BRK*Math.max(0, leadGap - (c.v||0)*HEADWAY))));
+  if (stopAt < len) vWant = Math.min(vWant, Math.sqrt(2*BRK*Math.max(0, stopAt - c.s - 0.01)) + (stopAt - c.s > 0.04 ? 0.06 : 0));
   // gridlock valve: after a long wait, cars inch forward instead of the jam freezing solid
-  if (c.stuck > 6) lim = Math.max(lim, Math.min(len, c.s + mv*0.3 + 0.02));
-  const room = Math.max(0, lim - c.s), vmax = mv / Math.max(dt, 1e-4);
-  const want = lim >= len - 1e-6 ? vmax : Math.min(vmax, room * 3.2 + 0.12);
-  if (c.v === undefined) c.v = want;
-  c.v = want < c.v ? Math.max(want, c.v - 5*SPEED*dt) : Math.min(want, c.v + 2.4*SPEED*dt);
+  if (c.stuck > 6) { lim = Math.max(lim, Math.min(len, c.s + mv*0.3 + 0.02)); vWant = Math.max(vWant, 0.3*vRoad); c.rx = 0; }
+  const room = Math.max(0, lim - c.s);
+  if (c.v === undefined) c.v = 0;
+  // a stopped car pulls away a moment after the way clears, so a queue starts one car after another
+  if (c.v < 0.04) { if (vWant < 0.1) c.rx = 0.12 + ((c.id * 7919) % 101) / 101 * 0.22; else if (c.rx > 0) { c.rx -= dt; vWant = 0; } }
+  if (vWant < c.v) { const nv = Math.max(vWant, c.v - BRK_MAX*dt); c.brk = c.v - nv > 0.6*dt || vWant < 0.05 ? 1 : 0; c.v = nv; }
+  else { c.brk = 0; c.v = Math.min(vWant, c.v + ACC*Math.max(0.3, 1 - Math.pow(c.v / Math.max(vRoad, 0.01), 4))*dt); }
   let ns = c.s + Math.min(c.v*dt, room);
+  if (c.v*dt > room + 1e-6) c.v = Math.min(c.v, room / dt);
   if (ns - c.s < mv*0.2) { c.stuck += dt; if (c.stuck > 1.8 && !c.honked && now - (G.lastHonk||0) > 0.9) { c.honked = true; G.lastHonk = now; honk(); } } else if (ns - c.s > mv*0.5) { c.stuck = Math.max(0, c.stuck - dt*3); if (c.stuck < 0.2) c.honked = false; }
   c.s = ns;
   if (c.held >= 0 && c.held === a && c.s > 0.62) { release(c.held, c); c.held = -1; }
@@ -1607,6 +1762,7 @@ function showUpgrade(){
   showSheet(`<div class="stack">
     <div class="row" style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap"><div><div class="small">Sunday · week ${G.week} begins</div><h2>${picks.length > 1 ? 'Choose an upgrade' : 'Your upgrade'}</h2></div><button class="btn" id="peek" type="button">Hold to see map</button></div>
     <div class="upgs">${picks.map(k => { const u = UPG[k]; return `<button class="upg" data-upg="${k}">
+      <span class="upg-key" aria-hidden="true">${picks.indexOf(k)+1}</span>
       <span class="upg-ico">${ICON[k]}</span>
       <span class="upg-n">+${u.n()}</span>
       <span class="upg-name">${u.name}</span>
@@ -1758,7 +1914,7 @@ function weekChart(){
 function showOver(d, extra){
   showSheet(`<div class="stack">
     <div><div class="small">Game over · week ${G.week}</div><h2>${G.forfeit ? 'You left the duel' : (d.color < 0 ? 'The airport' : 'The '+COLOR_NAMES[d.color]+' workplace') + ' overflowed'}</h2></div>
-    <div><div class="big">${G.score}</div><p>trips completed</p></div>
+    <div class="result"><div class="big">${G.score}</div><p>trips completed</p></div>
     ${statsLine()}
     ${PLUS() ? weekChart() : ''}
     ${extra}
@@ -2572,6 +2728,8 @@ function drawVehicle(car){
   toyCar(col, L, Wd, rad, car.kind === 'amb' ? '#f4f7f8' : st === 'retro' ? shade(col, -.15) : null);
   if (st === 'sport') { ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.fillRect(-L+0.02, -0.012, L*2-0.04, 0.024); }
   if (car.stuck > 0.25) { ctx.fillStyle = '#ff3b30'; ctx.globalAlpha = Math.min(1, car.stuck*2); ctx.fillRect(-L-0.015, -Wd+0.02, 0.045, 0.05); ctx.fillRect(-L-0.015, Wd-0.07, 0.045, 0.05); ctx.globalAlpha = 1; }
+  if (car.brk && !(car.stuck > 0.25) && car.state !== 'unload') { ctx.fillStyle = '#ff3b30'; ctx.globalAlpha = 0.9; ctx.fillRect(-L-0.015, -Wd+0.02, 0.04, 0.045); ctx.fillRect(-L-0.015, Wd-0.065, 0.04, 0.045); ctx.globalAlpha = 1; }
+  if (car.ind && car.state !== 'unload' && Math.floor(now*3.2 + (car.id%5)*0.13) % 2 === 0) { ctx.fillStyle = '#ffb02e'; const y0 = car.ind > 0 ? Wd - 0.035 : -Wd - 0.01; ctx.fillRect(L-0.05, y0, 0.05, 0.045); ctx.fillRect(-L-0.01, y0, 0.045, 0.045); }
   if (car.kind === 'amb') {
     const on = Math.floor(now*6) % 2;
     ctx.fillStyle = on ? '#e5484d' : '#3e7bfa'; ctx.fillRect(-0.05, -0.1, 0.05, 0.09); ctx.fillStyle = on ? '#3e7bfa' : '#e5484d'; ctx.fillRect(-0.05, 0.01, 0.05, 0.09);
@@ -2946,27 +3104,50 @@ function render(){
         ang = Math.atan2(g.bdy, g.bdx); car.stallXY = [px, py, ang];
         const f = ease(clamp((now - (car.parkT || 0)) / 0.6, 0, 1)); px = cx0 + (px - cx0)*f; py = cy0 + (py - cy0)*f; if (f < 0.5) ang = Math.atan2(py - cy0, px - cx0) || ang; } } }
     else {
-      const a = car.path[car.seg], b = car.path[car.seg+1], len = edgeLen(a,b), t = Math.min(1, car.s/len);
+      const a = car.path[car.seg], b = car.path[car.seg+1], len = edgeLen(a,b);
+      // draw where the car is right now, between two simulation steps (visual only)
+      const fr = clamp((G.debt > 0 && G.debt < 0.025 ? G.debt : G.acc) || 0, 0, 0.025), sD = Math.min(len - 1e-4, car.s + (car.v || 0)*fr*(car.state === 'unload' ? 0 : 1)), t = sD/len;
       const [x1,y1]=nodePos(a), [x2,y2]=nodePos(b), dx=(x2-x1)/len, dy=(y2-y1)/len;
       px = x1 + (x2-x1)*t; py = y1 + (y2-y1)*t; ang = Math.atan2(dy, dx);
-      // round the corners: near a node, follow a curve from the old direction into the new one
-      const R = 0.34; let cn = -1, pn = -1, nn = -1, u = 0;
-      if (car.seg + 2 < car.path.length && len - car.s < Math.min(R, len/2)) { pn = a; cn = b; nn = car.path[car.seg+2]; }
-      else if (car.seg > 0 && car.s < Math.min(R, len/2)) { pn = car.path[car.seg-1]; cn = a; nn = b; }
-      if (cn >= 0 && !G.round.has(cn)) {
-        const [qx, qy] = nodePos(cn), [ax, ay] = nodePos(pn), [bx, by] = nodePos(nn);
-        const l1 = Math.hypot(qx-ax, qy-ay), l2 = Math.hypot(bx-qx, by-qy), r = Math.min(R, l1/2, l2/2);
-        const e1x = (qx-ax)/l1, e1y = (qy-ay)/l1, e2x = (bx-qx)/l2, e2y = (by-qy)/l2;
-        if (e1x*e2x + e1y*e2y > -0.5 && r > 0.05) {
-          u = cn === b ? (r - (len - car.s)) / (2*r) : 0.5 + car.s / (2*r); u = clamp(u, 0, 1);
-          const sx = qx - e1x*r, sy = qy - e1y*r, ex = qx + e2x*r, ey = qy + e2y*r, m = 1-u;
-          px = m*m*sx + 2*u*m*qx + u*u*ex; py = m*m*sy + 2*u*m*qy + u*u*ey;
-          ang = Math.atan2(2*m*(qy-sy) + 2*u*(ey-qy), 2*m*(qx-sx) + 2*u*(ex-qx));
+      const D = G.drive < 0 ? -1 : 1, LO = 0.12;
+      const rIn = G.round.has(b) && car.seg + 2 < car.path.length, rOut = G.round.has(a) && car.seg > 0;
+      car.ind = 0;
+      if (rIn || rOut) {
+        // roundabout: curve in, follow the circle with the traffic, curve out
+        const n = rIn ? b : a, from = rIn ? a : car.path[car.seg-1], to = rIn ? car.path[car.seg+2] : b, g = ringGeo(n, from, to);
+        const T = p => [g.D*Math.sin(p), -g.D*Math.cos(p)], R = p => [g.cx + RING_R*Math.cos(p), g.cy + RING_R*Math.sin(p)];
+        const bez = (P0, P1, P2, u) => { const m = 1-u; return [m*m*P0[0] + 2*u*m*P1[0] + u*u*P2[0], m*m*P0[1] + 2*u*m*P1[1] + u*u*P2[1], Math.atan2(2*m*(P1[1]-P0[1]) + 2*u*(P2[1]-P1[1]), 2*m*(P1[0]-P0[0]) + 2*u*(P2[0]-P1[0]))]; };
+        let q;
+        if (rIn && sD < RA_IN) { const [fx, fy] = nodePos(from), hx = g.cx - fx, hy = g.cy - fy, E = R(g.p1), tE = T(g.p1); q = bez([fx - hy*LO*D, fy + hx*LO*D], [E[0] - tE[0]*0.3, E[1] - tE[1]*0.3], E, sD / RA_IN); }
+        else if (rOut && sD >= RA_OUT) { const [tx, ty] = nodePos(to), hx = tx - g.cx, hy = ty - g.cy, X = R(g.p2), tX = T(g.p2); q = bez(X, [X[0] + tX[0]*0.3, X[1] + tX[1]*0.3], [tx - hy*LO*D, ty + hx*LO*D], (sD - RA_OUT) / (1 - RA_OUT)); }
+        else { const u = rIn ? (sD - RA_IN) / (1 - RA_IN + RA_OUT) : (1 - RA_IN + sD) / (1 - RA_IN + RA_OUT), p = g.p1 - g.D*g.d*u, P = R(p), tt = T(p); q = [P[0], P[1], Math.atan2(tt[1], tt[0])]; if (g.d*(1-u) < 1.4) car.ind = D; }
+        [px, py, ang] = q;
+      } else {
+        // round the corners: near a node, follow a curve from the old direction into the new one
+        const Rr = 0.42; let cn = -1, pn = -1, nn = -1, u = 0;
+        if (car.seg + 2 < car.path.length && len - sD < Math.min(Rr, len/2)) { pn = a; cn = b; nn = car.path[car.seg+2]; }
+        else if (car.seg > 0 && sD < Math.min(Rr, len/2)) { pn = car.path[car.seg-1]; cn = a; nn = b; }
+        if (cn >= 0 && !G.round.has(cn) && !G.round.has(pn) && !G.round.has(nn)) {
+          const [qx, qy] = nodePos(cn), [ax, ay] = nodePos(pn), [bx, by] = nodePos(nn);
+          const l1 = Math.hypot(qx-ax, qy-ay), l2 = Math.hypot(bx-qx, by-qy), r = Math.min(Rr, l1/2, l2/2);
+          const e1x = (qx-ax)/l1, e1y = (qy-ay)/l1, e2x = (bx-qx)/l2, e2y = (by-qy)/l2;
+          if (e1x*e2x + e1y*e2y > -0.5 && r > 0.05) {
+            u = cn === b ? (r - (len - sD)) / (2*r) : 0.5 + sD / (2*r); u = clamp(u, 0, 1);
+            // lane-offset control points so the curve stays in the right-hand lane (inside lane is tighter, outside wider)
+            const n1x = -e1y*LO*D, n1y = e1x*LO*D, n2x = -e2y*LO*D, n2y = e2x*LO*D;
+            const sx = qx - e1x*r + n1x, sy = qy - e1y*r + n1y, ex = qx + e2x*r + n2x, ey = qy + e2y*r + n2y;
+            const cr = e1x*e2y - e1y*e2x, k = Math.abs(cr) > 1e-6 ? ((ex - sx)*e2y - (ey - sy)*e2x) / cr : r, cx_ = sx + e1x*k, cy_ = sy + e1y*k, m = 1-u;
+            px = m*m*sx + 2*u*m*cx_ + u*u*ex; py = m*m*sy + 2*u*m*cy_ + u*u*ey;
+            ang = Math.atan2(2*m*(cy_-sy) + 2*u*(ey-cy_), 2*m*(cx_-sx) + 2*u*(ex-cx_));
+            px -= -Math.sin(ang)*LO*D; py -= Math.cos(ang)*LO*D; // undo: the lane offset is already in the curve
+          }
         }
+        px += -Math.sin(ang)*LO*D; py += Math.cos(ang)*LO*D;
+        // indicators: blink on the side of the coming turn (or the roundabout exit) about a tile before it
+        if (car.seg + 2 < car.path.length && len - sD < 1.1) { const c2 = car.path[car.seg+2];
+          if (G.round.has(b)) car.ind = 0; else { const d2x = ix(c2)-ix(b), d2y = iy(c2)-iy(b), cr = (ix(b)-ix(a))*d2y - (iy(b)-iy(a))*d2x; car.ind = cr > 0 ? 1 : cr < 0 ? -1 : 0; } }
+        else if (car.seg + 3 < car.path.length && G.round.has(car.path[car.seg+2]) && len - sD < 0.9) { const g = ringGeo(car.path[car.seg+2], b, car.path[car.seg+3]); car.ind = g.d < 1.2 ? D : g.d > 3.2 ? -D : 0; }
       }
-      px += -Math.sin(ang)*0.12*G.drive; py += Math.cos(ang)*0.12*G.drive;
-      // inside a roundabout, cars follow the ring instead of crossing the island
-      for (const c0 of [a, b]) if (G.round.has(c0)) { const cx = ix(c0)+.5, cy = iy(c0)+.5, rx = px - cx, ry = py - cy, dd = Math.hypot(rx, ry); if (dd < 0.72 && dd > 1e-3) { px = cx + rx/dd*0.72; py = cy + ry/dd*0.72; ang = Math.atan2(ry, rx) + (G.drive > 0 ? -Math.PI/2 : Math.PI/2); } }
     }
     if (car.state === 'back' && car.stallXY && now - (car.unparkT || 0) < 0.55) { const f = ease(clamp((now - car.unparkT)/0.55, 0, 1)); px = car.stallXY[0] + (px - car.stallXY[0])*f; py = car.stallXY[1] + (py - car.stallXY[1])*f; }
     if (car.ra === undefined) car.ra = ang; else { let da = ang - car.ra; while (da > Math.PI) da -= 2*Math.PI; while (da < -Math.PI) da += 2*Math.PI; car.ra += da * (1 - Math.exp(-(G.fdt || 0.016) * 16 * Math.max(1, G.speed || 1))); }
@@ -3038,8 +3219,10 @@ function updateHud(){
     hint.hidden = false;
   } else hint.hidden = true;
   el('score').textContent = G.score;
+  if (G._hudScore !== undefined && G.score > G._hudScore) { for (const [id, cls] of [['score','pop'],['scorePlus','go']]) { const n = el(id); n.classList.remove(cls); void n.offsetWidth; n.classList.add(cls); } el('scorePlus').textContent = '+' + (G.score - G._hudScore); }
+  G._hudScore = G.score;
   el('weekLbl').textContent = (G.endless ? 'Endless · ' : '') + 'Week ' + G.week + (isRush() ? ' · rush hour' : '') + (G.weather !== 'clear' ? ' · ' + G.weather : '');
-  const wf = G.weekT/WEEK_LEN; el('dialFill').style.strokeDasharray = (wf*100).toFixed(1)+' 100'; el('dialHand').style.transform = `rotate(${(wf*360).toFixed(1)}deg)`;
+  const wf = G.weekT/WEEK_LEN; el('dayFill').style.width = (wf*100).toFixed(1)+'%';
   el('dayLbl').textContent = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][Math.min(6, Math.floor(wf*7))];
   { const b = el('nRoads').parentElement; if (G._lastRoads !== undefined && G.roads > G._lastRoads + 2) { b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); } G._lastRoads = G.roads; }
   el('nRoads').parentElement.classList.toggle('low', G.roads > 0 && G.roads <= 5);
@@ -3060,6 +3243,34 @@ const sheet = el('sheet'), sheetCard = el('sheetCard');
 function showSheet(html, over){ menuOpen = showSheet.menu || null; showSheet.menu = null; sheetCard.innerHTML = html; sheet.classList.toggle('over', !!over); sheet.hidden = false; }
 let menuOpen = null; // which menu is on screen, so background updates never open one by themselves
 function closeSheet(){ sheet.hidden = true; sheetCard.innerHTML = ''; menuOpen = null; }
+
+// ---- HUD helpers: tool tooltips (hover / long-press), 1-2-3 upgrade keys, dock scroll fade ----
+(() => {
+  const tip = document.createElement('div'); tip.id = 'tip'; tip.setAttribute('aria-hidden', 'true'); document.body.appendChild(tip);
+  const KEYS = {draw:'D', erase:'E', round:'R', mway:'M', planBtn:'P', s0:'Space', s1:'1', s2:'2'};
+  let tipT, lpT;
+  const labelOf = b => { if (b.hasAttribute('title')) { b.dataset.tip = b.getAttribute('title'); b.removeAttribute('title'); } return b.dataset.tip || b.getAttribute('aria-label') || ''; };
+  const showTip = b => { const t = labelOf(b); if (!t) return; const k = KEYS[b.dataset.tool] || KEYS[b.id] || (b.dataset.speed !== undefined && KEYS['s' + b.dataset.speed]); tip.textContent = t; if (k) { const e = document.createElement('kbd'); e.textContent = k; tip.appendChild(e); } const r = b.getBoundingClientRect(); const below = r.top < innerHeight / 2; tip.style.top = (below ? r.bottom + 8 : r.top - 36) + 'px'; tip.style.left = Math.max(60, Math.min(innerWidth - 60, r.left + r.width / 2)) + 'px'; tip.classList.add('show'); clearTimeout(tipT); tipT = setTimeout(hideTip, 2600); };
+  const hideTip = () => { tip.classList.remove('show'); clearTimeout(lpT); };
+  for (const root of [el('top'), el('bottom')]) {
+    root.addEventListener('pointerover', e => { const b = e.target.closest && e.target.closest('.tool'); if (b && e.pointerType === 'mouse') showTip(b); });
+    root.addEventListener('pointerout', e => { if (e.pointerType === 'mouse') hideTip(); });
+    root.addEventListener('pointerdown', e => { const b = e.target.closest && e.target.closest('.tool'); if (b && e.pointerType !== 'mouse') { clearTimeout(lpT); lpT = setTimeout(() => showTip(b), 450); } else hideTip(); });
+    for (const ev of ['pointerup', 'pointercancel']) root.addEventListener(ev, () => clearTimeout(lpT));
+    root.addEventListener('click', () => { if (tip.classList.contains('show')) hideTip(); });
+  }
+  const dock = document.querySelector('.tools');
+  const fade = () => { dock.classList.toggle('fade-l', dock.scrollLeft > 4); dock.classList.toggle('fade-r', dock.scrollLeft + dock.clientWidth < dock.scrollWidth - 4); };
+  dock.addEventListener('scroll', fade, {passive: true});
+  if (window.ResizeObserver) new ResizeObserver(fade).observe(dock);
+  new MutationObserver(fade).observe(dock, {subtree: true, attributes: true, attributeFilter: ['hidden']});
+  addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey || e.altKey || !'123'.includes(e.key) || e.key.length !== 1) return;
+    const b = sheetCard.querySelectorAll('[data-upg]')[+e.key - 1] || (e.key === '1' && sheetCard.querySelector('#gotIt'));
+    if (!b || sheet.hidden) return;
+    e.preventDefault(); e.stopImmediatePropagation(); b.classList.add('chosen'); setTimeout(() => { if (b.isConnected) b.click(); }, 140);
+  }, true);
+})();
 function medalRow(best){ return `<div class="medals" aria-label="Medals">${MILESTONES.map(m=>`<span class="medal ${m.k}${best>=m.n?' got':''}" title="${m.name}: ${m.n} trips">${m.name[0]}</span>`).join('')}</div>`; }
 
 function achSection(){
@@ -3401,7 +3612,7 @@ function frame(ts){
     render(); updateHud();
   } catch (err) { if (!frame.warned) { frame.warned = true; console.error(err); } }
 }
-window.__LL = { get G(){ return G; }, start: (seed, id) => newGame({kind:"classic", city: CITIES.find(c => c.id === (id || "seattle")), mods:[], seed}), step: (n, dt) => { for (let k=0;k<n;k++) update(dt || 0.025); }, frame: (t) => { if (t !== undefined) now = t; render(); updateHud(); }, cam: () => cam(), W, H, expand: () => expandStage(), paths: t => paths(t), upgradeDest: d => upgradeDest(d), chain: (v, p) => chain(v, p), stepLights: dt => stepLights(dt), lightState: t => lightState(t), mc: (...a) => moveConflict(...a) };
+if (/llsimtest/.test(location.search)) window.__LL = { get G(){ return G; }, start: (seed, id) => newGame({kind:"classic", city: CITIES.find(c => c.id === (id || "seattle")), mods:[], seed}), step: (n, dt) => { for (let k=0;k<n;k++) update(dt || 0.025); }, frame: (t) => { if (t !== undefined) now = t; render(); updateHud(); }, cam: () => cam(), W, H, expand: () => expandStage(), paths: t => paths(t), upgradeDest: d => upgradeDest(d), chain: (v, p) => chain(v, p), stepLights: dt => stepLights(dt), lightState: t => lightState(t), mc: (...a) => moveConflict(...a), update, stepTo, inRect, roundOf, placeRoundabout, graphChanged };
 resize(); now = performance.now()/1000;
 window.claude?.hot?.snapshot?.(() => ({ save: serialize() }));
 const boot = data => {

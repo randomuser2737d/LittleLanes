@@ -2,6 +2,12 @@
 
 Single-file game: `index.html` (HTML + vanilla JS + Canvas 2D, no libraries). Plan and design decisions live in the "Little Lanes — Game Design & Build Plan" doc.
 
+## Version 3.22 (Nov 19)
+- Realistic driving: smooth acceleration/braking, slowing for corners by sharpness, road speed limits (motorway faster, bridge slower), safe following gaps, queues start one by one, roundabouts follow a real circle (anticlockwise; clockwise in left-hand cities) and give way to circulating cars, stop at amber unless too close, brake lights and turn signals, smoothed drawing. Deterministic (duel-safe); throughput within ~3%.
+- In-game UI: cleaner top bar (speed buttons up top, score +1 pop, day progress bar), floating tool dock with badges, tooltips, upgrade cards with 1/2/3 keys, clearer game-over, toasts no longer cover the HUD.
+- Server: v59 security update applied, sign-in function redeployed, Secure password change + Require current password on. Debug hook only in ?llsimtest.
+- Reviews: driving realism 6.5/10, feel vs similar games 6.5/10, UI 7/10 (see chat for top fixes).
+
 ## Version 3.21 (Nov 19) — new numbering: 3.0 online play, 3.1 friend messaging, 3.2 Chats app; +0.01 small, next 0.1 medium, next whole number big
 - Security round from two red-team passes. Server (supabase-v59.sql): real timestamps forced, rate limits on an append-only log (deleting no longer resets), city/poll/room/slot values checked against fixed lists, nicknames checked on the server (bad words, personal info, look-alikes, 1 rename/day), friend codes hidden (my_friend_code / find_by_code), atomic sign-in limits with backoff and failure-only counting, recovery-code sign-in can reset the password, new devices wait 10 min for recovery code/parent email, writes need a registered device, realistic score caps, owner can remove group members, private realtime channels.
 - Duels/co-op: only the real opponent/teammates are listened to, host-only start, third players ignored, max 4 in co-op, names from the server, throttled messages, duels run on wall-clock time.
